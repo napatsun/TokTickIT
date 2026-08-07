@@ -1,6 +1,6 @@
 # TokTickIT — IT Service Desk (Lab 1: Full-Stack Hello World Starter)
 
-TokTickIT คือระบบ IT service desk สำหรับจัดการ request 4 ประเภท: Account and Access, Hardware, Software, และ Network
+TokTickIT คือระบบ IT service desk สำหรับจัดการ request 4 ประเภท: Account and Access Hardware Software และ Network
 
 Lab 1 นี้เป็น vertical slice เล็กๆ ที่พิสูจน์ว่า tech stack ทั้งระบบทำงานร่วมกันได้จริง:
 
