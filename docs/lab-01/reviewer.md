@@ -1,9 +1,10 @@
 # Lab 1 — Peer Review Record  (fill this in)
 
-**Author:** <NAPATR KASEMWEERASAN> — <67070501014> — GitHub: @<napatsun>
-**Peer reviewer1:** <KRITTAPHAT PANYASOMPHAN> — <67070501052> — GitHub: @< krittaphato3>
+**Author:** <NAPATR KASEMWEERASAN> — <67070501014> — GitHub: @napatsun
 
-**Peer reviewer2:** <ALONGKORN KAEWPROM> — <67070501050> — GitHub: @< Alongkron1234>
+**Peer reviewer1:** <KRITTAPHAT PANYASOMPHAN> — <67070501052> — GitHub: @krittaphato3
+
+**Peer reviewer2:** <ALONGKORN KAEWPROM> — <67070501050> — GitHub: @Alongkron1234
 
 ## Pull Requests I authored (reviewed by my partner)
 | PR | Branch | Reviewer verdict |
@@ -15,11 +16,14 @@
 
 **PR1**
 Reviewer comment I received: <Reviewer1:Issue 2 มีการ Implement Health Check API และทำแบบครบถ้วน Approved สามารถทำส่วนต่อไปได้ Reviewer2: มี API Health Check ถูกต้องตาม Criteria ผ่านครบถ้วนทำส่วนต่อไปได้เลยย >
+
 How I responded: <ขอบคุณสำหรับการรีวิวเพื่อให้ผมได้มั่นใจว่าที่ทำมาถูกต้องเรียบร้อย @Alongkron1234 & @krittaphato3>
 
 **PR4**
 Reviewer comment I received: <Reviewer1: Implement list ได้ถูกต้องตาม requirement มีครบ และ ยัง Implement ได้ถูกต้อง ในส่วนอื่นก็ครบ Acceptance Criteria ทั้งหมด ยอดเยี่ยมมาก Reviewer2: API categories และปุ่มหน้า UI ทำงานได้ถูกต้อง >
+
 How I responded: <เดี๋ยวเพิ่ม reviewer.md กับ ai_use.md อีกรอบ เเล้วรบกวนมาตรวจสอบให้อีกทีหน่อยนะ>
+
 Reviewer comment I received: <ได้ ยังไงตรวจสอบด้วยตัวเองให้เรียบร้อนก่อนด้วยนะ>
 
 ## Pull Requests I reviewed for my partner
