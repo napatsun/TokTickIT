@@ -8,8 +8,7 @@
 | PR | Branch | Reviewer verdict |
 |----|--------|------------------|
 | [PR1](https://github.com/napatsun/TokTickIT/pull/7) | feature/1-project-foundation | Reviewer1: มีระบบ ครบถ้วนตาม requirement ของ Issue 1, Approved |
-| [PR2](https://github.com/napatsun/TokTickIT/pull/8) | feature/2-health-check | Reviewer1:Issue 2 มีการ Implement Health Check API และทำแบบครบถ้วน Approved สามารถทำส่วนต่อไปได้
-Reviewer2: มี API Health Check ถูกต้องตาม Criteria ผ่านครบถ้วนทำส่วนต่อไปได้เลยย |
+| [PR2](https://github.com/napatsun/TokTickIT/pull/8) | feature/2-health-check | Reviewer1:Issue 2 มีการ Implement Health Check API และทำแบบครบถ้วน Approved สามารถทำส่วนต่อไปได้ Reviewer2: มี API Health Check ถูกต้องตาม Criteria ผ่านครบถ้วนทำส่วนต่อไปได้เลยย |
 | [PR3](https://github.com/napatsun/TokTickIT/pull/9) | feature/3-category-seed | Reviewer1: เพิ่ม Category seeds 4 roles ครบ ทั้งหมด Implement ได้ถูกต้อง เก่งไปไหมวะ |
 | [PR4](https://github.com/napatsun/TokTickIT/pull/10) | feature/4-category-list | Reviewer1: Implement list ได้ถูกต้องตาม requirement มีครบ และ ยัง Implement ได้ถูกต้อง ในส่วนอื่นก็ครบ Acceptance Criteria ทั้งหมด ยอดเยี่ยมมาก Reviewer2: API categories และปุ่มหน้า UI ทำงานได้ถูกต้อง |
 
