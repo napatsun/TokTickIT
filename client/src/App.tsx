@@ -37,7 +37,14 @@ export default function App() {
       {state === "success" && (
         <div className="mt-3">
           <p className="mb-1"><strong>System Status:</strong> Online</p>
-          {/* TODO(Issue 4): render the categories list here once /api/categories exists */}
+          <p className="mb-1"><strong>Supported Request Categories:</strong></p>
+          <ul className="list-group">
+            {categories.map((cat) => (
+              <li key={cat.id} className="list-group-item">
+                {cat.name}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

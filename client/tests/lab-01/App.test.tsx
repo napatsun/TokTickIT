@@ -14,10 +14,15 @@ describe("App", () => {
     expect(screen.getByText(/TokTickIT/i)).toBeInTheDocument();
   });
 
-  it("shows Online on success", async () => {
+  it("shows Online and the seeded categories on success", async () => {
     vi.spyOn(api, "checkSystem").mockResolvedValue({
       online: true,
-      categories: [],
+      categories: [
+        { id: 1, name: "Account and Access" },
+        { id: 2, name: "Hardware" },
+        { id: 3, name: "Software" },
+        { id: 4, name: "Network" },
+      ],
     });
 
     render(<App />);
@@ -26,6 +31,11 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText(/online/i)).toBeInTheDocument();
     });
+
+    expect(screen.getByText("Account and Access")).toBeInTheDocument();
+    expect(screen.getByText("Hardware")).toBeInTheDocument();
+    expect(screen.getByText("Software")).toBeInTheDocument();
+    expect(screen.getByText("Network")).toBeInTheDocument();
   });
 
   it("shows an Offline error message when the API is unavailable", async () => {
@@ -45,10 +55,3 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 });
-
-
-// // Issue 4 — write these yourself. Hint: mock the api module with
-//   // vi.spyOn(api, "checkSystem").mockResolvedValue(...) / .mockRejectedValue(...)
-//   // then click the button and assert the Online list / Offline message.
-//   it.todo("shows Online and the seeded categories on success");
-//   it.todo("shows an Offline error message when the API is unavailable");
