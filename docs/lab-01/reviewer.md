@@ -24,7 +24,7 @@ Reviewer comment I received: <Reviewer1: Implement list ได้ถูกต้
 
 How I responded: <เดี๋ยวเพิ่ม reviewer.md กับ ai_use.md อีกรอบ เเล้วรบกวนมาตรวจสอบให้อีกทีหน่อยนะ>
 
-Reviewer comment I received: <ได้ ยังไงตรวจสอบด้วยตัวเองให้เรียบร้อนก่อนด้วยนะ>
+Reviewer comment I received: <Reviewer1: ได้ ยังไงตรวจสอบด้วยตัวเองให้เรียบร้อนก่อนด้วยนะ Reviewer2: โอเคครับ ก่อน push ตรวจเช็คไฟล์ให้ดีก่อนด้วยนะ>
 
 ## Pull Requests I reviewed for my partner
 #### ของ <KRITTAPHAT PANYASOMPHAN> — <67070501052> — GitHub: @< krittaphato3>
@@ -49,4 +49,5 @@ Partner's response: <Thank you naja @napatsun>
 
 **PR4**
 My comment: <ถูกต้อง ครบถ้วน ตามใน issue4 Approved! (ไม่เกี่ยวกับ issue4) ตรง tests.md อยากให้มีการเพิ่มผลการรันเข้ามาใส่ไว้ให้หน่อย จะเป็นข้อความหรือรูปได้หมดเลย>
+
 Partner's response: <รับทราบครับ เดี๋ยวอัปเดตผลการรันใน tests.md เพิ่มเติมให้นะครับ>
