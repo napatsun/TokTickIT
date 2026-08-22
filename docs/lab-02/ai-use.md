@@ -1,6 +1,6 @@
 # Lab 1 — AI Use and Reflection  
 
-**LLM/agent used:** Claude Sonnet5
+**LLM/agent used:** Claude Sonnet 5’s medium effort setting | Tools-Websize: claude.ai
 
 ## Selected key prompts (6–10)
 | # | Prompt (summarised) | What I did with the result |
