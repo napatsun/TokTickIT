@@ -1,59 +1,30 @@
-import { useState } from "react";
-import { checkSystem, Category } from "./api.js";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AppShell from "./components/layout/AppShell.js";
+import MyTicketsPage from "./pages/MyTicketsPage.js";
+import CreateTicketPage from "./pages/CreateTicketPage.js";
 
-type UiState = "idle" | "loading" | "success" | "error";
-
+/**
+ * Root component — sets up routing and Application Shell (§6).
+ *
+ * Routes:
+ *   /tickets              → My Tickets screen
+ *   /tickets/new          → Create Ticket screen
+ *   /tickets/:ticketNumber → Ticket Detail (placeholder, lab2/07)
+ *   /select-requester     → Development Requester Selection (placeholder, lab2/04)
+ *   /*                    → redirect to /tickets
+ */
 export default function App() {
-  const [state, setState] = useState<UiState>("idle");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  async function handleCheck() {
-    setState("loading");
-    try {
-      const result = await checkSystem();
-      setCategories(result.categories);
-      setState("success");
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Unable to connect to TokTickIT API");
-      setState("error");
-    }
-  }
-
   return (
-    <div className="container py-5" style={{ maxWidth: 640 }}>
-      <h1 className="h3 mb-4">
-        TokTickIT <span className="text-success">IT Service Desk</span>
-      </h1>
-
-      <button className="btn btn-success" onClick={handleCheck} disabled={state === "loading"}>
-        {state === "loading" ? "Loading…" : "Check System"}
-      </button>
-
-      {state === "loading" && (
-        <p className="mt-3">⏳ Loading...</p>
-      )}
-
-      {state === "success" && (
-        <div className="mt-3">
-          <p className="mb-1"><strong>System Status:</strong> Online</p>
-          <p className="mb-1"><strong>Supported Request Categories:</strong></p>
-          <ul className="list-group">
-            {categories.map((cat) => (
-              <li key={cat.id} className="list-group-item">
-                {cat.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {state === "error" && (
-        <div className="alert alert-danger mt-3">
-          <p className="mb-1"><strong>System Status:</strong> Offline</p>
-          <p className="mb-0">{errorMsg}</p>
-        </div>
-      )}
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/tickets" element={<MyTicketsPage />} />
+          <Route path="/tickets/new" element={<CreateTicketPage />} />
+          <Route path="/tickets/:ticketNumber" element={<div className="container py-4"><h1>Ticket Detail</h1><p className="text-muted">Coming in lab2/07</p></div>} />
+          <Route path="/select-requester" element={<div className="container py-4"><h1>Select Development Requester</h1><p className="text-muted">Coming in lab2/04</p></div>} />
+          <Route path="*" element={<Navigate to="/tickets" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }

@@ -133,12 +133,17 @@ The IT department wants Requesters to be able to self-report problems without st
 ## 6. UI Specification Summary
 
 Full detail lives in `ui-spec.md`. Summary:
+- **Routes** (reference for all subsequent labs):
+  - `/tickets` — My Tickets
+  - `/tickets/new` — Create Ticket
+  - `/tickets/:ticketNumber` — Ticket Detail (implemented in lab2/07)
+  - `/select-requester` — Development Requester Selection (implemented in lab2/04)
 - **Application shell**: TokTickIT title/logo, top nav (My Tickets, Create Ticket), current-Requester badge with Change Requester action, active-page indication, responsive hamburger nav on mobile.
 - **Development Requester Selection**: dropdown of active Requesters, explanatory "testing only" banner, loading/empty/error states, Continue button.
 - **Create Ticket**: grouped sections (system-generated info, classification, summary/description, attachments, actions), Zen Green field states (editable, read-only, invalid, disabled), busy submit button, success panel showing generated Ticket Number.
 - **My Tickets**: search bar, filter controls, sortable table (desktop) / cards (mobile), pagination footer, loading/empty/no-results/error states.
 - **Ticket Detail**: read-only header grid, Attachments panel with active/removed sections, add-attachment control, download/remove actions gated by ownership.
-- **Shared components**: badges (priority, status), buttons (primary/secondary/tertiary/destructive/disabled/busy), validation message placement, responsive breakpoints (≥992px desktop, 768–991px tablet, <768px mobile).
+- **Shared components**: badges (priority, status), buttons (primary/secondary/tertiary/destructive/disabled/busy), validation message placement, responsive breakpoints (≥768px desktop/tablet, <768px mobile).
 
 ---
 

@@ -1,0 +1,53 @@
+/* ============================================================
+   Badge — ui-spec.md §8 (My Tickets badges + §1 non-color rule)
+   ============================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  /* Non-color redundancy (§1): text label is always present,
+     color is supplementary only. */
+}
+
+/* -----------------------------------------------------------
+   Priority badges (§8)
+   "Low (gray-green pale bg), Medium (amber),
+    High (red-tinted, not full error red)"
+   ----------------------------------------------------------- */
+
+/* Low — gray-green pale bg, muted text (derived from pale-green) */
+.priorityLow {
+  background-color: var(--color-priority-low-bg);
+  color: var(--color-priority-low-text);
+}
+
+/* Medium — amber bg (uses existing Section 1 tokens) */
+.priorityMedium {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* High — red-tinted, NOT full error red (derived from error) */
+.priorityHigh {
+  background-color: var(--color-priority-high-bg);
+  color: var(--color-priority-high-text);
+}
+
+/* -----------------------------------------------------------
+   Status badges (§8)
+   "New (pale-green bg, secondary-green text)"
+   Future values (IN_PROGRESS, RESOLVED, etc.) added here —
+   no component refactor needed, just a new CSS class + mapping.
+   ----------------------------------------------------------- */
+
+.statusNew {
+  background-color: var(--color-pale-green);   /* #EAF6EF (§1) */
+  color: var(--color-secondary-green);          /* #0B7A46 (§1) */
+}

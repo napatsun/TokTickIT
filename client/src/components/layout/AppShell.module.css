@@ -1,0 +1,234 @@
+/* ============================================================
+   Application Shell — ui-spec.md §6 + §11 (Responsive)
+   ============================================================ */
+
+/* -----------------------------------------------------------
+   Header bar
+   §6: primary-green background, white wordmark left,
+       requester badge + change button right
+   ----------------------------------------------------------- */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 56px;
+  background-color: var(--color-primary-green);
+  color: #FFFFFF;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* -----------------------------------------------------------
+   Wordmark — §6: white TokTickIT on the left
+   ----------------------------------------------------------- */
+.wordmark {
+  font-size: 18px;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-decoration: none;
+  letter-spacing: -0.3px;
+}
+
+/* -----------------------------------------------------------
+   Navigation — §6: "My Tickets" | "Create Ticket"
+   Active item: secondary-green underline + heavier weight
+   ----------------------------------------------------------- */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.navLink:hover {
+  color: #FFFFFF;
+}
+
+/* §6: active item — secondary-green underline + heavier weight */
+.navLinkActive {
+  color: #FFFFFF;
+  font-weight: 600;
+  border-bottom-color: var(--color-secondary-green);
+}
+
+/* -----------------------------------------------------------
+   Right side — requester badge + change button
+   ----------------------------------------------------------- */
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* §6: rounded pill badge for current Requester name */
+.requesterBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* -----------------------------------------------------------
+   Hamburger menu — §11: mobile <768px
+   ----------------------------------------------------------- */
+.hamburgerButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hamburgerIcon {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hamburgerIcon span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background-color: #FFFFFF;
+  border-radius: 1px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+/* When menu is open, transform hamburger into X */
+.menuOpen .hamburgerIcon span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.menuOpen .hamburgerIcon span:nth-child(2) {
+  opacity: 0;
+}
+.menuOpen .hamburgerIcon span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Mobile dropdown menu */
+.mobileMenu {
+  display: none;
+  position: absolute;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background-color: var(--color-primary-green);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 0;
+  z-index: 99;
+}
+
+.mobileMenuOpen {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobileNavLink {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  border-left: 3px solid transparent;
+}
+
+.mobileNavLink:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* §6: active item in mobile menu */
+.mobileNavLinkActive {
+  color: #FFFFFF;
+  font-weight: 600;
+  border-left-color: var(--color-secondary-green);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* §6: requester badge always visible in mobile — shown in mobile menu */
+.mobileRequester {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin-top: 4px;
+}
+
+.mobileRequesterBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* -----------------------------------------------------------
+   Content area
+   ----------------------------------------------------------- */
+.content {
+  min-height: calc(100vh - 56px);
+}
+
+/* -----------------------------------------------------------
+   §11: Responsive — mobile <768px (hamburger replaces full nav)
+   ----------------------------------------------------------- */
+@media (max-width: 767px) {
+  .nav {
+    display: none;
+  }
+
+  .hamburgerButton {
+    display: flex;
+  }
+
+  .headerRight .changeButton {
+    display: none;
+  }
+}
+
+/* -----------------------------------------------------------
+   §11: Responsive — mobile <768px
+   ----------------------------------------------------------- */
+@media (max-width: 767px) {
+  .header {
+    padding: 0 12px;
+  }
+
+  .requesterBadge {
+    display: none;
+  }
+
+  /* §6: requester badge moves into mobile menu, never hidden entirely */
+}

@@ -1,0 +1,134 @@
+/* ============================================================
+   Button — ui-spec.md §4 (Button Hierarchy) + §10 (Shared Rules)
+   ============================================================ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 40px;                          /* §10: consistent input height */
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1px solid transparent;
+
+  /* §3: focus ring — 2px secondary-green, never removed for keyboard users */
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring-color, #0B7A46);
+  }
+}
+
+/* -----------------------------------------------------------
+   1. Primary
+   Solid var(--color-primary-green) fill, white text.
+   ----------------------------------------------------------- */
+.primary {
+  background-color: var(--color-primary-green);
+  border-color: var(--color-primary-green);
+  color: #FFFFFF;
+
+  &:hover {
+    background-color: #005a32;
+    border-color: #005a32;
+  }
+}
+
+/* -----------------------------------------------------------
+   2. Secondary
+   White fill, var(--color-secondary-green) border + text.
+   ----------------------------------------------------------- */
+.secondary {
+  background-color: #FFFFFF;
+  border-color: var(--color-secondary-green);
+  color: var(--color-secondary-green);
+
+  &:hover {
+    background-color: var(--color-secondary-green);
+    color: #FFFFFF;
+  }
+}
+
+/* -----------------------------------------------------------
+   3. Tertiary
+   Text-only, var(--color-secondary-green). No border/bg.
+   ----------------------------------------------------------- */
+.tertiary {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--color-secondary-green);
+  padding: 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* -----------------------------------------------------------
+   4. Destructive (normal)
+   White fill + var(--color-error) border/text.
+   ----------------------------------------------------------- */
+.destructive {
+  background-color: #FFFFFF;
+  border-color: var(--color-error);
+  color: var(--color-error);
+
+  &:hover {
+    background-color: var(--color-error);
+    color: #FFFFFF;
+  }
+}
+
+/* -----------------------------------------------------------
+   4b. Destructive confirm step
+   Solid var(--color-error) fill, white text.
+   ----------------------------------------------------------- */
+.destructiveConfirm {
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+  color: #FFFFFF;
+
+  &:hover {
+    background-color: #8f1e18;
+    border-color: #8f1e18;
+  }
+}
+
+/* -----------------------------------------------------------
+   6. Busy
+   Same fill as Primary + spinner, button disabled.
+   ----------------------------------------------------------- */
+.busy {
+  background-color: var(--color-primary-green);
+  border-color: var(--color-primary-green);
+  color: #FFFFFF;
+  cursor: wait;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* -----------------------------------------------------------
+   5. Disabled state (applies on top of any variant)
+   var(--color-disabled-bg) / var(--color-disabled-text),
+   cursor: not-allowed, no hover effect.
+   §10: aria-disabled="true" used instead of native disabled
+        so button remains in tab order for keyboard users.
+   ----------------------------------------------------------- */
+.disabled {
+  background-color: var(--color-disabled-bg);
+  border-color: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
+  pointer-events: none;  /* prevents hover effect entirely */
+}
