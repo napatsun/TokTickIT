@@ -4,7 +4,7 @@ import { getPrisma } from "../src/prisma.js";
  * Idempotent seed — safe to run multiple times.
  * Uses upsert on unique keys so re-running never creates duplicates.
  */
-async function main() {
+export async function seed() {
   const prisma = getPrisma();
 
   // ─── Categories ──────────────────────────────────────────
@@ -78,7 +78,7 @@ async function main() {
   console.log("Seed completed.");
 }
 
-main()
+seed()
   .catch((e) => {
     console.error(e);
     process.exit(1);
