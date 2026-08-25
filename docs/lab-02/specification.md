@@ -209,6 +209,10 @@ Full detail lives in `ui-spec.md`. Summary:
 - RelatedSystem (1) — (N) Ticket
 - Ticket (1) — (N) Attachment
 
+**Audit trail FKs (defined in Section 7.1 Attachment table):**
+- Attachment.uploadedByRequesterId → DevRequester (not null; records who uploaded)
+- Attachment.removedByRequesterId → DevRequester (nullable; records who soft-removed)
+
 ### 7.3 Indexes / Constraints
 - Unique: `Ticket.ticketNumber`, `DevRequester.email`, `Attachment.storedFileName`, `Category.name`, `RelatedSystem.name`
 - Foreign keys with `onDelete: Restrict` on Ticket → DevRequester/Category/RelatedSystem (never cascade-delete a Requester's history in Lab 2)

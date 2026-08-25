@@ -29,6 +29,12 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | UNIT-06 | BR-28 | Attachment MIME/extension matcher | Rejects mismatched extension/MIME pairs (e.g., `.png` with `image/gif` MIME) | `server/tests/lab-02/attachmentValidation.unit.test.ts` |
 | UNIT-07 | BR-34 | Removal-reason validator | Rejects <3 or >200 chars, trims whitespace | `server/tests/lab-02/validation.unit.test.ts` |
 
+#### Seed Tests
+
+| Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
+|---|---|---|---|---|
+| SEED-01 | specification.md Section 5.3 (seed idempotency requirement) | Run seed function twice consecutively and count rows in Category, RelatedSystem, DevRequester | Row counts after run 1 and run 2 are identical for every table (no duplicates) | `server/tests/lab-02/seed.idempotency.test.ts` |
+
 ### 2.2 API / Integration Tests
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
@@ -58,6 +64,7 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-23 | BR-33 | `DELETE /api/attachments/:id` for an attachment on a ticket owned by a different Requester | 404 (ownership never confirmed nor denied explicitly) | `server/tests/lab-02/attachments.api.test.ts` |
 | API-24 | AC-21, BR-02 | `GET /api/dev-requesters` with one seeded inactive Requester | Response excludes the inactive Requester | `server/tests/lab-02/dev-requesters.api.test.ts` |
 | API-25 | BR-26 | Force an unexpected server error (e.g., DB disconnect mock) on any endpoint | 500 with generic safe message, no stack trace/SQL in body | `server/tests/lab-02/errorHandling.api.test.ts` |
+| API-26 | specification.md Section 7.1 (RelatedSystem.isActive, added in branch lab2/02) | `GET /api/related-systems` must exclude RelatedSystem rows where `isActive=false` | Response does not include any inactive RelatedSystem | `server/tests/lab-02/reference-data.api.test.ts` (**Pending** — to be implemented in branch `lab2/08-reference-data-api`) |
 
 ### 2.3 UI Component Tests
 
@@ -180,8 +187,8 @@ artifacts/lab-02/screenshots/ticket-detail/{desktop,tablet,mobile}.png
 
 | Level | Total | Passing | Failing | Skipped |
 |---|---|---|---|---|
-| Unit | 7 | — | — | 0 |
-| API | 25 | — | — | 0 |
+| Unit + Seed | 8 | — | — | 0 |
+| API | 26 | — | — | 0 |
 | UI Component | 16 | — | — | 0 |
 | UI Style | 4 | — | — | 0 |
 | Visual | 3 | — | — | 0 |
