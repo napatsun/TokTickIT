@@ -10,7 +10,8 @@ import styles from "./AppShell.module.css";
  *   Mobile: hamburger nav, requester badge always visible
  *
  * §11 — Responsive:
- *   Desktop ≥768px: full nav visible (including tablet 768–991px)
+ *   Desktop ≥992px: full nav visible, normal spacing
+ *   Tablet 768–991px: full nav visible, reduced spacing
  *   Mobile <768px: hamburger replaces nav, requester badge in dropdown
  */
 
