@@ -28,14 +28,12 @@ describe("App", () => {
  * checkSystem() at the API layer by mocking fetch directly.
  */
 describe("checkSystem (API layer)", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("returns online status and the seeded categories on success", async () => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { checkSystem } = await import("../../src/api.js");
 
     fetchSpy
@@ -66,7 +64,7 @@ describe("checkSystem (API layer)", () => {
   });
 
   it("throws an error when the API is unavailable", async () => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { checkSystem } = await import("../../src/api.js");
 
     fetchSpy.mockResolvedValueOnce({

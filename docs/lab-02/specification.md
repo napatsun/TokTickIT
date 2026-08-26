@@ -134,10 +134,10 @@ The IT department wants Requesters to be able to self-report problems without st
 
 Full detail lives in `ui-spec.md`. Summary:
 - **Routes** (reference for all subsequent labs):
-  - `/tickets` — My Tickets
-  - `/tickets/new` — Create Ticket
-  - `/tickets/:ticketNumber` — Ticket Detail (implemented in lab2/07)
-  - `/select-requester` — Development Requester Selection (implemented in lab2/04)
+  - `/select-requester` → Development Requester Selection (lab2/04)
+  - `/tickets` → My Tickets (lab2/06)
+  - `/tickets/new` → Create Ticket (lab2/05)
+  - `/tickets/:ticketNumber` → Requester Ticket Detail (lab2/07)
 - **Application shell**: TokTickIT title/logo, top nav (My Tickets, Create Ticket), current-Requester badge with Change Requester action, active-page indication, responsive hamburger nav on mobile.
 - **Development Requester Selection**: dropdown of active Requesters, explanatory "testing only" banner, loading/empty/error states, Continue button.
 - **Create Ticket**: grouped sections (system-generated info, classification, summary/description, attachments, actions), Zen Green field states (editable, read-only, invalid, disabled), busy submit button, success panel showing generated Ticket Number.

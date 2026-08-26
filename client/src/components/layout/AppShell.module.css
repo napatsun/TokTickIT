@@ -202,6 +202,29 @@
 }
 
 /* -----------------------------------------------------------
+   §11: Responsive — tablet 768–991px (full nav, reduced sizing)
+   ----------------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 991px) {
+  .navLink {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  .headerRight {
+    gap: 8px;
+  }
+
+  .requesterBadge {
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+
+  .changeButton {
+    font-size: 11px;
+  }
+}
+
+/* -----------------------------------------------------------
    §11: Responsive — mobile <768px (hamburger replaces full nav)
    ----------------------------------------------------------- */
 @media (max-width: 767px) {
@@ -219,7 +242,7 @@
 }
 
 /* -----------------------------------------------------------
-   §11: Responsive — mobile <768px
+   §11: Responsive — mobile <768px (header spacing adjustments)
    ----------------------------------------------------------- */
 @media (max-width: 767px) {
   .header {
