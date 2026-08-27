@@ -23,6 +23,17 @@
 | `--color-disabled-bg` | `#E9ECEA` | Disabled control background |
 | `--color-disabled-text` | `#9AA5A0` | Disabled control text |
 
+**Implementation-added tokens** (added during Badge component implementation — not in original spec handout):
+
+| Token | Hex | Usage |
+|---|---|---|
+| `--color-priority-low-bg` | `#e8edea` | Priority LOW badge background (gray-green pale, lighter than `--color-pale-green`) |
+| `--color-priority-low-text` | `#3d4f46` | Priority LOW badge text |
+| `--color-priority-high-bg` | `#fde8e7` | Priority HIGH badge background (red-tinted, lighter than `--color-error-bg`) |
+| `--color-priority-high-text` | `#9a1f1a` | Priority HIGH badge text |
+
+Priority MEDIUM badge reuses existing `--color-warning-bg` / `--color-warning` (amber, already in Section 1).
+
 Non-color redundancy: every status/priority badge also carries text (not color alone); every error also carries an icon + message text; disabled controls also carry `cursor: not-allowed` and reduced opacity, not color alone.
 
 ## 2. Typography and Spacing

@@ -1,0 +1,161 @@
+// ============================================================
+// Zen Green Theme — Bootstrap SCSS Variable Overrides
+// ============================================================
+// 1. Import Bootstrap functions first (required for overrides)
+@import "bootstrap/scss/functions";
+
+// 2. Override Bootstrap default variables
+//    Mapping: Bootstrap semantic → Zen Green tokens (ui-spec.md §1)
+
+$primary:   #006B3C;  // --color-primary-green
+$secondary: #0B7A46;  // --color-secondary-green
+$info:      #EAF6EF;  // --color-pale-green (user-confirmed §1)
+$success:   #0B7A46;  // reuses secondary green
+$warning:   #B8860B;  // --color-warning
+$danger:    #B3261E;  // --color-error
+
+// Body / page
+$body-bg:   #F5FAF7;  // --color-bg-page
+$body-color: #1E2B24; // --color-text
+
+// Typography — system UI stack, 16px base (ui-spec.md §2)
+$font-family-sans-serif: -apple-system, "Segoe UI", Roboto, sans-serif;
+$font-size-base: 1rem;  // 16px
+$h1-font-size: 1.5rem;  // 24px
+$h2-font-size: 1.25rem; // 20px
+$h3-font-size: 1rem;    // 16px
+
+// Border radius — 6px default matches field border-radius (§3)
+$border-radius:    0.375rem; // 6px
+$border-radius-sm: 0.25rem;  // 4px
+$border-radius-lg: 0.5rem;   // 8px
+
+// Form inputs — editable field defaults (§3)
+$input-bg:               #FFFFFF;
+$input-border-color:     #C7D3CC;
+$input-border-radius:    0.375rem; // 6px
+$input-height:           2.5rem;   // 40px (§10 shared component rule)
+
+// Disabled state (§3)
+$input-disabled-bg:      #E9ECEA;
+$input-disabled-color:   #9AA5A0;
+
+// Spacing scale — 4px base unit (§2)
+$spacer: 1rem; // 16px — Bootstrap's base spacer
+$spacer-0: 0;
+$spacer-1: 0.25rem;  // 4px
+$spacer-2: 0.5rem;   // 8px
+$spacer-3: 0.75rem;  // 12px
+$spacer-4: 1rem;     // 16px
+$spacer-5: 1.5rem;   // 24px
+$spacer-6: 2rem;     // 32px
+$spacer-7: 3rem;     // 48px
+
+// 3. Import full Bootstrap (after overrides)
+@import "bootstrap/scss/bootstrap";
+
+// ============================================================
+// Zen Green CSS Custom Properties (ui-spec.md §1)
+// Available to CSS modules and plain CSS via var()
+// ============================================================
+:root {
+  // --- Color tokens (Section 1) ---
+  --color-primary-green: #006B3C;
+  --color-secondary-green: #0B7A46;
+  --color-pale-green: #EAF6EF;
+  --color-bg-page: #F5FAF7;
+  --color-surface: #FFFFFF;
+
+  --color-text: #1E2B24;
+  --color-text-muted: #5B6B62;
+
+  --color-field-editable-bg: #FFFFFF;
+  --color-field-editable-border: #C7D3CC;
+  --color-field-readonly-bg: #F1EFE7;
+
+  --color-error: #B3261E;
+  --color-error-bg: #FBEAE9;
+  --color-warning: #B8860B;
+  --color-warning-bg: #FFF6E0;
+  --color-success: #0B7A46;
+  --color-success-bg: #EAF6EF;
+
+  --color-disabled-bg: #E9ECEA;
+  --color-disabled-text: #9AA5A0;
+
+  // --- Priority badge tokens (added during implementation) ---
+  // Derived from Section 1 colors:
+  //   LOW  = pale-green tinted toward gray (lighter than --color-pale-green)
+  //   HIGH = error tinted toward white (lighter than --color-error-bg)
+  --color-priority-low-bg: #e8edea;
+  --color-priority-low-text: #3d4f46;
+  --color-priority-high-bg: #fde8e7;
+  --color-priority-high-text: #9a1f1a;
+
+  // --- Typography tokens (Section 2) ---
+  --font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --font-size-base: 16px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-h3: 16px;
+  --font-size-h2: 20px;
+  --font-size-h1: 24px;
+
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  // --- Spacing tokens (Section 2, 4px base unit) ---
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  // Form field vertical rhythm (§2)
+  --space-field-gap: 16px;           // between fields
+  --space-field-group-gap: 24px;     // between sections
+  --space-before-actions: 32px;      // before action row
+
+  // --- Component tokens ---
+  --field-border-radius: 6px;
+  --field-height: 40px;              // §10 shared rule
+  --focus-ring-width: 2px;           // §3 focus state
+  --focus-ring-color: #0B7A46;       // secondary-green
+}
+
+// ============================================================
+// Bootstrap component overrides that depend on custom properties
+// ============================================================
+
+// Buttons — inherit Zen Green colors
+.btn-primary {
+  background-color: var(--color-primary-green);
+  border-color: var(--color-primary-green);
+  &:hover {
+    background-color: darken(#006B3C, 7.5%);
+    border-color: darken(#006B3C, 10%);
+  }
+}
+
+.btn-outline-secondary {
+  color: var(--color-secondary-green);
+  border-color: var(--color-secondary-green);
+  &:hover {
+    background-color: var(--color-secondary-green);
+    color: #FFFFFF;
+  }
+}
+
+// Body page background
+body {
+  background-color: var(--color-bg-page);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+}

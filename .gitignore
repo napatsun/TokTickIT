@@ -7,6 +7,10 @@ node_modules/
 # build output
 dist/
 build/
+
+# TypeScript compiled output in client/src (tsc without outDir)
+client/src/**/*.js
+client/tests/**/*.js
 # prisma
 server/prisma/*.db
 # logs & OS
