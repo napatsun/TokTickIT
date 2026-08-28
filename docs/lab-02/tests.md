@@ -65,6 +65,8 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-24 | AC-21, BR-02 | `GET /api/dev-requesters` with one seeded inactive Requester | Response excludes the inactive Requester | `server/tests/lab-02/dev-requesters.api.test.ts` |
 | API-25 | BR-26 | Force an unexpected server error (e.g., DB disconnect mock) on any endpoint | 500 with generic safe message, no stack trace/SQL in body | `server/tests/lab-02/errorHandling.api.test.ts` |
 | API-26 | specification.md Section 7.1 (RelatedSystem.isActive, added in branch lab2/02) | `GET /api/related-systems` must exclude RelatedSystem rows where `isActive=false` | Response does not include any inactive RelatedSystem | `server/tests/lab-02/reference-data.api.test.ts` (**Pending** — to be implemented in branch `lab2/08-reference-data-api`) |
+| API-27 | FR-01, BR-27 | `GET /api/dev-requesters` returns 200 with empty `requesters` array when no active requesters exist (empty state) | 200; `{ requesters: [] }`; valid JSON shape with no error field | `server/tests/lab-02/dev-requesters-empty-state.test.ts` |
+| API-28 | BR-41, BR-05, BR-37 | `requesterContext` middleware: rejects missing/invalid/inactive `X-Dev-Requester-Id` (401); accepts valid active Requester and attaches `req.currentRequester` | 401 `INVALID_REQUESTER_CONTEXT` for missing/empty/non-numeric/negative/zero/nonexistent/inactive; 200 + correct requester data for valid | `server/tests/lab-02/requester-context.test.ts` |
 
 ### 2.3 UI Component Tests
 
@@ -85,9 +87,23 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | UI-13 | AC-17 | Mocked successful attachment add | New attachment appears in the active list without a full remount/reload call | `client/.../lab-02/tests/AttachmentSection.test.tsx` |
 | UI-14 | AC-19, AC-20 | Attempt removal without reason, then with reason | Confirm button disabled until reason meets length rule; enabled after; calls DELETE only once confirmed | `client/.../lab-02/tests/AttachmentSection.test.tsx` |
 | UI-15 | BR-35 | Render a mocked removed attachment | Download/preview control is absent/disabled; "Unavailable" label shown instead | `client/.../lab-02/tests/AttachmentSection.test.tsx` |
-| UI-16 | AC-24 | Tab through Create Ticket form | Every control reachable in a logical order; focus ring visible via computed style/class | `client/.../lab-02/tests/CreateTicket.accessibility.test.tsx` |
+| UI-16 | AC-24 | Tab through Create Ticket form | Every control reachable in a logical order; focus ring visible via computed style/class | `client/.../lab-02/tests/CreateTicket.accessibility.test.tsx` (**Planned** — file exists but empty, no tests yet) |
+| UI-17 | ui-spec §4 (Buttons) | Button component renders variant classes (primary/secondary/tertiary/destructive/destructive-confirm/busy) | Each variant maps to its expected CSS module class name | `client/tests/lab-02/Button.test.tsx` |
+| UI-18 | ui-spec §4, BR-23 | Button disabled and busy states | `disabled` attr + `aria-disabled` when disabled; spinner + `busyLabel` + onClick suppressed when busy | `client/tests/lab-02/Button.test.tsx` |
+| UI-19 | ui-spec §3 (Fields), §10 | Field component renders states (default/focused/invalid/readonly/disabled), required asterisk, validation messages, input vs textarea, character counter | Correct CSS classes per state; `aria-describedby` linked; `role="alert"` for error; textarea resize=vertical; counter shows `n/max` | `client/tests/lab-02/Field.test.tsx` |
+| UI-20 | ui-spec §9 (Badges) | Badge renders priority (LOW/MEDIUM/HIGH) and status (NEW) with correct variant classes + accessible `role=status` | Correct CSS module class per value; text always visible (not sr-only) | `client/tests/lab-02/Badge.test.tsx` |
+| UI-21 | ui-spec §6, §11 (App Shell) | AppShell renders nav active state, wordmark link, requester badge, Change Requester button, hamburger toggle, mobile menu, content outlet | Active nav gets `navLinkActive`; wordmark links to `/tickets`; Change Requester calls `clearRequester`; hamburger toggles mobile nav | `client/tests/lab-02/AppShell.test.tsx` |
+| UI-22 | BR-01, FR-02 | RequesterContext reads/writes/clears localStorage; handles corrupted data; throws outside provider | `requester` restored from `localStorage` on mount; `setRequester` persists; `clearRequester` removes; corrupted JSON → null; throws without `<RequesterProvider>` | `client/tests/lab-02/RequesterContext.test.tsx` |
+| UI-23 | BR-03, BR-05 | `apiClient` attaches `X-Dev-Requester-Id` header from localStorage; on 401 `INVALID_REQUESTER_CONTEXT` clears localStorage + dispatches `requester:cleared` event; other errors leave state untouched | Header present with correct ID when requester stored; absent when empty/invalid; localStorage cleared + event dispatched only on 401 with matching code | `client/tests/lab-02/apiClient.test.ts` |
+| UI-23b | BR-03 | `apiClient` → `RequesterProvider` redirect integration: dispatching `requester:cleared` clears React state and navigates to `/select-requester` via React Router | Protected content disappears; selection screen renders; no full page reload; safe to dispatch multiple times | `client/tests/lab-02/apiClient.requesterCleared.test.tsx` |
 
-### 2.4 UI Style / Visual Tests
+### 2.4 Integration Tests
+
+| Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
+|---|---|---|---|---|
+| INT-01 | AC-02, AC-22 | Full Requester flow using real `RequesterProvider` + `RequireRequester` + `SelectRequesterPage` + `AppShell` (only `fetch` mocked): empty localStorage → redirect to selection; select → Continue → protected page with correct badge; Change Requester → back to selection | Selection screen renders on empty localStorage; selected requester badge appears after Continue; Change Requester clears state and returns to selection | `client/tests/lab-02/RequesterFlow.integration.test.tsx` |
+
+### 2.5 UI Style / Visual Tests
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
 |---|---|---|---|---|
@@ -99,7 +115,7 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | VISUAL-02 | AC-23 | Playwright screenshot of My Tickets at 3 viewports | Screenshots saved to `artifacts/lab-02/screenshots/my-tickets/*` | `e2e/lab-02/visual-my-tickets.spec.ts` |
 | VISUAL-03 | AC-23 | Playwright screenshot of Ticket Detail at 3 viewports | Screenshots saved to `artifacts/lab-02/screenshots/ticket-detail/*` | `e2e/lab-02/visual-ticket-detail.spec.ts` |
 
-### 2.5 Responsive Tests
+### 2.6 Responsive Tests
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
 |---|---|---|---|---|
@@ -107,7 +123,7 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | RESP-02 | Section 11 (ui-spec.md) | My Tickets table→card transition at <768px | Table element absent/hidden; card list elements present instead | `e2e/lab-02/responsive.spec.ts` |
 | RESP-03 | Section 11 (ui-spec.md) | Button touch target size at mobile width | All primary/secondary buttons compute to ≥44px height | `e2e/lab-02/responsive.spec.ts` |
 
-### 2.6 End-to-End Tests
+### 2.7 End-to-End Tests
 
 | Test ID | Requirement / AC | What It Tests | Expected Result | Automated Test File |
 |---|---|---|---|---|
@@ -121,7 +137,7 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 
 ---
 
-## 2.7 Test Commands
+## 2.8 Test Commands
 
 ```bash
 # Unit + API (backend)
@@ -142,7 +158,7 @@ npm run test:e2e -- --grep "lab-02"
 | AC | Covered By |
 |---|---|
 | AC-01 | API-01, UI-07, E2E-01 |
-| AC-02 | UI-02 |
+| AC-02 | UI-02, UI-24 (INT-01) |
 | AC-03 | API-15, E2E-03 |
 | AC-04 | API-02, UI-03 |
 | AC-05 | API-02 |
@@ -161,12 +177,14 @@ npm run test:e2e -- --grep "lab-02"
 | AC-18 | API-19 |
 | AC-19 | API-20, API-21, UI-14, UI-15, E2E-05 |
 | AC-20 | API-22, UI-14 |
-| AC-21 | API-24, E2E-06 |
-| AC-22 | E2E-02 |
+| AC-21 | API-24, API-27, E2E-06 |
+| AC-22 | E2E-02, INT-01 |
 | AC-23 | VISUAL-01, VISUAL-02, VISUAL-03, RESP-01, RESP-02, RESP-03 |
 | AC-24 | UI-16 |
 
 Every AC has ≥1 automated test. No test row is orphaned from an AC or a Business Rule.
+
+**Note:** AC-01, AC-04 through AC-20, AC-23, and AC-24 are mapped to *planned* test IDs (files exist but are currently empty stubs awaiting implementation in future branches). AC-02, AC-21, and AC-22 now have real implemented tests in addition to their planned counterparts.
 
 ---
 
@@ -187,13 +205,25 @@ artifacts/lab-02/screenshots/ticket-detail/{desktop,tablet,mobile}.png
 
 | Level | Total | Passing | Failing | Skipped |
 |---|---|---|---|---|
-| Unit + Seed | 8 | — | — | 0 |
-| API | 26 | — | — | 0 |
-| UI Component | 16 | — | — | 0 |
-| UI Style | 4 | — | — | 0 |
-| Visual | 3 | — | — | 0 |
-| Responsive | 3 | — | — | 0 |
-| E2E | 7 | — | — | 0 |
+| Unit + Seed | 3 | 3 | 0 | 0 |
+| API | 8 | 8 | 0 | 0 |
+| UI Component | 14 | 14 | 0 | 0 |
+| Integration | 1 | 1 | 0 | 0 |
+| UI Style | 0 | 0 | 0 | 0 |
+| Visual | 0 | 0 | 0 | 0 |
+| Responsive | 0 | 0 | 0 | 0 |
+| E2E | 0 | 0 | 0 | 0 |
+| **Total (implemented)** | **26** | **26** | **0** | **0** |
+| _Planned (files exist but empty)_ | _26_ | — | — | — |
+
+**Planned test file breakdown** (files exist on disk but contain no tests yet):
+- Unit: 7 files (UNIT-01 to UNIT-07 — `ticketNumber.unit.test.ts`, `validation.unit.test.ts`, `pagination.unit.test.ts`, `attachmentValidation.unit.test.ts`)
+- API: 22 files (API-01 to API-26 minus API-27/API-28 which are implemented — `create-ticket.api.test.ts`, `authContext.api.test.ts`, `my-tickets.api.test.ts`, `ticket-detail.api.test.ts`, `attachments.api.test.ts`, `errorHandling.api.test.ts`, `reference-data.api.test.ts`)
+- UI Component: 6 files (UI-03 to UI-16 minus implemented ones — `CreateTicket.test.tsx`, `MyTickets.test.tsx`, `AttachmentSection.test.tsx`, `RequesterTicketDetail.test.tsx`, `CreateTicket.accessibility.test.tsx`)
+- UI Style: 4 files (STYLE-01 to STYLE-04 — `theme.style.test.tsx`, `CreateTicket.style.test.tsx`, `buttons.style.test.tsx`, `badges.style.test.tsx`)
+- Visual: 3 files (VISUAL-01 to VISUAL-03)
+- Responsive: 1 file (RESP-01 to RESP-03)
+- E2E: 7 files (E2E-01 to E2E-07)
 
 No test may remain skipped/disabled at submission time (Definition of Done, Section 10 of `specification.md`).
 
@@ -203,4 +233,6 @@ No test may remain skipped/disabled at submission time (Definition of Done, Sect
 
 - Load/performance testing of the ticket list under very large datasets (>10,000 tickets) is deferred; Lab 2 seeds only realistic small datasets.
 - Cross-browser matrix testing is limited to the Playwright default browser project in Lab 2; multi-browser matrix expansion is deferred to a later lab if required.
+- `categories.test.ts` (Lab 1) uses hardcoded category IDs (1–4) which drift from actual DB state after repeated seed/reset cycles during development. This is a known test-fragility issue predating Lab 2 (see `specification.md` §11 item 9); flagged for cleanup when Lab 1 tests are next touched — not blocking for any Lab 2 branch.
+- **Vitest config silent-skip bug** — `client/vite.config.ts` originally used `include: ["tests/**/*.test.tsx"]` which silently excluded `.test.ts` files (discovered during self-audit when `apiClient.test.ts` with 14 tests was missing from vitest output). Fixed to `include: ["tests/**/*.test.{ts,tsx}"]`. The server config (`server/vitest.config.ts`) uses `include: ["tests/**/*.test.ts"]` which is correct for its all-`.ts` test files. No CI or lint step currently validates that the number of test files on disk matches the number discovered by the test runner — recommend adding such a check in a future sprint to prevent silent config regressions (see `specification.md` §11 item 11).
 - Real-session-based ownership testing (replacing `X-Dev-Requester-Id`) is explicitly deferred to Lab 3 per BR-41/BR-42.
