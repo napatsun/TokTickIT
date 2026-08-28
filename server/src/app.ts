@@ -30,4 +30,25 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
+// ─── GET /api/dev-requesters ─────────────────────────────
+// §1 API Contract: active Requesters for the Selection screen.
+// No auth header required — this is the one endpoint reachable
+// before a Requester is selected (api-spec §1).
+// Returns only isActive=true rows (BR-02).
+app.get('/api/dev-requesters', async (_req, res) => {
+  try {
+    const prisma = getPrisma();
+    const requesters = await prisma.devRequester.findMany({
+      where: { isActive: true },
+      orderBy: { id: 'asc' },
+      select: { id: true, fullName: true, email: true },
+    });
+    res.status(200).json({ requesters });
+  } catch (err) {
+    res.status(500).json({
+      error: { code: 'SERVER_ERROR', message: 'Something went wrong. Please try again.' },
+    });
+  }
+});
+
 export default app;
