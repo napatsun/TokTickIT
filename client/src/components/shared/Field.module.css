@@ -51,6 +51,14 @@
   resize: vertical;
 }
 
+/* §10: select control — same height as input, native dropdown styling */
+.selectControl {
+  height: var(--field-height, 40px);
+  padding: 0 12px;
+  cursor: pointer;
+  appearance: auto; /* preserve native dropdown arrow */
+}
+
 /* -----------------------------------------------------------
    State: default — white bg, editable border
    ----------------------------------------------------------- */
