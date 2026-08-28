@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useRequester } from "../../hooks/useRequester.js";
 import styles from "./AppShell.module.css";
 
 /**
@@ -15,8 +16,6 @@ import styles from "./AppShell.module.css";
  *   Mobile <768px: hamburger replaces nav, requester badge in dropdown
  */
 
-const MOCK_REQUESTER = "Jennifer Anderson";
-
 const NAV_ITEMS: { to: string; label: string; end?: boolean }[] = [
   { to: "/tickets", label: "My Tickets", end: true },
   { to: "/tickets/new", label: "Create Ticket" },
@@ -24,6 +23,15 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean }[] = [
 
 export default function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { requester, clearRequester } = useRequester();
+
+  const requesterName = requester?.fullName ?? "\u2014"; // em-dash fallback if null
+
+  function handleChangeRequester() {
+    clearRequester();
+    navigate("/select-requester", { replace: true });
+  }
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `${styles.navLink} ${isActive ? styles.navLinkActive : ""}`;
@@ -52,10 +60,10 @@ export default function AppShell() {
         <div className={styles.headerRight}>
           {/* §6: rounded pill badge — desktop */}
           <span className={styles.requesterBadge}>
-            {MOCK_REQUESTER}
+            {requesterName}
           </span>
 
-          {/* "Change Requester" — placeholder, §6 */}
+          {/* §6: Change Requester — clears selection, returns to selection screen */}
           <button
             type="button"
             className={`${styles.changeButton} btn btn-outline-secondary btn-sm`}
@@ -64,8 +72,8 @@ export default function AppShell() {
               borderColor: "rgba(255,255,255,0.5)",
               fontSize: "12px",
             }}
-            disabled
-            aria-label="Change Requester (placeholder)"
+            onClick={handleChangeRequester}
+            aria-label="Change Requester"
           >
             Change Requester
           </button>
@@ -108,7 +116,7 @@ export default function AppShell() {
         {/* §6: requester badge always visible — shown in mobile menu */}
         <div className={styles.mobileRequester}>
           <span className={styles.mobileRequesterBadge}>
-            {MOCK_REQUESTER}
+            {requesterName}
           </span>
           <button
             type="button"
@@ -118,7 +126,8 @@ export default function AppShell() {
               borderColor: "rgba(255,255,255,0.4)",
               fontSize: "11px",
             }}
-            disabled
+            onClick={handleChangeRequester}
+            aria-label="Change Requester (mobile)"
           >
             Change
           </button>

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import AppShell from "../../src/components/layout/AppShell";
 
 /**
@@ -14,6 +14,19 @@ function PlaceholderPage({ title }: { title: string }) {
     </div>
   );
 }
+
+// ─── Mock useRequester ──────────────────────────────────────────────────
+
+const mockClearRequester = vi.fn();
+
+vi.mock("../../src/hooks/useRequester", () => ({
+  useRequester: () => ({
+    requester: { id: 1, fullName: "Jennifer Anderson", email: "jennifer@example.com" },
+    isLoaded: true,
+    setRequester: vi.fn(),
+    clearRequester: mockClearRequester,
+  }),
+}));
 
 /**
  * Helper — renders AppShell with child routes at the given path.
@@ -91,7 +104,7 @@ describe("Application Shell", () => {
   // §6: Current-Requester badge — always visible
   // -----------------------------------------------------------
   describe("requester badge", () => {
-    it("shows mock requester name", () => {
+    it("shows requester name from context", () => {
       renderAtRoute("/tickets");
       const badges = screen.getAllByText("Jennifer Anderson");
       expect(badges.length).toBeGreaterThanOrEqual(1);
@@ -108,9 +121,18 @@ describe("Application Shell", () => {
   // §6: Change Requester button
   // -----------------------------------------------------------
   describe("change requester button", () => {
-    it("renders Change Requester button", () => {
+    it("renders Change Requester button (not disabled)", () => {
       renderAtRoute("/tickets");
-      expect(screen.getByLabelText("Change Requester (placeholder)")).toBeInTheDocument();
+      const btn = screen.getByLabelText("Change Requester");
+      expect(btn).toBeInTheDocument();
+      expect(btn).not.toBeDisabled();
+    });
+
+    it("clicking Change Requester calls clearRequester", () => {
+      mockClearRequester.mockClear();
+      renderAtRoute("/tickets");
+      fireEvent.click(screen.getByLabelText("Change Requester"));
+      expect(mockClearRequester).toHaveBeenCalledTimes(1);
     });
   });
 
