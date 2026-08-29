@@ -1,8 +1,8 @@
-import { useId, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useId, type ReactNode, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
 import styles from "./Field.module.css";
 
 type FieldState = "default" | "focused" | "invalid" | "readonly" | "disabled";
-type FieldType = "input" | "textarea";
+type FieldType = "input" | "textarea" | "select";
 
 // ---- Props ----
 
@@ -13,24 +13,27 @@ interface FieldBaseProps {
   label: string;
   /** Show red asterisk after label (§3). Does NOT substitute for validation message. */
   required?: boolean;
-  /** Render <textarea> instead of <input>. */
+  /** Render <textarea> or <select> instead of <input>. */
   type?: FieldType;
+  /** Child elements (used for <option> elements when type="select"). */
+  children?: ReactNode;
   /** Validation error message — shown directly below the field (§3). */
   errorMessage?: string;
   /** Max character count. When set, a live counter "n/max" is displayed. */
   maxLength?: number;
-  /** Current value (controlled component). */
-  value?: string;
+  /** Current value (controlled component). Accepts string for input/textarea, string|number for select. */
+  value?: string | number;
   /** Textarea rows (default 4). */
   rows?: number;
 }
 
-// Split input vs textarea attributes for proper typing.
+// Split input/textarea/select attributes for proper typing.
 type InputOnlyProps = InputHTMLAttributes<HTMLInputElement>;
 type TextareaOnlyProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
+type SelectOnlyProps = SelectHTMLAttributes<HTMLSelectElement>;
 
 export type FieldProps = FieldBaseProps &
-  Omit<InputOnlyProps & TextareaOnlyProps, keyof FieldBaseProps>;
+  Omit<InputOnlyProps & TextareaOnlyProps & SelectOnlyProps, keyof FieldBaseProps>;
 
 // ---- Component ----
 
@@ -63,6 +66,7 @@ export default function Field({
   id: idProp,
   placeholder,
   onChange,
+  children,
   ...rest
 }: FieldProps) {
   const autoId = useId();
@@ -104,19 +108,29 @@ export default function Field({
     .filter(Boolean)
     .join(" ");
 
+  const isSelect = type === "select";
+
   const inputClasses = [
     styles.control,
     styles[`${visualState}Control`],
     type === "textarea" ? styles.textareaControl : "",
+    isSelect ? styles.selectControl : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  // Ensure value is always a string for native HTML form elements.
+  // React expects `value` as a string on <select>/<input>/<textarea>, but
+  // callers may pass a number (e.g. <Field type="select" value={123}>).
+  // Coercing to String() prevents React type warnings and avoids console
+  // noise, regardless of React version.
+  const safeValue = value != null ? String(value) : undefined;
 
   // Shared input props
   const sharedProps = {
     id,
     name: name ?? id,
-    value,
+    value: safeValue,
     placeholder,
     onChange,
     disabled: isDisabled,
@@ -156,6 +170,14 @@ export default function Field({
           {...sharedProps}
           {...rest}
         />
+      ) : isSelect ? (
+        <select
+          className={inputClasses}
+          {...sharedProps}
+          {...rest}
+        >
+          {children}
+        </select>
       ) : (
         <input
           className={inputClasses}

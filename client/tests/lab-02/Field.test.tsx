@@ -210,4 +210,63 @@ describe("Field", () => {
       expect(label?.className).toMatch(/label/);
     });
   });
+
+  // -----------------------------------------------------------
+  // 7. Select with numeric value (PR reviewer concern #2)
+  // -----------------------------------------------------------
+  describe("select with numeric value", () => {
+    it("does not produce React warnings when value is a number", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      render(
+        <Field type="select" label="Priority" value={123} onChange={vi.fn()}>
+          <option value="123">Medium</option>
+          <option value="456">High</option>
+        </Field>,
+      );
+
+      const select = document.querySelector("select");
+      expect(select).toBeInTheDocument();
+
+      // Check that no React warning about value type was emitted
+      // React may warn: "Expected the `value` prop on `select` to be a `string`"
+      // or similar type-related warnings
+      const allCalls = [
+        ...errorSpy.mock.calls,
+        ...warnSpy.mock.calls,
+      ];
+      const typeWarnings = allCalls.filter(
+        (call) =>
+          call.some(
+            (arg) =>
+              typeof arg === "string" &&
+              (arg.includes("Expected the `value` prop on `select` to be a `string`") ||
+                arg.includes("value prop on a select") ||
+                arg.includes("not a string") ||
+                arg.includes("not a number")),
+          ),
+      );
+
+      // Regression test: even if React doesn't warn today, this test will
+      // catch it if a future React version adds the warning. For now we
+      // assert zero type-related warnings and document the intent.
+      expect(typeWarnings).toHaveLength(0);
+
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it("renders the select with the correct option selected when value is a number", () => {
+      const { container } = render(
+        <Field type="select" label="Priority" value={123}>
+          <option value="123">Medium</option>
+          <option value="456">High</option>
+        </Field>,
+      );
+
+      const select = container.querySelector("select") as HTMLSelectElement;
+      expect(select.value).toBe("123");
+    });
+  });
 });
