@@ -17,7 +17,7 @@
  * downstream data-fetching hooks see a new context value and refetch.
  */
 
-import { createContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { REQUESTER_CLEARED_EVENT } from "../lib/apiClient.js";
 
@@ -94,6 +94,14 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const navigate = useNavigate();
 
+  // Store navigate in a ref so the BR-03 event listener effect below has a
+  // stable dependency array and never re-subscribes due to navigate reference
+  // changes (which can happen with React Router internals even though the
+  // function itself is stable). This avoids unnecessary cleanup/recreate
+  // cycles if the component were to remount unexpectedly.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
   // Read from localStorage on mount (once)
   useEffect(() => {
     setRequesterState(readFromStorage());
@@ -103,18 +111,23 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   // BR-03: Listen for "requester:cleared" event dispatched by apiClient
   // when the backend rejects with INVALID_REQUESTER_CONTEXT.
   // This clears React state and navigates to the selection screen.
+  //
+  // NOTE: RequesterProvider wraps <Routes> in App.tsx, so route changes do
+  // NOT cause this component to remount — only the route children change.
+  // The navigate ref ensures this effect subscribes exactly once on mount
+  // and cleans up exactly once on unmount, regardless of navigate stability.
   useEffect(() => {
     function handleRequesterCleared() {
       setRequesterState(null);
       clearStorage();
-      navigate("/select-requester", { replace: true });
+      navigateRef.current("/select-requester", { replace: true });
     }
 
     window.addEventListener(REQUESTER_CLEARED_EVENT, handleRequesterCleared);
     return () => {
       window.removeEventListener(REQUESTER_CLEARED_EVENT, handleRequesterCleared);
     };
-  }, [navigate]);
+  }, []);
 
   const setRequester = useCallback((req: Requester) => {
     setRequesterState(req);

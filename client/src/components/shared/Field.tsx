@@ -119,11 +119,18 @@ export default function Field({
     .filter(Boolean)
     .join(" ");
 
+  // Ensure value is always a string for native HTML form elements.
+  // React expects `value` as a string on <select>/<input>/<textarea>, but
+  // callers may pass a number (e.g. <Field type="select" value={123}>).
+  // Coercing to String() prevents React type warnings and avoids console
+  // noise, regardless of React version.
+  const safeValue = value != null ? String(value) : undefined;
+
   // Shared input props
   const sharedProps = {
     id,
     name: name ?? id,
-    value,
+    value: safeValue,
     placeholder,
     onChange,
     disabled: isDisabled,

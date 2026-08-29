@@ -1,10 +1,21 @@
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { type ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { RequesterProvider } from "../../src/contexts/RequesterContext";
 import { useRequester } from "../../src/hooks/useRequester";
 import type { Requester } from "../../src/contexts/RequesterContext";
+import { REQUESTER_CLEARED_EVENT } from "../../src/lib/apiClient";
+
+// Mock useNavigate to spy on navigation calls
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 /**
  * RequesterContext — BR-01 / FR-02
@@ -189,6 +200,103 @@ describe("RequesterContext + useRequester", () => {
       }).toThrow("useRequester must be used within a <RequesterProvider>");
 
       console.error = spy;
+    });
+  });
+
+  // ─── BR-03 event listener lifecycle ──────────────────────────────
+
+  describe("BR-03 event listener lifecycle", () => {
+    beforeEach(() => {
+      mockNavigate.mockClear();
+    });
+
+    it("removes window.removeEventListener is called on unmount (cleanup)", () => {
+      const removeSpy = vi.spyOn(window, "removeEventListener");
+
+      const { unmount } = renderHook(() => useRequester(), { wrapper });
+
+      // Listener was added on mount
+      expect(removeSpy).not.toHaveBeenCalledWith(
+        REQUESTER_CLEARED_EVENT,
+        expect.any(Function),
+      );
+
+      unmount();
+
+      // removeEventListener should have been called with the correct event name
+      expect(removeSpy).toHaveBeenCalledWith(
+        REQUESTER_CLEARED_EVENT,
+        expect.any(Function),
+      );
+
+      removeSpy.mockRestore();
+    });
+
+    it("does not accumulate duplicate listeners on remount", () => {
+      // First mount
+      const { unmount: unmount1 } = renderHook(() => useRequester(), {
+        wrapper,
+      });
+
+      // Unmount to clean up the first listener
+      unmount1();
+
+      // Second mount — should register exactly one new listener
+      const addSpy = vi.spyOn(window, "addEventListener");
+
+      const { unmount: unmount2 } = renderHook(() => useRequester(), {
+        wrapper,
+      });
+
+      // Verify only one listener was added (not 2)
+      const addedListeners = addSpy.mock.calls.filter(
+        ([event]) => event === REQUESTER_CLEARED_EVENT,
+      );
+      expect(addedListeners).toHaveLength(1);
+
+      // Dispatch the event — count how many times the provider's handler fires
+      let providerHandlerFireCount = 0;
+      const originalHandler = addedListeners[0][1] as EventListener;
+      window.addEventListener(REQUESTER_CLEARED_EVENT, () => {
+        providerHandlerFireCount++;
+      });
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent(REQUESTER_CLEARED_EVENT));
+      });
+
+      // The key assertion: only ONE listener was registered by the provider
+      // after the second mount (not 2 stacked)
+      expect(addedListeners).toHaveLength(1);
+      // And it fires exactly once per dispatch
+      expect(providerHandlerFireCount).toBe(1);
+
+      addSpy.mockRestore();
+      unmount2();
+    });
+
+    it("dispatching requester:cleared clears state and navigates to /select-requester", () => {
+      const { result } = renderHook(() => useRequester(), { wrapper });
+
+      // Set a requester first
+      act(() => {
+        result.current.setRequester(MOCK_REQUESTER);
+      });
+      expect(result.current.requester).toEqual(MOCK_REQUESTER);
+
+      // Dispatch the event
+      act(() => {
+        window.dispatchEvent(new CustomEvent(REQUESTER_CLEARED_EVENT));
+      });
+
+      // State should be cleared
+      expect(result.current.requester).toBeNull();
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+      // Navigate should have been called to /select-requester
+      expect(mockNavigate).toHaveBeenCalledWith("/select-requester", {
+        replace: true,
+      });
     });
   });
 });
