@@ -26,12 +26,16 @@ import multer from "multer";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB (BR-29)
 const MAX_FILES = 5; // BR-30
 
-const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-]);
+// BR-28: Map each allowed MIME type to its expected file extensions.
+// Both MIME type AND extension must match — a mismatched pair is rejected.
+const MIME_TO_EXTENSIONS: Record<string, string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "application/pdf": [".pdf"],
+};
+
+const ALLOWED_MIME_TYPES = new Set(Object.keys(MIME_TO_EXTENSIONS));
 
 // ─── Custom error for MIME type rejection ────────────────────────────────
 
@@ -56,9 +60,13 @@ export class UnsupportedMimeTypeError extends Error {
 export const upload = multer({
   storage: multer.memoryStorage(),
 
-  // BR-28: Only allow JPEG, PNG, WEBP, PDF
+  // BR-28: Only allow JPEG, PNG, WEBP, PDF — both MIME type AND extension
+  // must match. A mismatched extension/MIME pair is rejected.
   fileFilter: (_req, file, callback) => {
-    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    const ext = file.originalname.toLowerCase().match(/\.[^.]+$/)?.[0] ?? "";
+    const allowedExts = MIME_TO_EXTENSIONS[file.mimetype];
+
+    if (allowedExts && allowedExts.includes(ext)) {
       callback(null, true);
     } else {
       // Pass custom error — Express error handler will map to 415

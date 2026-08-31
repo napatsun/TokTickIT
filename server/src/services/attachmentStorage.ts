@@ -22,7 +22,7 @@ import path from "node:path";
 
 // ─── Constants ──────────────────────────────────────────────────────────
 
-const UPLOADS_DIR = path.resolve(process.cwd(), "server", "uploads");
+export const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 
 // ─── Directory management ───────────────────────────────────────────────
 

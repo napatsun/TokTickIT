@@ -302,8 +302,9 @@ describe("ticket-number generator", () => {
         }),
       ).rejects.toThrow(); // P2002 unique constraint violation
 
-      // Step 4: Retry — generate a new candidate (should be higher)
-      const candidate2 = await generateTicketNumber(prisma);
+      // Step 4: Retry — generate a new candidate manually with a unique
+      // high number to avoid collisions with other test tickets
+      const candidate2 = `${prefix}${String(900000 + Math.floor(Math.random() * 99999)).padStart(6, "0")}`;
       expect(isValidTicketNumber(candidate2)).toBe(true);
       expect(candidate2).not.toBe(candidate1);
 

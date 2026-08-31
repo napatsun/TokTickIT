@@ -4,6 +4,7 @@ import { getPrisma } from "./prisma.js";
 import { requesterContext } from "./middleware/requester-context.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
+import { saveAttachmentFile, generateSafeFileName } from "./services/attachmentStorage.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
@@ -247,6 +248,78 @@ app.post(
           },
         });
 
+        // ─── Process attachments (BR-28, BR-29, BR-31, BR-32) ─────
+        // Attachments are processed AFTER ticket commit (Phase 2 of
+        // transaction strategy from Prompt 1 analysis). If attachment
+        // upload fails, the ticket remains valid (BR-31).
+        const files = (req.files as Express.Multer.File[]) ?? [];
+        const attachments: Array<{
+          id: number;
+          originalFileName: string;
+          fileSizeBytes: number;
+          mimeType: string;
+          uploadedAt: string;
+        }> = [];
+        const attachmentFailures: Array<{
+          originalFileName: string;
+          reason: string;
+        }> = [];
+
+        for (const file of files) {
+          // BR-32: safe storage filename = UUID + original extension
+          const storedFileName = generateSafeFileName(file.originalname);
+
+          // ─── Step 1: Write file to disk ─────────────────────────
+          // If this fails, the file was never written — clean failure.
+          let diskWriteOk = false;
+          try {
+            await saveAttachmentFile(file.buffer, storedFileName);
+            diskWriteOk = true;
+          } catch (diskErr) {
+            // BR-31: partial failure — file write failed, no orphan
+            attachmentFailures.push({
+              originalFileName: file.originalname,
+              reason: "UPLOAD_INTERRUPTED",
+            });
+            continue; // skip DB insert for this file
+          }
+
+          // ─── Step 2: Create attachment record in DB ─────────────
+          // If this fails after disk write succeeded, we have an orphan
+          // file on disk. This is acceptable in Lab 2 (file is harmless,
+          // soft-deletion never removes files per BR-34) but the failure
+          // reason is distinct from UPLOAD_INTERRUPTED for debugging.
+          try {
+            const attachment = await prisma.attachment.create({
+              data: {
+                ticketId: ticket.id,
+                originalFileName: file.originalname,
+                storedFileName,
+                mimeType: file.mimetype,
+                fileSizeBytes: file.size,
+                uploadedByRequesterId: requester.id,
+              },
+            });
+
+            attachments.push({
+              id: attachment.id,
+              originalFileName: attachment.originalFileName,
+              fileSizeBytes: attachment.fileSizeBytes,
+              mimeType: attachment.mimeType,
+              uploadedAt: attachment.uploadedAt.toISOString(),
+            });
+          } catch (dbErr) {
+            // File was written to disk but DB record failed — orphan file.
+            // Reason is distinct from UPLOAD_INTERRUPTED so ops can
+            // distinguish "file never written" from "file written but
+            // record missing" when debugging.
+            attachmentFailures.push({
+              originalFileName: file.originalname,
+              reason: "RECORD_CREATION_FAILED",
+            });
+          }
+        }
+
         // Success — return 201 per api-spec §4
         res.status(201).json({
           ticket: {
@@ -264,8 +337,8 @@ app.post(
             ticketOwner: null, // BR-08: not yet assigned in Lab 2 (IT Staff workflow out of scope)
             resolutionSummary: ticket.resolutionSummary,
           },
-          attachments: [],
-          attachmentFailures: [],
+          attachments,
+          attachmentFailures,
         });
         return;
       } catch (err: any) {
