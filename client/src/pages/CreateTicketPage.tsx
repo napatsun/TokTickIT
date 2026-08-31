@@ -285,6 +285,104 @@ function validateField(
   }
 }
 
+// ─── Async submit (Phase 5d) ──────────────────────────────────────
+// Defined outside the component to avoid stale closure issues.
+// Receives state and dispatch explicitly so it can be tested directly.
+
+export async function submitTicket(
+  currentState: FormState,
+  dispatchFn: React.Dispatch<FormAction>,
+) {
+  try {
+    // ─── Build FormData ──────────────────────────────────────
+    const formData = new FormData();
+    formData.append("categoryId", String(currentState.categoryId));
+    formData.append("relatedSystemId", String(currentState.relatedSystemId));
+    formData.append("summary", currentState.summary.trim());
+    formData.append("description", currentState.description.trim());
+    formData.append("requestedPriority", currentState.requestedPriority);
+
+    // BR-30: only include files without client-side validation errors
+    for (const pf of currentState.pendingFiles) {
+      if (!pf.error) {
+        formData.append("attachments", pf.file);
+      }
+    }
+
+    // ─── Call API ────────────────────────────────────────────
+    const res = await apiClient("/api/tickets", {
+      method: "POST",
+      body: formData,
+      // NOTE: Do NOT set Content-Type header — the browser must set
+      // it automatically with the correct multipart boundary.
+    });
+
+    const body = await res.json();
+
+    // ─── Handle response ─────────────────────────────────────
+
+    if (res.status === 201) {
+      // Success — BR-31: attachmentFailures may be non-empty
+      dispatchFn({
+        type: "SUBMIT_SUCCESS",
+        ticketNumber: body.ticket.ticketNumber,
+        ticketDate: body.ticket.ticketDate,
+        attachmentFailures: body.attachmentFailures ?? [],
+      });
+      return;
+    }
+
+    // 401: apiClient handles auto-redirect (BR-03), just return
+    if (res.status === 401) {
+      return;
+    }
+
+    // 400: validation error or invalid reference
+    if (res.status === 400 && body.error?.fieldErrors) {
+      dispatchFn({ type: "SET_ERRORS", errors: body.error.fieldErrors });
+
+      // Focus first error field (AC-24)
+      const fieldOrder = ["categoryId", "relatedSystemId", "requestedPriority", "summary", "description"];
+      const firstErrorField = fieldOrder.find((f) => body.error.fieldErrors[f]);
+      if (firstErrorField) {
+        setTimeout(() => {
+          document.getElementById(firstErrorField)?.focus();
+        }, 0);
+      }
+      return;
+    }
+
+    // 400 without fieldErrors (shouldn't happen per api-spec, but handle safely)
+    if (res.status === 400) {
+      dispatchFn({
+        type: "SUBMIT_ERROR",
+        message: body.error?.message ?? "Please fix the highlighted fields.",
+      });
+      return;
+    }
+
+    // 413/415: attachment errors
+    if (res.status === 413 || res.status === 415) {
+      const attachmentMsg =
+        body.error?.fieldErrors?.attachments ?? body.error?.message ?? "Attachment error.";
+      dispatchFn({ type: "SUBMIT_ERROR", message: attachmentMsg });
+      return;
+    }
+
+    // 500 or any other status: safe generic message (AC-09)
+    dispatchFn({
+      type: "SUBMIT_ERROR",
+      message: "We couldn\u2019t submit your ticket. Please try again.",
+    });
+  } catch {
+    // Network error or JSON parse failure (AC-09)
+    dispatchFn({
+      type: "SUBMIT_ERROR",
+      message: "We couldn\u2019t submit your ticket. Please try again.",
+    });
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────────────
 
 export default function CreateTicketPage() {
@@ -379,9 +477,9 @@ export default function CreateTicketPage() {
       return;
     }
 
-    // All valid — proceed to submit (Phase 5d placeholder)
+    // All valid — proceed to submit (Phase 5d)
     dispatch({ type: "SUBMIT_START" });
-    // TODO: Phase 5d — build FormData and call apiClient
+    submitTicket(state, dispatch);
   }
 
   // ─── Blur handler for live validation ───────────────────────────

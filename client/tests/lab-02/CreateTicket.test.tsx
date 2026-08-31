@@ -13,7 +13,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import CreateTicketPage, { validateForm, type FormState } from "../../src/pages/CreateTicketPage";
+import CreateTicketPage, { validateForm, submitTicket, type FormState } from "../../src/pages/CreateTicketPage";
 import { fireEvent } from "@testing-library/react";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────
@@ -42,26 +42,42 @@ const MOCK_RELATED_SYSTEMS = [
   { id: 4, name: "Corporate Laptop" },
 ];
 
-let fetchHandler: (url: string) => { ok: boolean; json: () => Promise<unknown> };
+let fetchHandler: (url: string, init?: RequestInit) => { ok: boolean; status: number; json: () => Promise<unknown> };
+let mockPostResponse: (() => Promise<{ status: number; body: unknown }>) | null = null;
+let fetchSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: string) => {
-      return fetchHandler(input);
-    }),
-  );
+  fetchSpy = vi.fn(async (input: string, init?: RequestInit) => {
+    // Intercept POST /api/tickets if mockPostResponse is set
+    if (
+      typeof input === "string" &&
+      input.includes("/api/tickets") &&
+      init?.method === "POST"
+    ) {
+      if (mockPostResponse) {
+        const resp = await mockPostResponse();
+        return {
+          ok: resp.status >= 200 && resp.status < 300,
+          status: resp.status,
+          json: async () => resp.body,
+        };
+      }
+    }
+    return fetchHandler(input, init);
+  });
+  vi.stubGlobal("fetch", fetchSpy);
 
   fetchHandler = (url: string) => {
     if (url.includes("/api/categories")) {
-      return { ok: true, json: async () => ({ categories: MOCK_CATEGORIES }) };
+      return { ok: true, status: 200, json: async () => ({ categories: MOCK_CATEGORIES }) };
     }
     if (url.includes("/api/related-systems")) {
-      return { ok: true, json: async () => ({ relatedSystems: MOCK_RELATED_SYSTEMS }) };
+      return { ok: true, status: 200, json: async () => ({ relatedSystems: MOCK_RELATED_SYSTEMS }) };
     }
-    return { ok: false, json: async () => ({ error: { code: "UNKNOWN" } }) };
+    return { ok: false, status: 500, json: async () => ({ error: { code: "UNKNOWN" } }) };
   };
 
+  mockPostResponse = null;
   mockNavigate.mockReset();
 });
 
@@ -484,6 +500,388 @@ describe("CreateTicketPage — validation", () => {
       await waitFor(() => {
         expect(screen.getByText(/Description must be between 20 and 2000 characters/)).toBeInTheDocument();
       });
+    });
+  });
+
+  // ─── Submit handler — API integration (Phase 5d) ───────────────
+
+  describe("submit handler — API integration", () => {
+    /** Helper to fill all required fields with valid values. */
+    async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
+      await user.selectOptions(screen.getAllByRole("combobox")[0], "1");
+      await user.selectOptions(screen.getAllByRole("combobox")[1], "1");
+      await user.click(screen.getByRole("radio", { name: /Medium/ }));
+      await user.type(screen.getByLabelText(/Summary/), "Test ticket summary");
+      await user.type(screen.getByLabelText(/Description/), "A".repeat(20));
+    }
+
+    it("shows success panel with ticket number on 201 response", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 201,
+        body: {
+          ticket: {
+            ticketNumber: "TKT-2026-000042",
+            ticketDate: "2026-08-31T10:00:00.000Z",
+          },
+          attachments: [],
+          attachmentFailures: [],
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("TKT-2026-000042")).toBeInTheDocument();
+        expect(screen.getByText(/Your ticket has been created successfully/)).toBeInTheDocument();
+      });
+    });
+
+    it("shows attachmentFailures when partial failure occurs (BR-31)", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 201,
+        body: {
+          ticket: {
+            ticketNumber: "TKT-2026-000043",
+            ticketDate: "2026-08-31T10:00:00.000Z",
+          },
+          attachments: [],
+          attachmentFailures: [
+            { originalFileName: "screenshot.png", reason: "UPLOAD_INTERRUPTED" },
+          ],
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/screenshot.png/)).toBeInTheDocument();
+        expect(screen.getByText(/UPLOAD_INTERRUPTED/)).toBeInTheDocument();
+        expect(screen.getByText(/not uploaded/)).toBeInTheDocument();
+      });
+    });
+
+    it("displays backend 400 VALIDATION_ERROR field errors (different from client messages)", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 400,
+        body: {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Please fix the highlighted fields.",
+            fieldErrors: {
+              summary: "Server says: summary is too short.",
+            },
+          },
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Server says: summary is too short.")).toBeInTheDocument();
+      });
+
+      // Field values should be preserved (BR-24)
+      expect(screen.getByLabelText(/Summary/)).toHaveValue("Test ticket summary");
+    });
+
+    it("displays backend 400 INVALID_REFERENCE error", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 400,
+        body: {
+          error: {
+            code: "INVALID_REFERENCE",
+            message: "Selected category is no longer available.",
+            fieldErrors: {
+              categoryId: "Selected category is no longer available.",
+            },
+          },
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Selected category is no longer available.")).toBeInTheDocument();
+      });
+
+      // Other field values preserved
+      expect(screen.getByLabelText(/Summary/)).toHaveValue("Test ticket summary");
+    });
+
+    it("shows banner error on 500 response, all field values preserved (AC-09)", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 500,
+        body: {
+          error: { code: "SERVER_ERROR", message: "Something went wrong." },
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/couldn.*submit your ticket/i)).toBeInTheDocument();
+      });
+
+      // All field values preserved (AC-09)
+      expect(screen.getAllByRole("combobox")[0]).toHaveValue("1");
+      expect(screen.getAllByRole("combobox")[1]).toHaveValue("1");
+      expect(screen.getByLabelText(/Summary/)).toHaveValue("Test ticket summary");
+      expect(screen.getByLabelText(/Description/)).toHaveValue("A".repeat(20));
+    });
+
+    it("shows banner error on network failure, all field values preserved (AC-09)", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => {
+        throw new Error("Network failure");
+      };
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/couldn.*submit your ticket/i)).toBeInTheDocument();
+      });
+
+      // Values preserved
+      expect(screen.getByLabelText(/Summary/)).toHaveValue("Test ticket summary");
+    });
+
+    it("submit button shows busy state while request is in flight", async () => {
+      const user = userEvent.setup();
+
+      // Delay the response by 500ms
+      mockPostResponse = async () => {
+        await new Promise((r) => setTimeout(r, 500));
+        return {
+          status: 201,
+          body: {
+            ticket: { ticketNumber: "TKT-2026-000099", ticketDate: "2026-08-31T10:00:00.000Z" },
+            attachments: [],
+            attachmentFailures: [],
+          },
+        };
+      };
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      // Button should show busy state (spinner text)
+      await waitFor(() => {
+        const submitBtn = screen.getByRole("button", { name: /Submitting/ });
+        expect(submitBtn).toBeDisabled();
+      });
+
+      // Wait for success
+      await waitFor(() => {
+        expect(screen.getByText("TKT-2026-000099")).toBeInTheDocument();
+      });
+    });
+
+    it("sends correct FormData fields to apiClient", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 201,
+        body: {
+          ticket: { ticketNumber: "TKT-2026-000100", ticketDate: "2026-08-31T10:00:00.000Z" },
+          attachments: [],
+          attachmentFailures: [],
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("TKT-2026-000100")).toBeInTheDocument();
+      });
+
+      // Verify the POST request was made with correct FormData
+      const postCalls = fetchSpy.mock.calls.filter((call: unknown[]) => {
+        const [url, init] = call as [string, RequestInit];
+        return typeof url === "string" && url.includes("/api/tickets") && init?.method === "POST";
+      });
+      expect(postCalls).toHaveLength(1);
+
+      const [, init] = postCalls[0] as [string, RequestInit];
+      const formData = init?.body as FormData;
+
+      expect(formData.get("categoryId")).toBe("1");
+      expect(formData.get("relatedSystemId")).toBe("1");
+      expect(formData.get("summary")).toBe("Test ticket summary");
+      expect(formData.get("description")).toBe("A".repeat(20));
+      expect(formData.get("requestedPriority")).toBe("MEDIUM");
+    });
+
+    it("shows attachment error for 413 response", async () => {
+      const user = userEvent.setup();
+      mockPostResponse = async () => ({
+        status: 413,
+        body: {
+          error: {
+            code: "ATTACHMENT_TOO_LARGE",
+            message: "One or more files exceed the 5 MB limit.",
+            fieldErrors: { attachments: "photo.jpg is 7.2 MB, which exceeds the 5 MB limit." },
+          },
+        },
+      });
+
+      renderPage();
+      await waitForFormReady();
+      await fillValidForm(user);
+
+      await user.click(screen.getByRole("button", { name: "Submit Ticket" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/photo.jpg is 7.2 MB/)).toBeInTheDocument();
+      });
+
+      // Field values preserved
+      expect(screen.getByLabelText(/Summary/)).toHaveValue("Test ticket summary");
+    });
+
+    it("sends attachment files in FormData with correct field name", async () => {
+      // Test submitTicket() directly with a real File object.
+      // This bypasses the UI (jsdom lacks DataTransfer) and tests
+      // the FormData construction logic proven working with real File.
+      const validFile = new File(["hello"], "test-photo.jpg", { type: "image/jpeg" });
+      const mockDispatch = vi.fn();
+
+      mockPostResponse = async () => ({
+        status: 201,
+        body: {
+          ticket: { ticketNumber: "TKT-2026-000200", ticketDate: "2026-08-31T10:00:00.000Z" },
+          attachments: [],
+          attachmentFailures: [],
+        },
+      });
+
+      const state: FormState = {
+        categories: MOCK_CATEGORIES,
+        relatedSystems: MOCK_RELATED_SYSTEMS,
+        refDataStatus: "success",
+        categoryId: 1,
+        relatedSystemId: 1,
+        summary: "Test ticket with attachment",
+        description: "A".repeat(20),
+        requestedPriority: "MEDIUM",
+        errors: {},
+        submissionStatus: "submitting",
+        createdTicket: null,
+        attachmentFailures: [],
+        pendingFiles: [{ file: validFile }],
+        apiErrorMessage: "",
+      };
+
+      await submitTicket(state, mockDispatch);
+
+      // Verify FormData was sent with the attachment
+      const postCalls = fetchSpy.mock.calls.filter((call: unknown[]) => {
+        const [url, init] = call as [string, RequestInit];
+        return typeof url === "string" && url.includes("/api/tickets") && init?.method === "POST";
+      });
+      expect(postCalls).toHaveLength(1);
+
+      const [, init] = postCalls[0] as [string, RequestInit];
+      const formData = init?.body as FormData;
+      const attachments = formData.getAll("attachments");
+      expect(attachments).toHaveLength(1);
+      expect(attachments[0]).toBeInstanceOf(File);
+      expect((attachments[0] as File).name).toBe("test-photo.jpg");
+
+      // Verify submitTicket dispatched SUBMIT_SUCCESS
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "SUBMIT_SUCCESS",
+          ticketNumber: "TKT-2026-000200",
+        }),
+      );
+    });
+
+    it("excludes files with client-side validation errors from FormData", async () => {
+      // Test submitTicket() directly: one valid file, one with error.
+      // The file with error should NOT appear in FormData.
+      const validFile = new File(["ok"], "screenshot.png", { type: "image/png" });
+      const invalidFile = new File(["no"], "notes.docx", { type: "application/msword" });
+      const mockDispatch = vi.fn();
+
+      mockPostResponse = async () => ({
+        status: 201,
+        body: {
+          ticket: { ticketNumber: "TKT-2026-000201", ticketDate: "2026-08-31T10:00:00.000Z" },
+          attachments: [],
+          attachmentFailures: [],
+        },
+      });
+
+      const state: FormState = {
+        categories: MOCK_CATEGORIES,
+        relatedSystems: MOCK_RELATED_SYSTEMS,
+        refDataStatus: "success",
+        categoryId: 1,
+        relatedSystemId: 1,
+        summary: "Test with mixed attachments",
+        description: "A".repeat(20),
+        requestedPriority: "HIGH",
+        errors: {},
+        submissionStatus: "submitting",
+        createdTicket: null,
+        attachmentFailures: [],
+        pendingFiles: [
+          { file: validFile },               // no error → included
+          { file: invalidFile, error: "Unsupported file type" }, // has error → excluded
+        ],
+        apiErrorMessage: "",
+      };
+
+      await submitTicket(state, mockDispatch);
+
+      const postCalls = fetchSpy.mock.calls.filter((call: unknown[]) => {
+        const [url, init] = call as [string, RequestInit];
+        return typeof url === "string" && url.includes("/api/tickets") && init?.method === "POST";
+      });
+      expect(postCalls).toHaveLength(1);
+
+      const [, init] = postCalls[0] as [string, RequestInit];
+      const formData = init?.body as FormData;
+      const attachments = formData.getAll("attachments");
+
+      // Only the valid file should be in FormData
+      expect(attachments).toHaveLength(1);
+      expect((attachments[0] as File).name).toBe("screenshot.png");
     });
   });
 });
