@@ -25,7 +25,7 @@
  * and submit handler will be added in subsequent phases.
  */
 
-import { useReducer, useRef, useCallback, useEffect } from "react";
+import { useReducer, useRef, useCallback, useEffect, act } from "react";
 import { useNavigate } from "react-router-dom";
 import Field from "../components/shared/Field.js";
 import Button from "../components/shared/Button.js";
@@ -51,7 +51,7 @@ interface RelatedSystem {
 type Priority = "" | "LOW" | "MEDIUM" | "HIGH";
 type SubmissionStatus = "idle" | "submitting" | "success" | "error";
 
-interface FormState {
+export interface FormState {
   // Reference data (will be fetched from API in Phase 5b)
   categories: Category[];
   relatedSystems: RelatedSystem[];
@@ -198,6 +198,93 @@ function formReducer(state: FormState, action: FormAction): FormState {
   }
 }
 
+// ─── Client-side validation (BR-19 to BR-24) ───────────────────────
+
+const VALID_PRIORITIES = new Set(["LOW", "MEDIUM", "HIGH"]);
+
+/**
+ * Validate all form fields per BR-19 to BR-22.
+ * Returns a Record of field name → error message.
+ * Empty object means all fields valid.
+ *
+ * BR-24: field values are NOT cleared on validation failure —
+ * the caller preserves state as-is.
+ */
+export function validateForm(state: FormState): Record<string, string> {
+  const errors: Record<string, string> = {};
+
+  // BR-21: categoryId required
+  if (state.categoryId === "") {
+    errors.categoryId = "Category is required.";
+  }
+
+  // BR-21: relatedSystemId required
+  if (state.relatedSystemId === "") {
+    errors.relatedSystemId = "Related system is required.";
+  }
+
+  // BR-19: summary required, trimmed, 5–120 chars
+  const summary = state.summary.trim();
+  if (summary.length === 0) {
+    errors.summary = "Summary is required.";
+  } else if (summary.length < 5 || summary.length > 120) {
+    errors.summary = "Summary must be between 5 and 120 characters.";
+  }
+
+  // BR-20: description required, trimmed, 20–2000 chars
+  const description = state.description.trim();
+  if (description.length === 0) {
+    errors.description = "Description is required.";
+  } else if (description.length < 20 || description.length > 2000) {
+    errors.description = "Description must be between 20 and 2000 characters.";
+  }
+
+  // BR-21 + BR-22: requestedPriority required, must be LOW/MEDIUM/HIGH
+  if (!VALID_PRIORITIES.has(state.requestedPriority)) {
+    errors.requestedPriority = "Please select a priority.";
+  }
+
+  return errors;
+}
+
+/**
+ * Validate a single field. Used for blur-triggered live validation.
+ * Returns error message or undefined if valid.
+ */
+function validateField(
+  field: string,
+  state: FormState,
+): string | undefined {
+  switch (field) {
+    case "categoryId":
+      if (state.categoryId === "") return "Category is required.";
+      return undefined;
+    case "relatedSystemId":
+      if (state.relatedSystemId === "") return "Related system is required.";
+      return undefined;
+    case "summary": {
+      const v = state.summary.trim();
+      if (v.length === 0) return "Summary is required.";
+      if (v.length < 5 || v.length > 120)
+        return "Summary must be between 5 and 120 characters.";
+      return undefined;
+    }
+    case "description": {
+      const v = state.description.trim();
+      if (v.length === 0) return "Description is required.";
+      if (v.length < 20 || v.length > 2000)
+        return "Description must be between 20 and 2000 characters.";
+      return undefined;
+    }
+    case "requestedPriority":
+      if (!VALID_PRIORITIES.has(state.requestedPriority))
+        return "Please select a priority.";
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────────────
 
 export default function CreateTicketPage() {
@@ -265,13 +352,52 @@ export default function CreateTicketPage() {
     { value: "HIGH", label: "High" },
   ];
 
-  // ─── Form submit handler (Phase 5c/d) ──────────────────────────
+  // ─── Form submit handler (Phase 5c) ─────────────────────────────
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: Phase 5c — client-side validation
-    // TODO: Phase 5d — submit to API
+
+    // BR-19 to BR-22: client-side validation before any API call
+    const errors = validateForm(state);
+
+    if (Object.keys(errors).length > 0) {
+      // BR-24: preserve all field values, just show errors
+      dispatch({ type: "SET_ERRORS", errors });
+
+      // AC-24: focus the first invalid field for keyboard accessibility
+      const fieldOrder = ["categoryId", "relatedSystemId", "requestedPriority", "summary", "description"];
+      const firstErrorField = fieldOrder.find((f) => errors[f]);
+      if (firstErrorField) {
+        // Use act + setTimeout to ensure React has rendered the error
+        // messages before focusing. This is more reliable than
+        // requestAnimationFrame in test environments (jsdom).
+        setTimeout(() => {
+          const el = document.getElementById(firstErrorField);
+          el?.focus();
+        }, 0);
+      }
+      return;
+    }
+
+    // All valid — proceed to submit (Phase 5d placeholder)
+    dispatch({ type: "SUBMIT_START" });
+    // TODO: Phase 5d — build FormData and call apiClient
   }
+
+  // ─── Blur handler for live validation ───────────────────────────
+
+  const handleBlur = useCallback(
+    (field: string) => () => {
+      const error = validateField(field, state);
+      if (error) {
+        dispatch({ type: "SET_ERRORS", errors: { ...state.errors, [field]: error } });
+      } else if (state.errors[field]) {
+        // Clear the error for this field if it's now valid
+        dispatch({ type: "CLEAR_ERROR", field });
+      }
+    },
+    [state.errors, state.categoryId, state.relatedSystemId, state.summary, state.description, state.requestedPriority],
+  );
 
   // ─── Cancel handler ─────────────────────────────────────────────
 
@@ -386,7 +512,7 @@ export default function CreateTicketPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <form ref={formRef} noValidate>
+        <form ref={formRef} noValidate onSubmit={handleSubmit}>
           {/* ─── §7.1: Header row ─── */}
           <div className={styles.headerRow}>
             <h1 className={styles.title}>Create Ticket</h1>
@@ -422,10 +548,12 @@ export default function CreateTicketPage() {
               type="select"
               label="Category"
               required
+              id="categoryId"
               state={getFieldState("categoryId")}
               errorMessage={state.errors.categoryId}
               value={state.categoryId}
               onChange={handleFieldChange("categoryId")}
+              onBlur={handleBlur("categoryId")}
             >
               <option value="">— Select a category —</option>
               {state.categories.map((cat) => (
@@ -439,10 +567,12 @@ export default function CreateTicketPage() {
               type="select"
               label="Related System"
               required
+              id="relatedSystemId"
               state={getFieldState("relatedSystemId")}
               errorMessage={state.errors.relatedSystemId}
               value={state.relatedSystemId}
               onChange={handleFieldChange("relatedSystemId")}
+              onBlur={handleBlur("relatedSystemId")}
             >
               <option value="">— Select a related system —</option>
               {state.relatedSystems.map((rs) => (
@@ -469,6 +599,7 @@ export default function CreateTicketPage() {
                     state.requestedPriority === p.value ? styles.priorityOptionActive : ""
                   }`}
                   onClick={() => dispatch({ type: "SET_FIELD", field: "requestedPriority", value: p.value })}
+                  onBlur={handleBlur("requestedPriority")}
                   role="radio"
                   aria-checked={state.requestedPriority === p.value}
                 >
@@ -489,11 +620,13 @@ export default function CreateTicketPage() {
             type="input"
             label="Summary"
             required
+            id="summary"
             maxLength={120}
             state={getFieldState("summary")}
             errorMessage={state.errors.summary}
             value={state.summary}
             onChange={handleFieldChange("summary")}
+            onBlur={handleBlur("summary")}
             placeholder="Brief description of your issue"
           />
 
@@ -502,12 +635,14 @@ export default function CreateTicketPage() {
             type="textarea"
             label="Description"
             required
+            id="description"
             maxLength={2000}
             rows={6}
             state={getFieldState("description")}
             errorMessage={state.errors.description}
             value={state.description}
             onChange={handleFieldChange("description")}
+            onBlur={handleBlur("description")}
             placeholder="Please describe your issue in detail (minimum 20 characters)"
           />
 
@@ -532,7 +667,6 @@ export default function CreateTicketPage() {
               variant={state.submissionStatus === "submitting" ? "busy" : "primary"}
               type="submit"
               disabled={state.submissionStatus === "submitting"}
-              onClick={handleSubmit}
             >
               Submit Ticket
             </Button>
