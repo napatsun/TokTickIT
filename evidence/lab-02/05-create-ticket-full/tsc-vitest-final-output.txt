@@ -1,0 +1,173 @@
+================================================================================
+  Final Typecheck + Vitest Output — branch lab2/05-create-ticket-full
+  Captured: 2026-09-01
+  Commands run from project root
+================================================================================
+
+========== CLIENT tsc ==========
+(exit code 0, no output — clean typecheck)
+
+========== CLIENT vitest ==========
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client
+
+ ✓ tests/lab-02/apiClient.test.ts (14 tests) 10ms
+ ✓ tests/lab-02/Button.test.tsx (13 tests) 24ms
+ ✓ tests/lab-02/RequesterContext.test.tsx (14 tests) 38ms
+stderr | tests/lab-02/Field.test.tsx > Field > select with numeric value > renders the select with the correct option selected when value is a number
+Warning: You provided a `value` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultValue`. Otherwise, set either `onChange` or `readOnly`.
+    at select
+    at div
+    at Field (/Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/src/components/shared/Field.tsx:8:3)
+
+ ✓ tests/lab-02/Field.test.tsx (21 tests) 69ms
+stderr | tests/lab-02/AppShell.test.tsx > Application Shell > change requester button > clicking Change Requester calls clearRequester
+No routes matched location "/select-requester" 
+
+ ✓ tests/lab-02/AppShell.test.tsx (14 tests) 178ms
+ ✓ tests/lab-02/AttachmentPicker.test.tsx (29 tests) 211ms
+ ✓ tests/lab-02/RequesterFlow.integration.test.tsx (3 tests) 186ms
+ ✓ tests/lab-02/apiClient.requesterCleared.test.tsx (3 tests) 18ms
+ ✓ tests/lab-02/SelectRequester.test.tsx (22 tests) 429ms
+ ✓ tests/lab-02/RouteGuard.test.tsx (4 tests) 26ms
+ ❯ tests/lab-02/AttachmentSection.test.tsx (0 test)
+ ✓ tests/lab-02/Badge.test.tsx (8 tests) 35ms
+ ❯ tests/lab-02/MyTickets.test.tsx (0 test)
+ ❯ tests/lab-02/RequesterTicketDetail.test.tsx (0 test)
+ ✓ tests/lab-01/App.test.tsx (5 tests) 66ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (34 tests) 3377ms
+   ✓ CreateTicketPage — validation > summary validation (BR-19) > accepts summary at exactly 120 characters 303ms
+   ✓ CreateTicketPage — validation > submit handler — API integration > submit button shows busy state while request is in flight 636ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/AttachmentSection.test.tsx [ tests/lab-02/AttachmentSection.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/AttachmentSection.test.tsx
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/MyTickets.test.tsx [ tests/lab-02/MyTickets.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/MyTickets.test.tsx
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/RequesterTicketDetail.test.tsx [ tests/lab-02/RequesterTicketDetail.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/RequesterTicketDetail.test.tsx
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ Test Files  3 failed | 13 passed (16)
+      Tests  184 passed (184)
+   Start at  08:21:41
+   Duration  4.15s (transform 432ms, collect 1.68s, tests 4.67s, environment 4.63s, prepare 746ms)
+
+NOTE: The 3 "failed" files are empty stub files (no test suites defined).
+      They are planned for future branches (lab2/06, lab2/07) and are NOT
+      regressions. All 184 actual tests PASS.
+
+========== SERVER tsc ==========
+(exit code 0, no output — clean typecheck)
+
+========== SERVER vitest (lab-02 only) ==========
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server
+
+ ✓ tests/lab-02/dev-requesters-empty-state.test.ts (2 tests) 18ms
+stdout | tests/lab-02/ticket-number.test.ts > ticket-number generator
+Seed completed.
+
+stdout | tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+Seed completed.
+
+stdout | tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+Seed completed.
+
+stdout | tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > returns different numbers on successive calls (after insert)
+Seed completed.
+
+stdout | tests/lab-02/requester-context.test.ts > requesterContext middleware
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason
+Seed completed.
+
+stdout | tests/lab-02/related-systems.api.test.ts > GET /api/related-systems
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments
+Seed completed.
+
+stdout | tests/lab-02/requester-context.test.ts > requesterContext middleware
+Seed completed.
+
+stdout | tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason > returns RECORD_CREATION_FAILED when disk write succeeds but DB insert fails
+Seed completed.
+
+stdout | tests/lab-02/create-ticket.api.test.ts > POST /api/tickets
+Seed completed.
+
+ ✓ tests/lab-02/seed.idempotency.test.ts (1 test) 152ms
+stdout | tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters
+Seed completed.
+
+stdout | tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > returns 200 with only active requesters
+Seed completed.
+
+stdout | tests/lab-02/related-systems.api.test.ts > GET /api/related-systems
+Seed completed.
+
+stdout | tests/lab-02/create-ticket.api.test.ts > POST /api/tickets
+Seed completed.
+
+ ✓ tests/lab-02/ticket-number.test.ts (18 tests) 173ms
+ ❯ tests/lab-02/attachments.api.test.ts (0 test)
+ ✓ tests/lab-02/requester-context.test.ts (12 tests) 149ms
+ ✓ tests/lab-02/create-ticket-attachments-db-failure.api.test.ts (1 test) 130ms
+ ✓ tests/lab-02/related-systems.api.test.ts (7 tests) 137ms
+ ✓ tests/lab-02/dev-requesters.api.test.ts (6 tests) 126ms
+ ❯ tests/lab-02/my-tickets.api.test.ts (0 test)
+ ❯ tests/lab-02/ticket-detail.api.test.ts (0 test)
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts (10 tests) 262ms
+ ✓ tests/lab-02/create-ticket.api.test.ts (33 tests) 324ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/attachments.api.test.ts [ tests/lab-02/attachments.api.test.ts ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server/tests/lab-02/attachments.api.test.ts
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/my-tickets.api.test.ts [ tests/lab-02/my-tickets.api.test.ts ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server/tests/lab-02/my-tickets.api.test.ts
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/ticket-detail.api.test.ts [ tests/lab-02/ticket-detail.api.test.ts ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server/tests/lab-02/ticket-detail.api.test.ts
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ Test Files  3 failed | 9 passed (12)
+      Tests  90 passed (90)
+   Start at  08:22:05
+   Duration  670ms (transform 1.65s, collect 1.98s, tests 1.47s, environment 1.64s, prepare 194ms)
+
+NOTE: The 3 "failed" files are empty stub files (no test suites defined).
+      They are planned for future branches (lab2/06, lab2/07) and are NOT
+      regressions. All 90 actual tests PASS.
+
+================================================================================
+  SUMMARY
+================================================================================
+
+  Client:
+    tsc --noEmit:    PASS (exit 0)
+    vitest:          184/184 tests pass, 3 empty stubs (not regressions)
+
+  Server:
+    tsc --noEmit:    PASS (exit 0)
+    vitest lab-02:   90/90 tests pass, 3 empty stubs (not regressions)
+
+  Totals:            274/274 actual tests PASS
+================================================================================
