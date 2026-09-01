@@ -13,6 +13,9 @@ client/src/**/*.js
 client/tests/**/*.js
 # prisma
 server/prisma/*.db
+# user-uploaded attachments (BR-32)
+server/uploads/
+
 # logs & OS
 *.log
 .DS_Store

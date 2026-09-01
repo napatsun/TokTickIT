@@ -1,0 +1,399 @@
+================================================================================
+  Self-Audit Checklist — branch lab2/05-create-ticket-full
+  Generated: 2026-09-01
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. BUSINESS RULES (BR-06 through BR-32) — Create Ticket Related
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BR-06  Ticket number: TKT-{YYYY}-{6-digit}, globally unique
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/ticket-number.test.ts — format validation (lines 23-55),
+      generation (lines 60-100), P2002 retry simulation (lines 125-180)
+    - server/tests/lab-02/create-ticket.api.test.ts:118-120 — "generates a valid
+      ticket number" happy path
+    - server/tests/lab-02/create-ticket.api.test.ts — "returns unique ticket numbers
+      on successive requests"
+
+BR-07  New ticket starts with currentStatus=NEW
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:152-153 —
+      "sets currentStatus to NEW (BR-07)"
+
+BR-08  itPriority=null, ticketOwnerId=null at creation
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:158-159 —
+      "sets itPriority and ticketOwnerId to null (BR-08)"
+
+BR-09  Ticket Date set by backend, never client-supplied
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:164-165 —
+      "sets ticketDate from backend (BR-09)"
+
+BR-11  Ticket belongs to exactly one Requester (immutable FK)
+  Status: ✅
+  Evidence:
+    - server/src/app.ts:234 — requesterId: requester.id assigned from middleware,
+      not from request body
+  NOTE: POST /api/tickets is implemented inline in server/src/app.ts, NOT in a
+  separate routes/create-ticket.ts file. The routes/ directory does not exist.
+
+BR-19  Summary: required, trimmed, 5-120 chars
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:230-264 — summary validation
+      tests (empty, <5, >120, exactly 5, exactly 120, missing field)
+    - client/tests/lab-02/CreateTicket.test.tsx — 5 summary tests including
+      boundary + maxLength bypass via fireEvent.change
+
+BR-20  Description: required, trimmed, 20-2000 chars
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:282-311 — description validation
+      tests (empty, <20, >2000, exactly 20, exactly 2000, trimmed)
+    - client/tests/lab-02/CreateTicket.test.tsx — 3 description tests
+
+BR-21  Category/RelatedSystem/Priority must reference active records
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts — reference validation tests:
+      rejects non-existent categoryId, non-existent relatedSystemId,
+      inactive categoryId, inactive relatedSystemId (all return 400 INVALID_REFERENCE)
+
+BR-22  Requested Priority: LOW/MEDIUM/HIGH only
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts — 4 priority tests (rejects
+      URGENT, accepts lowercase medium, rejects missing, rejects empty string)
+    - client/tests/lab-02/CreateTicket.test.tsx — priority validation test
+
+BR-23  Submit disabled immediately on click (busy state)
+  Status: ✅
+  Evidence:
+    - client/tests/lab-02/CreateTicket.test.tsx — "submit button shows busy state
+      while request is in flight" test verifies button shows "Submitting..." and
+      is disabled
+
+BR-24  Field values preserved on validation failure
+  Status: ✅
+  Evidence:
+    - client/tests/lab-02/CreateTicket.test.tsx — "BR-24 field value preservation"
+      test verifies all fields survive validation failure
+
+BR-25  No orphaned attachments if ticket creation fails pre-commit
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts — 400/413/415 responses never
+      return 201, so no ticket is created
+
+BR-26  Safe error message on 500, no stack trace leaked
+  Status: ✅
+  Evidence:
+    - client/tests/lab-02/CreateTicket.test.tsx — "shows banner error on 500
+      response, all field values preserved (AC-09)" — client submitTicket() returns
+      "We couldn't submit your ticket. Please try again." on 500/catch
+
+BR-27  Retry affordance when ref data fails to load
+  Status: ✅
+  Evidence:
+    - client/src/pages/CreateTicketPage.tsx — ref error state renders
+      refErrorBanner with Retry button
+
+BR-28  Allowed MIME: jpeg/png/webp/pdf; extension+MIME both checked
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — rejects .docx (415),
+      .gif (415), MIME/extension mismatch (415)
+    - client/src/components/shared/AttachmentPicker.tsx — validateFile() checks both
+      MIME and extension
+
+BR-29  Max 5 MB per file (frontend + backend)
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — rejects 6MB file
+      with 413 ATTACHMENT_TOO_LARGE
+    - client/src/components/shared/AttachmentPicker.tsx — MAX_FILE_SIZE = 5 * 1024 * 1024
+
+BR-30  Max 5 active attachments per ticket
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — rejects 6 files
+      with 400 VALIDATION_ERROR
+    - client/tests/lab-02/AttachmentPicker.test.tsx — 5/5 counter, drop zone disabled
+      at max (aria-disabled="true", tabindex="-1")
+
+BR-31  Ticket survives partial attachment failure (201 + attachmentFailures)
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — "ticket survives
+      when 1 of 3 attachments fails to upload" (201 + attachmentFailures[0].reason
+      = "UPLOAD_INTERRUPTED")
+    - server/tests/lab-02/create-ticket-attachments-db-failure.api.test.ts —
+      RECORD_CREATION_FAILED scenario (disk write succeeds, DB insert fails)
+    - client/tests/lab-02/CreateTicket.test.tsx — "shows attachmentFailures when
+      partial failure occurs (BR-31)"
+
+BR-32  Attachment stores: originalFileName, storedFileName (UUID), mimeType,
+       fileSizeBytes, uploadedByRequesterId, uploadedAt, soft-removal fields
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — "disk write
+      verification" test verifies storedFileName, fileSizeBytes, mimeType on disk
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. FUNCTIONAL REQUIREMENTS (FR-04, FR-05, FR-06)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FR-04  Allow creating ticket with Category, Related System, Summary, Description,
+       Priority, optional <=5 attachments
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — happy path with
+      0, 1, and 5 attachments
+    - client/tests/lab-02/CreateTicket.test.tsx — "sends correct FormData fields to
+      apiClient" verifies all 5 required fields
+
+FR-05  Backend generates unique Ticket Number, never client-supplied
+  Status: ✅
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts — "generates a valid ticket
+      number (BR-06)" + "returns unique ticket numbers on successive requests"
+
+FR-06  Validate all fields on frontend AND backend, reject with field-level
+       messages, preserve values
+  Status: ✅
+  Evidence:
+    - Client: client/tests/lab-02/CreateTicket.test.tsx — client-side validation
+      (empty form, boundary, blur re-validation)
+    - Server: server/tests/lab-02/create-ticket.api.test.ts — backend validation
+      returns fieldErrors in Common Error Shape
+    - Client: client/src/pages/CreateTicketPage.tsx — validateForm() for client
+      side + submitTicket() handles both client and server error responses
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. ACCEPTANCE CRITERIA (AC-01, AC-04 through AC-09)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AC-01  Valid data → ticket saved, backend Ticket Number displayed
+  Status: ✅
+  Test IDs: API-01, UI-07
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts — happy path (201 + ticketNumber)
+    - client/tests/lab-02/CreateTicket.test.tsx — "shows success panel with ticket
+      number on 201 response"
+
+AC-04  Empty Summary → field-level error, no API call
+  Status: ✅
+  Test IDs: API-02, UI-03
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:231 — "rejects empty summary
+      with 400"
+    - client/tests/lab-02/CreateTicket.test.tsx — "does NOT call POST /api/tickets
+      when validation fails"
+
+AC-05  10-char Description → field-level error + backend 400
+  Status: ✅
+  Test IDs: API-02
+  Evidence:
+    - server/tests/lab-02/create-ticket.api.test.ts:291 — "rejects description
+      shorter than 20 chars"
+
+AC-06  6 MB image → rejected before upload, size-limit message
+  Status: ✅
+  Test IDs: API-04, UI-04
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — "rejects file
+      exceeding 5MB with 413"
+    - client/tests/lab-02/AttachmentPicker.test.tsx — "shows correct error for
+      oversized file" ("Exceeds 5.0 MB limit")
+
+AC-07  .docx file → rejected as unsupported type
+  Status: ✅
+  Test IDs: API-05, UI-05
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — "rejects .docx
+      file with 415"
+    - client/tests/lab-02/AttachmentPicker.test.tsx — "shows error message for a
+      file with wrong type" ("Unsupported file type")
+
+AC-08  5 active attachments → 6th rejected, no record created
+  Status: ✅
+  Test IDs: API-18
+  Evidence:
+    - server/tests/lab-02/create-ticket-attachments.api.test.ts — "rejects 6 files
+      with 400"
+    - client/tests/lab-02/AttachmentPicker.test.tsx — "drop zone is disabled when
+      at max files"
+
+AC-09  Backend unreachable → safe error state, values preserved
+  Status: ✅
+  Test IDs: UI-08
+  Evidence:
+    - client/tests/lab-02/CreateTicket.test.tsx — "shows banner error on network
+      failure, all field values preserved (AC-09)"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. API-SPEC.MD SECTION 4 — All Response/Error Cases (Frontend Handling)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+201 (fully successful)
+  Status: ✅
+  Frontend: submitTicket() → SUBMIT_SUCCESS → success panel with ticketNumber
+
+201 (attachment failures — BR-31)
+  Status: ✅
+  Frontend: submitTicket() → SUBMIT_SUCCESS with attachmentFailures → warning
+  shown in success panel (yellow banner with ⚠ icon)
+
+400 (VALIDATION_ERROR with fieldErrors)
+  Status: ✅
+  Frontend: submitTicket() → SET_ERRORS → per-field error messages beneath
+  each invalid field + form-level summary banner
+
+400 (INVALID_REFERENCE)
+  Status: ✅
+  Frontend: submitTicket() → SET_ERRORS → field error message shown under
+  the affected select field
+
+400 (no fieldErrors — unexpected shape)
+  Status: ✅
+  Frontend: submitTicket() → SUBMIT_ERROR → banner message
+
+401 (INVALID_REQUESTER_CONTEXT)
+  Status: ✅
+  Frontend: apiClient auto-clears localStorage + dispatches
+  "requester:cleared" CustomEvent → RequesterProvider navigates to
+  /select-requester (SPA, no page reload)
+
+413 (ATTACHMENT_TOO_LARGE)
+  Status: ✅
+  Frontend: submitTicket() → extracts fieldErrors.attachments → banner message
+
+415 (UNSUPPORTED_ATTACHMENT_TYPE)
+  Status: ✅
+  Frontend: submitTicket() → extracts fieldErrors.attachments → banner message
+
+500 (safe generic error)
+  Status: ✅
+  Frontend: submitTicket() → "We couldn't submit your ticket. Please try again."
+
+Network error / catch
+  Status: ✅
+  Frontend: submitTicket() catch block → same safe generic message
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. UI-SPEC.MD SECTION 7 — Every Element/State
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Header row ("Create Ticket")
+  Status: ✅  — h1 rendered in CreateTicketPage.tsx
+
+Ticket Number chip (post-success)
+  Status: ✅  — success panel shows ticketNumber in large text + ticketChip class
+
+System-generated info (Ticket Date)
+  Status: ✅  — Field state="readonly" with value={ticketDate ?? "—"}
+
+Classification grid (Category + Related System)
+  Status: ✅  — 2-column desktop, 1-column tablet+mobile (CSS grid)
+
+Requested Priority segmented control
+  Status: ✅  — radiogroup with 3 Button components, Badge preview per option
+
+Summary
+  Status: ✅  — input with maxLength=120, live counter "n/120"
+
+Description
+  Status: ✅  — textarea with maxLength=2000, live counter, resize=vertical
+
+Attachments
+  Status: ✅  — AttachmentPicker with drag-drop zone, Browse link, file list
+  with errors, counter "n/5"
+
+Actions (Cancel + Submit)
+  Status: ✅  — side-by-side desktop/tablet, stacked full-width mobile
+
+Success panel
+  Status: ✅  — pale-green panel, ticket number, confirm text, View Ticket +
+  Create Another buttons
+
+Validation failure
+  Status: ✅  — per-field errors + form-level summary banner ("Please fix N
+  field(s) below.")
+
+API/server failure
+  Status: ✅  — red apiErrorBanner with role="alert" above Actions row
+
+Busy submit state
+  Status: ✅  — Button variant="busy" with "Submitting…" label, disabled
+
+Loading state (ref data)
+  Status: ✅  — spinner + "Loading form data..." text
+
+Ref data error
+  Status: ✅  — refErrorBanner with Retry button
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. RESPONSIVE RULES (Phase 5f audit)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Breakpoints used (matching AppShell branch #03):
+  Desktop  >= 992px
+  Tablet   768 - 991px
+  Mobile   < 768px
+
+Classification grid: 2-column desktop, 1-column tablet+mobile
+  Status: ✅
+  CSS: .classificationGrid grid-template-columns: 1fr 1fr (default)
+       @media (max-width: 991px) → grid-template-columns: 1fr
+
+Priority segmented control: horizontal row desktop, stacked mobile
+  Status: ✅
+  CSS: .prioritySegmented display: flex (default = row)
+       @media (max-width: 767px) → flex-direction: column
+
+Actions row: side-by-side desktop/tablet, stacked full-width mobile
+  Status: ✅
+  CSS: .actions display: flex (default = row)
+       @media (max-width: 767px) → flex-direction: column-reverse; > * { width: 100% }
+
+Browse link touch target >= 44px on mobile
+  Status: ✅
+  CSS: @media (max-width: 767px) { .dropZoneBrowse { min-height: 44px; line-height: 44px } }
+
+Remove button touch target >= 44px on mobile
+  Status: ✅
+  CSS: @media (max-width: 767px) { .fileRemove { width: 44px; height: 44px } }
+
+Success actions: stacked on mobile
+  Status: ✅
+  CSS: @media (max-width: 767px) { .successActions { flex-direction: column } > * { width: 100% } }
+
+No horizontal overflow at any breakpoint
+  Status: ✅
+  Evidence: box-sizing: border-box (Bootstrap global), max-width: 840px,
+  padding: 24px 16px on .page
+
+Priority segmented: no overflow at mobile
+  Status: ✅
+  Evidence: Vertical stacking at <768px prevents horizontal overflow
+
+Priority segmented: no overflow at desktop
+  Status: ✅
+  Evidence: Three segments each flex: 1 within a bounded container
+
+
+================================================================================
+END OF SELF-AUDIT CHECKLIST
+================================================================================

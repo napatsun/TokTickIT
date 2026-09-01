@@ -1,0 +1,121 @@
+================================================================================
+  Evidence Verification Log — branch lab2/05-create-ticket-full
+  Date: 2026-09-01
+================================================================================
+
+CONTEXT
+-------
+During the Phase 5f self-audit, the BR-11 evidence row in the audit checklist
+referenced "server/src/routes/create-ticket.ts" as the location where
+requesterId is assigned. This was incorrect and was caught during the user's
+review before approving the commit.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ISSUE 1: BR-11 Evidence — Phantom File Reference
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem:
+  The self-audit table cited "server/src/routes/create-ticket.ts" for BR-11
+  (immutable requesterId FK). However, POST /api/tickets has been implemented
+  inline in server/src/app.ts throughout this entire branch. There is no
+  server/src/routes/ directory at all.
+
+Verification command:
+  $ ls -la server/src/routes/
+
+Result:
+  ls: server/src/routes/: No such file or directory
+
+Finding the actual location:
+  $ grep -n "requesterId" server/src/app.ts | head -10
+
+Result:
+  234:            requesterId: requester.id,
+
+Correction:
+  BR-11 evidence changed from:
+    "server/src/routes/create-ticket.ts"
+  to:
+    "server/src/app.ts:234 — requesterId: requester.id assigned from middleware"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ISSUE 2: BR-19 / BR-20 Line Number Verification
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Problem:
+  The audit table cited "lines 155-210" for BR-19 (summary validation) and
+  "lines 215-255" for BR-20 (description validation) in
+  server/tests/lab-02/create-ticket.api.test.ts. These line numbers were
+  approximate guesses, not verified against the actual file.
+
+Verification command:
+  $ sed -n '150,260p' server/tests/lab-02/create-ticket.api.test.ts | grep -n "describe\|it("
+
+Result (summary validation tests start at):
+  Line 150 + 80 = line 230: describe("summary validation (BR-19)")
+  Line 150 + 81 = line 231: it("rejects empty summary with 400")
+  ...
+  Line 150 + 109 = line 259: it("accepts summary at exactly 120 chars")
+
+  $ sed -n '260,310p' server/tests/lab-02/create-ticket.api.test.ts | grep -n "describe\|it("
+
+Result (description validation tests start at):
+  Line 260 + 22 = line 282: describe("description validation (BR-20)")
+  Line 260 + 23 = line 283: it("rejects empty description with 400")
+  ...
+  Line 260 + 51 = line 311: it("accepts description at exactly 2000 chars")
+
+Correction:
+  BR-19 evidence changed from "lines 155-210" to "lines 230-264"
+  BR-20 evidence changed from "lines 215-255" to "lines 282-311"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIMELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Phase 5f self-audit compiled. BR-11 evidence written from memory referencing
+   "server/src/routes/create-ticket.ts". BR-19/BR-20 line numbers written as
+   approximate ranges ("155-210", "215-255") without verification.
+
+2. User reviewed the self-audit and flagged two issues:
+   a. BR-11 references a file (routes/create-ticket.ts) that may not exist,
+      since POST /api/tickets lives in app.ts.
+   b. BR-19/BR-20 line numbers should be verified, not estimated.
+
+3. Verification commands executed:
+   - ls -la server/src/routes/ → confirmed: directory does not exist
+   - grep -n "requesterId" server/src/app.ts → found actual location: line 234
+   - sed + grep → found actual line numbers for summary (230-264) and
+     description (282-311) validation test blocks
+
+4. Audit checklist corrected with verified evidence locations.
+
+5. This verification log created as documentation.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LESSON LEARNED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Evidence in an audit checklist must always be verified against the actual source
+code, not written from memory or assumption. Even a thorough audit can contain
+incorrect evidence references. The following cross-check steps should be
+performed before finalizing any audit:
+
+  1. For every file path cited in evidence, run `ls` or `test -f` to confirm
+     the file exists.
+  2. For every line number cited, use `grep -n` or `sed -n` to verify the
+     content at that line matches what the evidence claims.
+  3. For implementation-location claims (e.g., "feature X is in file Y"),
+     verify with `grep` that the relevant code is actually in that file,
+     especially when the codebase may have been refactored.
+
+These checks take seconds and prevent incorrect evidence from being committed
+to the repository.
+
+================================================================================
+END OF VERIFICATION LOG
+================================================================================
