@@ -247,6 +247,18 @@
   margin-top: 8px;
 }
 
+/* §11: Mobile — success action buttons stack full-width */
+@media (max-width: 767px) {
+  .successActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .successActions > * {
+    width: 100%;
+  }
+}
+
 /* -----------------------------------------------------------
    Post-submit: API error banner (§7)
    ----------------------------------------------------------- */

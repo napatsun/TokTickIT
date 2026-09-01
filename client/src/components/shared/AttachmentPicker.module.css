@@ -78,6 +78,16 @@
   font-family: inherit;
 }
 
+/* §11 / AC-23: ≥44px touch target for Browse link on mobile */
+@media (max-width: 767px) {
+  .dropZoneBrowse {
+    display: inline-block;
+    padding: 8px 0;
+    min-height: 44px;
+    line-height: 44px;
+  }
+}
+
 .dropZoneBrowse:hover {
   color: var(--color-primary-green);
 }
@@ -184,6 +194,15 @@
   font-size: 16px;
   flex-shrink: 0;
   transition: color 0.15s, background-color 0.15s;
+}
+
+/* §11 / AC-23: ≥44px touch target for remove button on mobile */
+@media (max-width: 767px) {
+  .fileRemove {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
 }
 
 .fileRemove:hover {
