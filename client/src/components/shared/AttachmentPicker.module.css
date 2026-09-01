@@ -37,6 +37,25 @@
   background-color: var(--color-pale-green);
 }
 
+.dropZoneDisabled {
+  border-color: var(--color-field-editable-border);
+  background-color: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
+}
+
+.dropZoneDisabled .dropZoneText,
+.dropZoneDisabled .dropZoneHint,
+.dropZoneDisabled .dropZoneIcon {
+  color: var(--color-disabled-text);
+}
+
+.dropZoneDisabled .dropZoneBrowse {
+  color: var(--color-disabled-text);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
 .dropZoneIcon {
   font-size: 24px;
   color: var(--color-text-muted);

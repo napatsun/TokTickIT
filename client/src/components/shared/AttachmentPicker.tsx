@@ -156,6 +156,7 @@ export default function AttachmentPicker({
   }
 
   function handleBrowseClick() {
+    if (isAtLimit) return;
     inputRef.current?.click();
   }
 
@@ -165,21 +166,22 @@ export default function AttachmentPicker({
     <div className={styles.picker}>
       {/* Drop zone */}
       <div
-        className={`${styles.dropZone} ${dragOver ? styles.dropZoneActive : ""}`}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        className={`${styles.dropZone} ${dragOver && !isAtLimit ? styles.dropZoneActive : ""} ${isAtLimit ? styles.dropZoneDisabled : ""}`}
+        onDragEnter={isAtLimit ? undefined : handleDragEnter}
+        onDragOver={isAtLimit ? undefined : handleDragOver}
+        onDragLeave={isAtLimit ? undefined : handleDragLeave}
+        onDrop={isAtLimit ? undefined : handleDrop}
         onClick={handleBrowseClick}
         role="button"
-        tabIndex={0}
+        tabIndex={isAtLimit ? -1 : 0}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+          if ((e.key === "Enter" || e.key === " ") && !isAtLimit) {
             e.preventDefault();
             handleBrowseClick();
           }
         }}
-        aria-label="Drop files here or click to browse"
+        aria-label={isAtLimit ? "Maximum attachments reached" : "Drop files here or click to browse"}
+        aria-disabled={isAtLimit}
       >
         <span className={styles.dropZoneIcon} aria-hidden="true">
           📎
@@ -203,6 +205,7 @@ export default function AttachmentPicker({
         onChange={handleInputChange}
         aria-hidden="true"
         tabIndex={-1}
+        disabled={isAtLimit}
       />
 
       {/* Pending file list */}
