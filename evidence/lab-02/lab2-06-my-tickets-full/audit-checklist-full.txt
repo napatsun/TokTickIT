@@ -1,0 +1,226 @@
+================================================================================
+Self-Audit Checklist — lab2/06-my-tickets-full
+Date: 2 September 2026
+Branch: lab2/06-my-tickets-full
+Final Status: 346 tests passing (134 backend + 212 frontend)
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. BR COVERAGE TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BR-03 | Automatic auth enforcement (401 INVALID_REQUESTER_CONTEXT clears
+      | localStorage + dispatches requester:cleared event)
+      | Implementation: client/src/lib/apiClient.ts L93-115
+      | Tests: client/tests/lab-02/apiClient.test.ts (UI-23, 14 tests)
+      |        client/tests/lab-02/apiClient.requesterCleared.test.tsx (UI-23b, 3 tests)
+      | Status: PASS
+
+BR-05 | Auth header attachment (X-Dev-Requester-Id from localStorage)
+      | Implementation: client/src/lib/apiClient.ts L85-88
+      | Tests: client/tests/lab-02/apiClient.test.ts (UI-23, 14 tests)
+      |        server/tests/lab-02/requester-context.test.ts (API-28, 12 tests)
+      |        server/tests/lab-02/create-ticket.api.test.ts (API-35, 3 auth tests)
+      | Status: PASS
+
+BR-07 | currentStatus defaults to NEW on ticket creation
+      | Implementation: server/src/app.ts L240
+      | Tests: server/tests/lab-02/create-ticket.api.test.ts (API-29, 33 tests)
+      | Status: PASS
+
+BR-12 | Ownership: only current Requester's tickets (requesterId filter)
+      | Implementation: server/src/app.ts L484
+      | Tests (BACKEND ONLY — no frontend test exists for ownership):
+      |   server/tests/lab-02/my-tickets.api.test.ts API-09 (2 tests: lines 176, 189)
+      |   server/tests/lab-02/my-tickets.api.test.ts API-41 (1 test: line 545)
+      | Status: PASS (backend only)
+
+BR-14 | Search: case-insensitive partial match on ticketNumber OR summary
+      | Implementation: server/src/app.ts L487-491
+      | Tests (BACKEND ONLY):
+      |   server/tests/lab-02/my-tickets.api.test.ts API-10 (3 tests: lines 207, 223, 234)
+      | Status: PASS (backend only)
+
+BR-15 | Filters: AND logic; filterOptions from full ticket set
+      | Implementation: server/src/app.ts L509-597
+      |        client/src/pages/MyTicketsPage.tsx L36-42 (hasActiveFilters)
+      | Tests:
+      |   Backend: API-11 (2), API-36 (2), API-37 (1), API-38 (1),
+      |            API-39 (2), API-40 (1), API-41 (1) = 10 tests
+      |   Frontend: UI-32 (5), UI-33 (4) = 9 tests
+      | Status: PASS
+
+BR-16 | Sort: default createdAt desc, tie-break id desc
+      | Implementation: server/src/app.ts L511-513
+      | Tests (BACKEND ONLY):
+      |   server/tests/lab-02/my-tickets.api.test.ts (3 sort tests: lines 624, 637+)
+      | Status: PASS (backend only)
+
+BR-17 | Pagination: page>=1, pageSize in {10,20,50}, clamped
+      | Implementation: server/src/app.ts L471-479, L521-522
+      | Tests (BACKEND ONLY):
+      |   server/tests/lab-02/my-tickets.api.test.ts API-12 (3 tests: lines 280, 293, 309)
+      |   server/tests/lab-02/my-tickets.api.test.ts API-13 (6 tests: lines 321-358)
+      | Status: PASS (backend only)
+
+BR-39 | Empty vs no-results distinction (check hasActiveFilters, not just totalItems)
+      | Implementation: client/src/pages/MyTicketsPage.tsx L36-42, L106-110
+      | Tests:
+      |   Frontend: UI-09 (5), UI-10 (4) = 9 tests
+      |   Backend: API-40 (1)
+      | Status: PASS
+
+BR-41 | Session via X-Dev-Requester-Id header (requesterContext middleware)
+      | Implementation: server/src/middleware/requester-context.ts
+      | Tests (BACKEND ONLY):
+      |   server/tests/lab-02/requester-context.test.ts API-28 (12 tests)
+      | Status: PASS (backend only)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. FR COVERAGE TABLE (My Tickets related)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FR-02 | My Tickets lists tickets for current Requester
+      | Implementation: server/src/app.ts L484 (requesterId WHERE)
+      | Tests: API-09, API-10, API-11 (backend)
+      | Status: PASS
+
+FR-03 | Ticket list supports pagination
+      | Implementation: server/src/app.ts L471-522
+      | Tests: API-12, API-13 (backend); UI-11 (frontend rendering)
+      | Status: PASS
+
+FR-14 | Loading, empty, no-results, safe-failure states for data-fetching screens
+      | Implementation: client/src/pages/MyTicketsPage.tsx L60-135
+      | Tests: UI-09 (empty), UI-10 (no-results), UI-34 (loading), UI-35 (error)
+      | Status: PASS
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. AC COVERAGE TABLE (My Tickets)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AC-10 | Given seeded tickets for Requester A and B, when each views My Tickets,
+      | then only own tickets shown.
+      | Tests: API-09 (2 tests, backend only — no frontend ownership test)
+      | Status: PASS (backend only)
+
+AC-11 | Given 42 seeded tickets, when search "laptop", then only matching shown.
+      | Tests: API-10 (3 tests, backend only)
+      | Status: PASS (backend only)
+
+AC-12 | Given 42 seeded tickets, when filter by categoryId, then only that
+      | category's tickets shown.
+      | Tests: API-11 (2 tests, backend only)
+      | Status: PASS (backend only)
+
+AC-13 | Given zero tickets ever and no filters, when My Tickets loads, then
+      | empty state with "Create Ticket" button shown.
+      | Tests: UI-09 (5 tests, frontend)
+      | Status: PASS
+
+AC-14 | Given filters active and zero results, when My Tickets loads, then
+      | no-results state with "Clear Filters" button shown.
+      | Tests: UI-10 (4 tests, frontend)
+      | Status: PASS
+
+AC-15 | Given 42 seeded tickets, when paginate, then page 1 shows 10,
+      | page 2 shows next distinct 10.
+      | Tests: API-12 (3 tests, backend only)
+      | Status: PASS (backend only)
+
+AC-25 | Given My Tickets is loading, when response hasn't arrived, then
+      | skeleton loading rows are displayed.
+      | Tests: UI-34 (2 tests, frontend)
+      | Status: PASS
+
+AC-26 | Given API error or non-200 response, when error occurs, then
+      | error banner with message and Retry button is shown.
+      | Tests: UI-35 (4 tests, frontend)
+      | Status: PASS
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. CORRECTED UI TEST ID MAPPING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UI-09 | Empty ticket list (zero tickets ever, no filters active)
+      | Tests: empty state message, create button, navigate, hides controls, heading
+      | File: client/tests/lab-02/MyTickets.test.tsx L145-195 (5 tests)
+
+UI-10 | No-results state (filters active, zero matches)
+      | Tests: no-results message, clear button, controls visible, BR-39 distinction
+      | File: client/tests/lab-02/MyTickets.test.tsx L202-380 (4 tests)
+
+UI-11 | Paginated response
+      | Tests: "Showing X to Y of Z tickets", Previous/Next buttons, page numbers
+      | File: client/tests/lab-02/MyTickets.test.tsx L471-529 (4 tests)
+
+UI-32 | Filter dropdowns from filterOptions
+      | Tests: Category, Priority, Status dropdowns + Sort dropdown 4 options
+      | File: client/tests/lab-02/MyTickets.test.tsx L531-627 (5 tests)
+
+UI-33 | Empty filterOptions
+      | Tests: empty dropdowns for Category/Priority/Status + no error on empty
+      | File: client/tests/lab-02/MyTickets.test.tsx L629-end (4 tests)
+      | NOTE: UI-33 does NOT test ownership. Ownership is backend-only (API-09, API-41).
+
+UI-34 | Loading state
+      | Tests: skeleton rows while loading, hidden after load
+      | File: client/tests/lab-02/MyTickets.test.tsx L98-143 (2 tests)
+
+UI-35 | Error state
+      | Tests: error banner for non-ok/throw, Retry present, retry re-fetches, hides after retry
+      | File: client/tests/lab-02/MyTickets.test.tsx L387-468 (4 tests)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. SPECIFICATION §11 DEVIATIONS (items 14-18, added in this branch)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Item 14: filterOptions field added to GET /api/tickets response (api-spec §5)
+         to comply with BR-15. Computed from full ticket set ignoring filters.
+
+Item 15: TicketTable uses native <table> without explicit role attribute.
+         Initial role="grid" removed because it conflicts with §8.3 keyboard
+         navigation (grid implies arrow-key cell navigation; design calls for
+         Tab-to-row + Enter-to-navigate).
+
+Item 16: Desktop table container uses overflow-x: auto instead of hidden.
+         9-column table can exceed 1200px max-width; auto allows scroll
+         within container only, not on page.
+
+Item 17: Ticket row click navigates to /tickets/:ticketNumber as placeholder.
+         Ticket Detail page will be implemented in lab2/07.
+
+Item 18: Responsive layout — tablet (768-991px) shows 4 columns via CSS
+         display: none; mobile (<768px) switches to stacked card layout.
+         Touch targets override Field height to 44px via CSS variable
+         --field-height: 44px only within FilterControls.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. KNOWN ISSUES / DEFERRED ITEMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Item                                    | Status     | Reference              |
+|-----------------------------------------|------------|------------------------|
+| Ticket Detail navigation (placeholder)  | Deferred   | spec §11 item 17       |
+| seed.idempotency race condition         | Resolved   | spec §11 item 12       |
+| attachments.api.test.ts empty stub      | Planned    | API-17–23              |
+| ticket-detail.api.test.ts empty stub    | Planned    | API-15–16              |
+| AttachmentSection.test.tsx empty stub   | Planned    | UI-13–15               |
+| RequesterTicketDetail.test.tsx empty    | Planned    | UI-12                  |
+| CreateTicket.accessibility.test.tsx     | Planned    | UI-16                  |
+| Real-session-based ownership testing    | Deferred   | Lab 3 per BR-41/42     |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. SCREENSHOTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+artifacts/lab-02/screenshots/my-tickets/
+  desktop.png          1280x800   76607 bytes  (happy path)
+  desktop-empty.png    1280x800   33977 bytes  (empty state)
+  desktop-error.png    1280x800   44038 bytes  (error state)
+  tablet.png            834x1112  73784 bytes  (4-column table)
+  mobile.png            375x1062  67706 bytes  (stacked card layout)
+
+================================================================================
+End of Audit — 2 September 2026
+================================================================================

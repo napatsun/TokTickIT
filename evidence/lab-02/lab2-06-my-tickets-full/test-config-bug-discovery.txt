@@ -1,0 +1,116 @@
+================================================================================
+Test Configuration Bug Discovery — lab2/06-my-tickets-full
+Date: 2 September 2026
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUG 1: seed.idempotency.test.ts Race Condition
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SYMPTOMS:
+  After adding my-tickets.api.test.ts (37 new tests) to the server test suite,
+  2-14 tests began failing intermittently in full-suite runs. Failures were
+  non-deterministic — different tests failed on each run. Symptoms included:
+    - FK violation errors (foreign key constraint fails during DELETE)
+    - "not iterable" errors (querying while another test was mid-deletion)
+    - ID mismatch errors (rows deleted/inserted between seed and assertion)
+
+ROOT CAUSE:
+  seed.idempotency.test.ts runs DELETE FROM every table in beforeAll to
+  verify seed idempotency. When Vitest runs test files in parallel (its
+  default behavior), other test files (e.g., my-tickets.api.test.ts) query
+  the same tables at the same time, causing FK violations and data
+  inconsistencies. The race condition was always present but became
+  visible only after my-tickets.api.test.ts added enough concurrent queries
+  to reliably trigger it.
+
+  server/vitest.config.ts had:
+    // No poolOptions — defaults to parallel fork execution
+
+FIX:
+  Added poolOptions.forks.singleFork: true to server/vitest.config.ts:
+
+    export default defineConfig({
+      test: {
+        include: ["tests/**/*.test.ts"],
+        poolOptions: {
+          forks: {
+            singleFork: true,  // Force sequential execution
+          },
+        },
+      },
+    });
+
+  This forces all test files to run in a single fork (sequential) instead of
+  multiple parallel forks, eliminating the race entirely.
+
+RESULTS:
+  Before fix:
+    - Full suite: 2-14 failures per run (non-deterministic)
+    - Race was inherent in seed.idempotency.test.ts design
+    - Manifested only when enough concurrent test files existed
+
+  After fix:
+    - Full suite: 0 failures (deterministic across 3+ consecutive runs)
+    - 134 backend tests pass consistently
+    - Trade-off: sequential is slightly faster (~1.08s vs ~1.4s) due to
+      eliminating process-spawn overhead for this test count
+    - Real-world impact: negligible for current test count; would matter
+      if test count grew to 500+
+
+  Confirmed in specification.md §11 item 12.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUG 2: tests.md Sync Gap — 13 API Tests Marked "Planned" but Implemented
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SYMPTOMS:
+  During self-audit of lab2/06-my-tickets-full, tests.md still marked
+  my-tickets.api.test.ts as "Planned — file exists but empty" for test IDs
+  API-09 through API-14 and API-36 through API-41 (13 entries). However,
+  the file had 682 lines and 37 passing tests — it was fully implemented
+  in a previous phase (lab2/05 or earlier).
+
+AFFECTED TEST IDs:
+  API-09  (AC-10)  — Requester isolation (2 tests)
+  API-10  (AC-11)  — Search by ticket number/summary (3 tests)
+  API-11  (AC-12)  — Filter by categoryId (2 tests)
+  API-12  (AC-15)  — Pagination (3 tests)
+  API-13  (BR-17)  — Parameter clamping (6 tests)
+  API-14  (BR-15)  — Invalid enum values (4 tests)
+  API-36  (BR-15)  — filterOptions.categories (2 tests)
+  API-37  (BR-15)  — filterOptions.requestedPriorities (1 test)
+  API-38  (BR-15)  — filterOptions.currentStatuses (1 test)
+  API-39  (BR-15)  — filterOptions independent of filters (2 tests)
+  API-40  (BR-15)  — filterOptions empty when zero tickets (1 test)
+  API-41  (BR-12)  — filterOptions cross-requester isolation (1 test)
+
+ROOT CAUSE:
+  tests.md was not updated immediately after my-tickets.api.test.ts was
+  implemented in a previous phase. Each phase focused on its own deliverables
+  and the test-traceability table was only partially maintained. The "Planned"
+  label persisted because no one did a full re-sync audit until lab2/06.
+
+FIX:
+  Updated all 13 entries in tests.md from:
+    (**Planned** — file exists but empty)
+  to:
+    (✅ Implemented — N tests)
+  with correct test counts per describe block.
+
+  Also updated:
+    - Total implemented: 262 -> 346 (was missing 37 my-tickets + 7 lab-01)
+    - Backend breakdown: 90 tests across 9 files -> 134 tests across 12 files
+    - Empty stubs count: 40 -> 14 (only files that actually exist and are empty)
+    - seed.idempotency note: "Recommended fix (not implemented yet)" ->
+      "Resolved in lab2/06: singleFork"
+
+IMPACT:
+  This sync gap meant the audit table showed 13 API tests as "Planned" when
+  they were actually passing. No tests were actually missing — only the
+  documentation was stale. The corrected tests.md now accurately reflects
+  the true implementation status.
+
+================================================================================
+End of Bug Discovery Documentation
+================================================================================
