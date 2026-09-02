@@ -1,0 +1,23 @@
+/* ============================================================
+   FilterControls — §8 My Tickets controls row
+   ============================================================ */
+
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.filterGroup {
+  min-width: 160px;
+  flex: 1;
+  max-width: 220px;
+}
+
+.clearGroup {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2px; /* align with select control bottom */
+}

@@ -1,0 +1,39 @@
+/* ============================================================
+   Pagination — §8 My Tickets pagination footer
+   ============================================================ */
+
+.pagination {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.summary {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pageNumbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ellipsis {
+  padding: 0 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  user-select: none;
+}
+
+.activePage {
+  pointer-events: none;
+}
