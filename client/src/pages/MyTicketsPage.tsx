@@ -163,12 +163,14 @@ export default function MyTicketsPage() {
             View and track all of your support requests.
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => navigate("/tickets/new")}
-        >
-          Create Ticket
-        </Button>
+        <div className={styles.headerAction}>
+          <Button
+            variant="primary"
+            onClick={() => navigate("/tickets/new")}
+          >
+            Create Ticket
+          </Button>
+        </div>
       </div>
 
       {/* §8: Controls row — Search + filters + sort */}

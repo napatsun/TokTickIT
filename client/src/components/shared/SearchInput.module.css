@@ -1,5 +1,8 @@
 /* ============================================================
-   SearchInput — §8 My Tickets search box
+   SearchInput — §8 My Tickets search box, responsive
+   ============================================================
+   Desktop/Tablet: full width of parent container
+   Mobile <768px: full viewport width, ≥44px touch target
    ============================================================ */
 
 .searchInput {
@@ -30,6 +33,7 @@
   font-family: inherit;
   line-height: 1.4;
   transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 
 .input::placeholder {
@@ -40,4 +44,14 @@
   outline: none;
   border-color: var(--color-secondary-green);
   box-shadow: 0 0 0 2px var(--focus-ring-color, #0B7A46);
+}
+
+/* -----------------------------------------------------------
+   §11: Mobile <768px — full width, larger touch target
+   ----------------------------------------------------------- */
+@media (max-width: 767px) {
+  .input {
+    height: 44px; /* §11: touch target ≥44px */
+    font-size: 16px; /* prevent iOS zoom on focus */
+  }
 }

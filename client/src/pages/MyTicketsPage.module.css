@@ -1,5 +1,9 @@
 /* ============================================================
-   MyTicketsPage — §8 My Tickets screen (desktop ≥992px)
+   MyTicketsPage — §8 My Tickets screen, responsive
+   ============================================================
+   Desktop ≥992px: horizontal header, max-width ~1200px
+   Tablet 768–991px: same with tighter padding
+   Mobile <768px: stacked header, full-width button
    ============================================================ */
 
 /* §8: Full-width page, max-width ~1200px centered */
@@ -33,9 +37,52 @@
   margin: 4px 0 0 0;
 }
 
+/* Wrapper for Create Ticket button (allows mobile full-width styling) */
+.headerAction {
+  flex-shrink: 0;
+}
+
 /* §8: Controls section — search + filters */
 .controlsSection {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* -----------------------------------------------------------
+   §11: Tablet 768–991px — tighter padding
+   ----------------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 991px) {
+  .page {
+    padding: 20px 16px;
+  }
+}
+
+/* -----------------------------------------------------------
+   §11: Mobile <768px — stacked header, full-width button
+   ----------------------------------------------------------- */
+@media (max-width: 767px) {
+  .page {
+    padding: 16px 12px;
+    gap: 12px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  /* §11: Create Ticket button full-width on mobile */
+  .headerAction {
+    width: 100%;
+  }
+
+  .headerAction > * {
+    width: 100%;
+  }
 }
