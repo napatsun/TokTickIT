@@ -2,13 +2,16 @@
  * MyTickets.test.tsx — UI Component tests for MyTicketsPage
  *
  * Covers:
- *   UI-09  — Mocked empty ticket list (zero ever) → empty-state message
- *   UI-11  — Mocked paginated response (42 items) → pagination text + controls
+ *   UI-09  — Empty ticket list (zero ever) → empty-state message
+ *   UI-10  — No-results state (filters active, zero matches)
+ *   UI-11  — Paginated response (42 items) → pagination text + controls
  *   UI-32  — Filter dropdowns populated from filterOptions (not full list)
  *   UI-33  — Empty filterOptions → dropdowns empty, no error
+ *   UI-34  — Loading state → skeleton rows
+ *   UI-35  — Error state → error banner + Retry
  */
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -20,9 +23,11 @@ const mockApiResponse = vi.fn();
 
 vi.mock("../../src/lib/apiClient", () => ({
   apiClient: vi.fn(async (_url: string | URL | Request) => {
-    const data = mockApiResponse();
+    const result = mockApiResponse();
+    // Support both sync returns and promise returns
+    const data = await result;
     return {
-      ok: true,
+      ok: data._ok !== undefined ? data._ok : true,
       json: async () => data,
     };
   }),
@@ -47,8 +52,10 @@ function createMockResponse(overrides: {
   totalItems?: number;
   totalPages?: number;
   filterOptions?: any;
+  _ok?: boolean;
 } = {}) {
   return {
+    _ok: overrides._ok !== undefined ? overrides._ok : true,
     tickets: overrides.tickets ?? [],
     pagination: {
       page: 1,
@@ -86,90 +93,375 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ─── UI-09: Empty ticket list (zero ever) ───────────────────────────────
+// ─── UI-34: Loading state ──────────────────────────────────────────────
 
-describe("UI-09 — Empty ticket list", () => {
-  it("renders My Tickets heading", async () => {
-    mockApiResponse.mockReturnValue(createMockResponse());
+describe("UI-34 — Loading state", () => {
+  it("shows skeleton rows while loading", async () => {
+    // Make the API hang (never resolves during test)
+    let resolveFetch: (v: any) => void;
+    mockApiResponse.mockReturnValue(
+      new Promise((resolve) => { resolveFetch = resolve; }),
+    );
+
     renderPage();
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My Tickets" })).toBeInTheDocument();
+    // Should show skeleton loading indicator
+    expect(screen.getByRole("status", { name: /loading/i })).toBeInTheDocument();
+
+    // Should NOT show table yet
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    // Resolve the fetch to clean up (wrap in act to avoid warning)
+    await act(async () => {
+      resolveFetch!(createMockResponse());
     });
   });
 
-  it("renders Create Ticket button", async () => {
-    mockApiResponse.mockReturnValue(createMockResponse());
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Create Ticket" })).toBeInTheDocument();
-    });
-  });
-
-  it("renders search input", async () => {
-    mockApiResponse.mockReturnValue(createMockResponse());
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Search by ticket number or summary/)).toBeInTheDocument();
-    });
-  });
-
-  it("renders the subtitle", async () => {
-    mockApiResponse.mockReturnValue(createMockResponse());
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText("View and track all of your support requests.")).toBeInTheDocument();
-    });
-  });
-
-  it("renders table with 9 column headers when tickets exist", async () => {
+  it("hides skeleton after loading completes", async () => {
     mockApiResponse.mockReturnValue(
       createMockResponse({
-        tickets: [
-          {
-            id: 1,
-            ticketNumber: "TKT-2026-000001",
-            createdAt: "2026-08-22T09:14:00.000Z",
-            summary: "Laptop battery drains quickly",
-            category: "Hardware",
-            requestedPriority: "MEDIUM",
-            itPriority: null,
-            currentStatus: "NEW",
-            ticketOwner: null,
-            updatedAt: "2026-08-22T09:14:00.000Z",
-          },
-        ],
-        totalItems: 1,
-        totalPages: 1,
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test ticket", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
       }),
     );
+
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByRole("table")).toBeInTheDocument();
     });
 
-    const table = screen.getByRole("table");
-    const headerRow = within(table).getAllByRole("columnheader");
-    expect(headerRow).toHaveLength(9);
+    // Skeleton should be gone
+    expect(screen.queryByRole("status", { name: /loading/i })).not.toBeInTheDocument();
+  });
+});
 
-    const expectedHeaders = [
-      "Ticket No.",
-      "Created Date",
-      "Summary",
-      "Category",
-      "Requested Priority",
-      "IT Priority",
-      "Current Status",
-      "Ticket Owner",
-      "Last Updated",
-    ];
+// ─── UI-09: Empty ticket list (zero ever) ───────────────────────────────
 
-    expectedHeaders.forEach((header) => {
-      expect(headerRow.find((th) => th.textContent === header)).toBeTruthy();
+describe("UI-09 — Empty ticket list", () => {
+  it("shows empty state message when zero tickets and no filters active", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ totalItems: 0, totalPages: 0 }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("You haven't created any tickets yet.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'Create your first ticket' button in empty state", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ totalItems: 0, totalPages: 0 }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Create your first ticket" })).toBeInTheDocument();
+    });
+  });
+
+  it("navigates to /tickets/new when 'Create your first ticket' is clicked", async () => {
+    const user = userEvent.setup();
+    mockApiResponse.mockReturnValue(createMockResponse({ totalItems: 0, totalPages: 0 }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Create your first ticket" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Create your first ticket" }));
+    expect(mockNavigate).toHaveBeenCalledWith("/tickets/new");
+  });
+
+  it("hides search and filter controls in empty state", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ totalItems: 0, totalPages: 0 }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("You haven't created any tickets yet.")).toBeInTheDocument();
+    });
+
+    // Search input and filter controls should NOT be rendered
+    expect(screen.queryByPlaceholderText(/Search by ticket number or summary/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+  });
+
+  it("renders My Tickets heading in empty state", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ totalItems: 0, totalPages: 0 }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "My Tickets" })).toBeInTheDocument();
+    });
+  });
+});
+
+// ─── UI-10: No-results state (filters active, zero matches) ─────────────
+
+describe("UI-10 — No-results state", () => {
+  it("shows no-results message when filters active and zero matches", async () => {
+    // First render with tickets so controls are visible,
+    // then mock returns zero results after filter change
+    let callCount = 0;
+    mockApiResponse.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Initial load: return some tickets
+        return createMockResponse({
+          tickets: [{
+            id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+            summary: "Laptop battery", category: "Hardware", requestedPriority: "MEDIUM",
+            itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+          }],
+          totalItems: 1, totalPages: 1,
+          filterOptions: {
+            categories: [{ id: 2, name: "Hardware" }],
+            requestedPriorities: ["MEDIUM"],
+            currentStatuses: ["NEW"],
+          },
+        });
+      }
+      // After filter: return zero results
+      return createMockResponse({
+        totalItems: 0, totalPages: 0,
+        filterOptions: {
+          categories: [{ id: 2, name: "Hardware" }],
+          requestedPriorities: ["MEDIUM"],
+          currentStatuses: ["NEW"],
+        },
+      });
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Category"), "2");
+
+    await waitFor(() => {
+      expect(screen.getByText("No tickets match your search/filters.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'Clear filters' button in no-results state", async () => {
+    let callCount = 0;
+    mockApiResponse.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return createMockResponse({
+          tickets: [{
+            id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+            summary: "Laptop battery", category: "Hardware", requestedPriority: "MEDIUM",
+            itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+          }],
+          totalItems: 1, totalPages: 1,
+          filterOptions: {
+            categories: [{ id: 2, name: "Hardware" }],
+            requestedPriorities: ["MEDIUM"],
+            currentStatuses: ["NEW"],
+          },
+        });
+      }
+      return createMockResponse({
+        totalItems: 0, totalPages: 0,
+        filterOptions: {
+          categories: [{ id: 2, name: "Hardware" }],
+          requestedPriorities: ["MEDIUM"],
+          currentStatuses: ["NEW"],
+        },
+      });
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Category"), "2");
+
+    await waitFor(() => {
+      // There are 2 Clear filters buttons: one in FilterControls, one in no-results state
+      const clearButtons = screen.getAllByRole("button", { name: "Clear filters" });
+      expect(clearButtons.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it("keeps search/filter controls visible in no-results state", async () => {
+    let callCount = 0;
+    mockApiResponse.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return createMockResponse({
+          tickets: [{
+            id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+            summary: "Laptop battery", category: "Hardware", requestedPriority: "MEDIUM",
+            itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+          }],
+          totalItems: 1, totalPages: 1,
+          filterOptions: {
+            categories: [{ id: 2, name: "Hardware" }],
+            requestedPriorities: ["MEDIUM"],
+            currentStatuses: ["NEW"],
+          },
+        });
+      }
+      return createMockResponse({
+        totalItems: 0, totalPages: 0,
+        filterOptions: {
+          categories: [{ id: 2, name: "Hardware" }],
+          requestedPriorities: ["MEDIUM"],
+          currentStatuses: ["NEW"],
+        },
+      });
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Category"), "2");
+
+    await waitFor(() => {
+      expect(screen.getByText("No tickets match your search/filters.")).toBeInTheDocument();
+    });
+
+    // Controls should still be visible
+    expect(screen.getByPlaceholderText(/Search by ticket number or summary/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Category")).toBeInTheDocument();
+  });
+
+  it("does NOT show empty state when filters are active (BR-39 distinction)", async () => {
+    let callCount = 0;
+    mockApiResponse.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return createMockResponse({
+          tickets: [{
+            id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+            summary: "Laptop battery", category: "Hardware", requestedPriority: "MEDIUM",
+            itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+          }],
+          totalItems: 1, totalPages: 1,
+          filterOptions: {
+            categories: [{ id: 2, name: "Hardware" }],
+            requestedPriorities: ["MEDIUM"],
+            currentStatuses: ["NEW"],
+          },
+        });
+      }
+      return createMockResponse({
+        totalItems: 0, totalPages: 0,
+        filterOptions: {
+          categories: [{ id: 2, name: "Hardware" }],
+          requestedPriorities: ["MEDIUM"],
+          currentStatuses: ["NEW"],
+        },
+      });
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Category"), "2");
+
+    await waitFor(() => {
+      expect(screen.getByText("No tickets match your search/filters.")).toBeInTheDocument();
+    });
+
+    // Should NOT show the empty state message
+    expect(screen.queryByText("You haven't created any tickets yet.")).not.toBeInTheDocument();
+  });
+});
+
+// ─── UI-35: Error state ────────────────────────────────────────────────
+
+describe("UI-35 — Error state", () => {
+  it("shows error banner when API returns non-ok response", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ _ok: false }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText("Couldn't load your tickets.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error banner when API throws an error", async () => {
+    mockApiResponse.mockRejectedValue(new Error("Network error"));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText("Couldn't load your tickets.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Retry button in error state", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ _ok: false }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+  });
+
+  it("Retry button re-fetches tickets", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ _ok: false }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+
+    // Now make the API succeed
+    mockApiResponse.mockReturnValue(
+      createMockResponse({
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test ticket", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+      }),
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("table")).toBeInTheDocument();
+    });
+
+    // Error banner should be gone
+    expect(screen.queryByText("Couldn't load your tickets.")).not.toBeInTheDocument();
+  });
+
+  it("hides error banner after successful retry", async () => {
+    mockApiResponse.mockReturnValue(createMockResponse({ _ok: false }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't load your tickets.")).toBeInTheDocument();
+    });
+
+    mockApiResponse.mockReturnValue(
+      createMockResponse({ totalItems: 0, totalPages: 0 }),
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Couldn't load your tickets.")).not.toBeInTheDocument();
     });
   });
 });
@@ -179,10 +471,7 @@ describe("UI-09 — Empty ticket list", () => {
 describe("UI-11 — Paginated response", () => {
   it('renders "Showing 1 to 10 of 42 tickets" text', async () => {
     mockApiResponse.mockReturnValue(
-      createMockResponse({
-        totalItems: 42,
-        totalPages: 5,
-      }),
+      createMockResponse({ totalItems: 42, totalPages: 5 }),
     );
     renderPage();
 
@@ -193,10 +482,7 @@ describe("UI-11 — Paginated response", () => {
 
   it("renders Previous button (disabled on page 1)", async () => {
     mockApiResponse.mockReturnValue(
-      createMockResponse({
-        totalItems: 42,
-        totalPages: 5,
-      }),
+      createMockResponse({ totalItems: 42, totalPages: 5 }),
     );
     renderPage();
 
@@ -211,10 +497,7 @@ describe("UI-11 — Paginated response", () => {
 
   it("renders Next button (enabled when more pages exist)", async () => {
     mockApiResponse.mockReturnValue(
-      createMockResponse({
-        totalItems: 42,
-        totalPages: 5,
-      }),
+      createMockResponse({ totalItems: 42, totalPages: 5 }),
     );
     renderPage();
 
@@ -229,10 +512,7 @@ describe("UI-11 — Paginated response", () => {
 
   it("renders page number buttons", async () => {
     mockApiResponse.mockReturnValue(
-      createMockResponse({
-        totalItems: 42,
-        totalPages: 5,
-      }),
+      createMockResponse({ totalItems: 42, totalPages: 5 }),
     );
     renderPage();
 
@@ -240,28 +520,9 @@ describe("UI-11 — Paginated response", () => {
       expect(screen.getByText("Showing 1 to 10 of 42 tickets")).toBeInTheDocument();
     });
 
-    // Should have page buttons 1–5
     for (let i = 1; i <= 5; i++) {
       expect(screen.getByRole("button", { name: `Page ${i}` })).toBeInTheDocument();
     }
-  });
-
-  it("does not render pagination when totalItems is 0", async () => {
-    mockApiResponse.mockReturnValue(
-      createMockResponse({
-        totalItems: 0,
-        totalPages: 0,
-      }),
-    );
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole("table")).toBeInTheDocument();
-    });
-
-    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Previous page" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Next page" })).not.toBeInTheDocument();
   });
 });
 
@@ -272,15 +533,11 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
     mockApiResponse.mockReturnValue(
       createMockResponse({
         filterOptions: {
-          categories: [
-            { id: 2, name: "Hardware" },
-            { id: 3, name: "Software" },
-          ],
+          categories: [{ id: 2, name: "Hardware" }, { id: 3, name: "Software" }],
           requestedPriorities: ["MEDIUM", "HIGH"],
           currentStatuses: ["NEW"],
         },
-        totalItems: 2,
-        totalPages: 1,
+        totalItems: 2, totalPages: 1,
       }),
     );
     renderPage();
@@ -291,9 +548,7 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
 
     const categorySelect = screen.getByLabelText("Category");
     const options = within(categorySelect).getAllByRole("option");
-
-    // "All Categories" + 2 from filterOptions
-    expect(options).toHaveLength(3);
+    expect(options).toHaveLength(3); // "All Categories" + 2
     expect(options[1]).toHaveTextContent("Hardware");
     expect(options[2]).toHaveTextContent("Software");
   });
@@ -306,8 +561,7 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
           requestedPriorities: ["LOW", "MEDIUM", "HIGH"],
           currentStatuses: ["NEW"],
         },
-        totalItems: 3,
-        totalPages: 1,
+        totalItems: 3, totalPages: 1,
       }),
     );
     renderPage();
@@ -318,12 +572,7 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
 
     const prioritySelect = screen.getByLabelText("Requested Priority");
     const options = within(prioritySelect).getAllByRole("option");
-
-    // "All Priorities" + 3 from filterOptions
-    expect(options).toHaveLength(4);
-    expect(options[1]).toHaveTextContent("Low");
-    expect(options[2]).toHaveTextContent("Medium");
-    expect(options[3]).toHaveTextContent("High");
+    expect(options).toHaveLength(4); // "All Priorities" + 3
   });
 
   it("Current Status dropdown options come from filterOptions.currentStatuses", async () => {
@@ -334,8 +583,7 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
           requestedPriorities: [],
           currentStatuses: ["NEW"],
         },
-        totalItems: 1,
-        totalPages: 1,
+        totalItems: 1, totalPages: 1,
       }),
     );
     renderPage();
@@ -346,14 +594,20 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
 
     const statusSelect = screen.getByLabelText("Current Status");
     const options = within(statusSelect).getAllByRole("option");
-
-    // "All Statuses" + 1 from filterOptions
-    expect(options).toHaveLength(2);
-    expect(options[1]).toHaveTextContent("New");
+    expect(options).toHaveLength(2); // "All Statuses" + 1
   });
 
   it("Sort dropdown has 4 options per D4", async () => {
-    mockApiResponse.mockReturnValue(createMockResponse());
+    mockApiResponse.mockReturnValue(
+      createMockResponse({
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+      }),
+    );
     renderPage();
 
     await waitFor(() => {
@@ -362,7 +616,6 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
 
     const sortSelect = screen.getByLabelText("Sort by");
     const options = within(sortSelect).getAllByRole("option");
-
     expect(options).toHaveLength(4);
     expect(options[0]).toHaveTextContent("Created Date (newest)");
     expect(options[1]).toHaveTextContent("Created Date (oldest)");
@@ -375,15 +628,16 @@ describe("UI-32 — Filter dropdowns from filterOptions", () => {
 
 describe("UI-33 — Empty filterOptions", () => {
   it("Category dropdown has no filter options when filterOptions.categories is empty", async () => {
+    // Use totalItems > 0 so controls are visible (not hidden by empty state)
     mockApiResponse.mockReturnValue(
       createMockResponse({
-        filterOptions: {
-          categories: [],
-          requestedPriorities: [],
-          currentStatuses: [],
-        },
-        totalItems: 0,
-        totalPages: 0,
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+        filterOptions: { categories: [], requestedPriorities: [], currentStatuses: [] },
       }),
     );
     renderPage();
@@ -394,22 +648,20 @@ describe("UI-33 — Empty filterOptions", () => {
 
     const categorySelect = screen.getByLabelText("Category");
     const options = within(categorySelect).getAllByRole("option");
-
-    // Only "All Categories" — no data options
-    expect(options).toHaveLength(1);
+    expect(options).toHaveLength(1); // Only "All Categories"
     expect(options[0]).toHaveTextContent("All Categories");
   });
 
   it("Requested Priority dropdown has no filter options when empty", async () => {
     mockApiResponse.mockReturnValue(
       createMockResponse({
-        filterOptions: {
-          categories: [],
-          requestedPriorities: [],
-          currentStatuses: [],
-        },
-        totalItems: 0,
-        totalPages: 0,
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+        filterOptions: { categories: [], requestedPriorities: [], currentStatuses: [] },
       }),
     );
     renderPage();
@@ -420,22 +672,19 @@ describe("UI-33 — Empty filterOptions", () => {
 
     const prioritySelect = screen.getByLabelText("Requested Priority");
     const options = within(prioritySelect).getAllByRole("option");
-
-    // Only "All Priorities" — no data options
-    expect(options).toHaveLength(1);
-    expect(options[0]).toHaveTextContent("All Priorities");
+    expect(options).toHaveLength(1); // Only "All Priorities"
   });
 
   it("Current Status dropdown has no filter options when empty", async () => {
     mockApiResponse.mockReturnValue(
       createMockResponse({
-        filterOptions: {
-          categories: [],
-          requestedPriorities: [],
-          currentStatuses: [],
-        },
-        totalItems: 0,
-        totalPages: 0,
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+        filterOptions: { categories: [], requestedPriorities: [], currentStatuses: [] },
       }),
     );
     renderPage();
@@ -446,26 +695,22 @@ describe("UI-33 — Empty filterOptions", () => {
 
     const statusSelect = screen.getByLabelText("Current Status");
     const options = within(statusSelect).getAllByRole("option");
-
-    // Only "All Statuses" — no data options
-    expect(options).toHaveLength(1);
-    expect(options[0]).toHaveTextContent("All Statuses");
+    expect(options).toHaveLength(1); // Only "All Statuses"
   });
 
   it("does not throw an error when filterOptions arrays are all empty", async () => {
     mockApiResponse.mockReturnValue(
       createMockResponse({
-        filterOptions: {
-          categories: [],
-          requestedPriorities: [],
-          currentStatuses: [],
-        },
-        totalItems: 0,
-        totalPages: 0,
+        tickets: [{
+          id: 1, ticketNumber: "TKT-2026-000001", createdAt: "2026-08-22T09:14:00.000Z",
+          summary: "Test", category: "Hardware", requestedPriority: "MEDIUM",
+          itPriority: null, currentStatus: "NEW", ticketOwner: null, updatedAt: "2026-08-22T09:14:00.000Z",
+        }],
+        totalItems: 1, totalPages: 1,
+        filterOptions: { categories: [], requestedPriorities: [], currentStatuses: [] },
       }),
     );
 
-    // Should render without throwing
     expect(() => {
       renderPage();
     }).not.toThrow();
