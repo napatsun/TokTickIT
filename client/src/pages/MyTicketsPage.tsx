@@ -1,19 +1,19 @@
 /**
- * MyTicketsPage — §8 My Tickets screen (desktop ≥992px).
+ * MyTicketsPage — §8 My Tickets screen.
  *
  * Orchestrates:
  *   - SearchInput (debounced search by ticket number or summary)
  *   - FilterControls (Category, Requested Priority, Current Status, Sort)
- *   - TicketTable (9-column desktop table)
+ *   - TicketTable (9-column desktop table / 4-col tablet / card list mobile)
  *   - Pagination ("Showing X to Y of Z tickets" + page buttons)
  *   - "Create Ticket" primary button → navigates to /tickets/new
  *
- * Calls GET /api/tickets on every search/filter/sort/page change.
- * Stores state: search, categoryId, requestedPriority, currentStatus,
- * sortBy, sortDir, page, pageSize.
- *
- * Phase 2 scope: happy path only — no loading/empty/no-results/error UI.
- * Those are deferred to Phase 4.
+ * States (§8, BR-39):
+ *   - Loading: skeleton rows while awaiting API response
+ *   - Empty (totalItems===0, no filters): "You haven't created any tickets yet."
+ *   - No-results (totalItems===0, filters active): "No tickets match your search/filters."
+ *   - Error (API failure): "Couldn't load your tickets." + Retry
+ *   - Happy path: table + pagination
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -76,8 +76,15 @@ export default function MyTicketsPage() {
     currentStatuses: [],
   });
 
+  // ─── Loading & error state (Phase 4) ──────────────────────────────
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // ─── Fetch tickets ────────────────────────────────────────────────
   const fetchTickets = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -93,13 +100,21 @@ export default function MyTicketsPage() {
       const url = `/api/tickets${queryString ? `?${queryString}` : ""}`;
 
       const response = await apiClient(url);
+
+      if (!response.ok) {
+        setError("Couldn't load your tickets.");
+        return;
+      }
+
       const data: TicketsResponse = await response.json();
 
       setTickets(data.tickets ?? []);
       setPagination(data.pagination ?? { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 });
       setFilterOptions(data.filterOptions ?? { categories: [], requestedPriorities: [], currentStatuses: [] });
     } catch {
-      // Phase 4 will handle error states
+      setError("Couldn't load your tickets.");
+    } finally {
+      setIsLoading(false);
     }
   }, [search, categoryId, requestedPriority, currentStatus, sortBy, sortDir, page, pageSize]);
 
@@ -144,7 +159,7 @@ export default function MyTicketsPage() {
     setPage(1);
   }, []);
 
-  // ─── Determine if any filter/search is active (for Clear Filters visibility) ───
+  // ─── Determine if any filter/search is active (BR-39) ─────────────
   const hasActiveFilters =
     search !== "" ||
     categoryId !== "" ||
@@ -152,6 +167,10 @@ export default function MyTicketsPage() {
     currentStatus !== "" ||
     sortBy !== "createdAt" ||
     sortDir !== "desc";
+
+  // ─── Determine which state to render ──────────────────────────────
+  const isEmpty = !isLoading && !error && pagination.totalItems === 0 && !hasActiveFilters;
+  const isNoResults = !isLoading && !error && pagination.totalItems === 0 && hasActiveFilters;
 
   return (
     <div className={styles.page}>
@@ -173,39 +192,97 @@ export default function MyTicketsPage() {
         </div>
       </div>
 
-      {/* §8: Controls row — Search + filters + sort */}
-      <div className={styles.controlsSection}>
-        <SearchInput
-          value={search}
-          onSearch={handleSearch}
-          id="ticket-search"
-        />
-        <FilterControls
-          categoryId={categoryId}
-          requestedPriority={requestedPriority}
-          currentStatus={currentStatus}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          categoryOptions={filterOptions.categories}
-          requestedPriorities={filterOptions.requestedPriorities}
-          currentStatuses={filterOptions.currentStatuses}
-          hasActiveFilters={hasActiveFilters}
-          onFilterChange={handleFilterChange}
-          onClearFilters={handleClearFilters}
-        />
-      </div>
+      {/* §8: Controls row — Search + filters + sort
+           Hidden when empty state (nothing to search/filter) */}
+      {!isEmpty && (
+        <div className={styles.controlsSection}>
+          <SearchInput
+            value={search}
+            onSearch={handleSearch}
+            id="ticket-search"
+          />
+          <FilterControls
+            categoryId={categoryId}
+            requestedPriority={requestedPriority}
+            currentStatus={currentStatus}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            categoryOptions={filterOptions.categories}
+            requestedPriorities={filterOptions.requestedPriorities}
+            currentStatuses={filterOptions.currentStatuses}
+            hasActiveFilters={hasActiveFilters}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
+      )}
 
-      {/* §8: Table */}
-      <TicketTable tickets={tickets} />
+      {/* ─── Loading state: skeleton rows ─── */}
+      {isLoading && (
+        <div className={styles.skeletonTable} role="status" aria-label="Loading tickets">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className={styles.skeletonRow}>
+              <div className={styles.skeletonCell} style={{ width: "15%" }} />
+              <div className={styles.skeletonCell} style={{ width: "12%" }} />
+              <div className={styles.skeletonCell} style={{ width: "25%" }} />
+              <div className={styles.skeletonCell} style={{ width: "12%" }} />
+              <div className={styles.skeletonCell} style={{ width: "10%" }} />
+              <div className={styles.skeletonCell} style={{ width: "8%" }} />
+              <div className={styles.skeletonCell} style={{ width: "10%" }} />
+              <div className={styles.skeletonCell} style={{ width: "8%" }} />
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* §8: Pagination footer */}
-      <Pagination
-        page={pagination.page}
-        pageSize={pagination.pageSize}
-        totalItems={pagination.totalItems}
-        totalPages={pagination.totalPages}
-        onPageChange={setPage}
-      />
+      {/* ─── Error state: red banner + Retry ─── */}
+      {error && !isLoading && (
+        <div className={styles.errorBanner} role="alert">
+          <span className={styles.errorIcon} aria-hidden="true">⚠</span>
+          <span>{error}</span>
+          <Button variant="secondary" onClick={fetchTickets}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* ─── Empty state: no tickets ever (BR-39) ─── */}
+      {isEmpty && (
+        <div className={styles.emptyState}>
+          <span className={styles.emptyIcon} aria-hidden="true">📋</span>
+          <p className={styles.emptyMessage}>You haven't created any tickets yet.</p>
+          <Button
+            variant="primary"
+            onClick={() => navigate("/tickets/new")}
+          >
+            Create your first ticket
+          </Button>
+        </div>
+      )}
+
+      {/* ─── No-results state: filters active but zero matches (BR-39) ─── */}
+      {isNoResults && (
+        <div className={styles.noResultsState}>
+          <p className={styles.noResultsMessage}>No tickets match your search/filters.</p>
+          <Button variant="tertiary" onClick={handleClearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      )}
+
+      {/* ─── Happy path: table + pagination ─── */}
+      {!isLoading && !error && !isEmpty && !isNoResults && (
+        <>
+          <TicketTable tickets={tickets} />
+          <Pagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={pagination.totalItems}
+            totalPages={pagination.totalPages}
+            onPageChange={setPage}
+          />
+        </>
+      )}
     </div>
   );
 }
