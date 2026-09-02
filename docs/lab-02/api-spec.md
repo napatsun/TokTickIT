@@ -198,10 +198,21 @@ Example: `GET /api/tickets?search=laptop&categoryId=2&sortBy=createdAt&sortDir=d
       "ticketOwner": null, "updatedAt": "2026-08-22T09:14:00.000Z"
     }
   ],
-  "pagination": { "page": 1, "pageSize": 10, "totalItems": 42, "totalPages": 5 }
+  "pagination": { "page": 1, "pageSize": 10, "totalItems": 42, "totalPages": 5 },
+  "filterOptions": {
+    "categories": [
+      { "id": 2, "name": "Hardware" },
+      { "id": 3, "name": "Software" }
+    ],
+    "requestedPriorities": [ "MEDIUM", "HIGH" ],
+    "currentStatuses": [ "NEW" ]
+  }
 }
 ```
-An empty `tickets` array with `totalItems: 0` is a valid 200 — the frontend distinguishes "no tickets ever" (empty state) from "no matches for current filter" (no-results state) by checking whether any filter/search parameter is active (BR-39).
+
+`filterOptions` contains the distinct values that exist across **all** of the current Requester's tickets (BR-15), computed **independently of any active search/filter/sort parameters** — it must always reflect the full set of available filter values for this Requester, not a subset narrowed by the current query. The frontend uses these to populate filter dropdowns, showing only options that have at least one matching ticket. The API validates any supplied filter value against the full reference set (all active Categories from the `Category` table, all valid enum values), not against `filterOptions`.
+
+An empty `tickets` array with `totalItems: 0` is a valid 200 — the frontend distinguishes "no tickets ever" (empty state) from "no matches for current filter" (no-results state) by checking whether any filter/search parameter is active (BR-39). When `totalItems` is 0, `filterOptions` arrays are all empty (no tickets exist for this Requester).
 
 **Response 400** — invalid `sortBy`/`sortDir`/`requestedPriority`/`currentStatus` enum value:
 ```json

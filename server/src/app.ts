@@ -369,6 +369,244 @@ app.post(
   }
 });
 
+// ─── GET /api/tickets ──────────────────────────────────────────────
+// §5 API Contract: Paginated, searchable, filterable, sortable list of
+// the current Requester's own Tickets (FR-07, FR-08).
+// Auth header required: Yes.
+//
+// Query params: search, categoryId, requestedPriority, currentStatus,
+//   sortBy, sortDir, page, pageSize
+// Response: { tickets, pagination, filterOptions }
+//
+// Business rules enforced:
+//   BR-07  currentStatus = NEW (only value in Lab 2)
+//   BR-12  Ownership: only current Requester's tickets (WHERE requesterId)
+//   BR-14  Search: case-insensitive partial match on ticketNumber OR summary
+//   BR-15  Filters: AND logic; filterOptions from full ticket set
+//   BR-16  Sort: default createdAt desc, tie-break id desc
+//   BR-17  Pagination: page ≥ 1, pageSize ∈ {10,20,50}, clamped
+//   BR-39  Empty vs no-results: totalItems=0 + no filters = empty state
+
+const VALID_SORT_BY = ["createdAt", "updatedAt"] as const;
+const VALID_SORT_DIR = ["asc", "desc"] as const;
+const VALID_PAGE_SIZES = [10, 20, 50] as const;
+
+app.get("/api/tickets", requesterContext, async (req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const requester = req.currentRequester!;
+
+    // ─── Parse & validate query params ────────────────────────────────
+    const fieldErrors: Record<string, string> = {};
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+    // categoryId: optional integer filter
+    let categoryId: number | null = null;
+    if (req.query.categoryId != null && req.query.categoryId !== "") {
+      const parsed = Number(req.query.categoryId);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        fieldErrors.categoryId = "categoryId must be a positive integer.";
+      } else {
+        categoryId = parsed;
+      }
+    }
+
+    // requestedPriority: optional, one of LOW/MEDIUM/HIGH
+    let requestedPriority: string | null = null;
+    if (req.query.requestedPriority != null && req.query.requestedPriority !== "") {
+      const raw = String(req.query.requestedPriority).trim().toUpperCase();
+      if (!VALID_PRIORITY_VALUES.includes(raw as any)) {
+        fieldErrors.requestedPriority = "requestedPriority must be one of LOW, MEDIUM, HIGH.";
+      } else {
+        requestedPriority = raw;
+      }
+    }
+
+    // currentStatus: optional, one of NEW (Lab 2)
+    let currentStatus: string | null = null;
+    if (req.query.currentStatus != null && req.query.currentStatus !== "") {
+      const raw = String(req.query.currentStatus).trim().toUpperCase();
+      if (raw !== "NEW") {
+        fieldErrors.currentStatus = "currentStatus must be NEW.";
+      } else {
+        currentStatus = raw;
+      }
+    }
+
+    // sortBy: default createdAt
+    let sortBy: string = "createdAt";
+    if (req.query.sortBy != null && req.query.sortBy !== "") {
+      const raw = String(req.query.sortBy).trim();
+      if (!VALID_SORT_BY.includes(raw as any)) {
+        fieldErrors.sortBy = "sortBy must be one of createdAt, updatedAt.";
+      } else {
+        sortBy = raw;
+      }
+    }
+
+    // sortDir: default desc
+    let sortDir: string = "desc";
+    if (req.query.sortDir != null && req.query.sortDir !== "") {
+      const raw = String(req.query.sortDir).trim().toLowerCase();
+      if (!VALID_SORT_DIR.includes(raw as any)) {
+        fieldErrors.sortDir = "sortDir must be one of asc, desc.";
+      } else {
+        sortDir = raw;
+      }
+    }
+
+    // If any enum validation failed, return 400
+    if (Object.keys(fieldErrors).length > 0) {
+      res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid query parameter.",
+          fieldErrors,
+        },
+      });
+      return;
+    }
+
+    // page: clamped to ≥ 1 (BR-17)
+    let page = Number(req.query.page);
+    if (!Number.isFinite(page) || page < 1) page = 1;
+    page = Math.floor(page);
+
+    // pageSize: clamped to {10, 20, 50}, default 10 (BR-17)
+    let pageSize = Number(req.query.pageSize);
+    if (!Number.isFinite(pageSize) || !VALID_PAGE_SIZES.includes(pageSize as any)) {
+      pageSize = 10;
+    }
+
+    // ─── Build Prisma where clause ───────────────────────────────────
+    const where: any = {
+      requesterId: requester.id, // BR-12: ownership
+    };
+
+    // BR-14: search — case-insensitive partial match on ticketNumber OR summary
+    if (search) {
+      where.OR = [
+        { ticketNumber: { contains: search, mode: "insensitive" } },
+        { summary: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    // BR-15: filters — AND logic
+    if (categoryId != null) {
+      where.categoryId = categoryId;
+    }
+    if (requestedPriority != null) {
+      where.requestedPriority = requestedPriority;
+    }
+    if (currentStatus != null) {
+      where.currentStatus = currentStatus;
+    }
+
+    // ─── Execute queries ─────────────────────────────────────────────
+    // Two parallel queries:
+    //   1. Filtered + paginated ticket list
+    //   2. filterOptions from FULL ticket set (ignoring filters) (BR-15)
+
+    const orderBy: any = [
+      { [sortBy]: sortDir },
+      { id: "desc" }, // BR-16: secondary tie-break
+    ];
+
+    const [tickets, totalItems, filterOptionsRaw] = await Promise.all([
+      // Query 1: filtered + paginated tickets
+      prisma.ticket.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          ticketNumber: true,
+          createdAt: true,
+          summary: true,
+          requestedPriority: true,
+          itPriority: true,
+          currentStatus: true,
+          ticketOwnerId: true,
+          updatedAt: true,
+          category: { select: { name: true } },
+        },
+      }),
+
+      // Query 2: total count with same filters
+      prisma.ticket.count({ where }),
+
+      // Query 3: filterOptions from FULL ticket set (no search/filter/sort)
+      // Uses only the ownership filter (requesterId = current)
+      (async () => {
+        const fullWhere = { requesterId: requester.id };
+        const [cats, pris, stats] = await Promise.all([
+          prisma.ticket.findMany({
+            where: fullWhere,
+            distinct: ["categoryId"],
+            select: { category: { select: { id: true, name: true } } },
+          }),
+          prisma.ticket.findMany({
+            where: fullWhere,
+            distinct: ["requestedPriority"],
+            select: { requestedPriority: true },
+          }),
+          prisma.ticket.findMany({
+            where: fullWhere,
+            distinct: ["currentStatus"],
+            select: { currentStatus: true },
+          }),
+        ]);
+        return {
+          categories: cats
+            .map((c) => c.category)
+            .sort((a, b) => a.id - b.id),
+          requestedPriorities: pris
+            .map((p) => p.requestedPriority)
+            .sort(),
+          currentStatuses: stats
+            .map((s) => s.currentStatus)
+            .sort(),
+        };
+      })(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+    // ─── Build response ───────────────────────────────────────────────
+    res.status(200).json({
+      tickets: tickets.map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticketNumber,
+        createdAt: t.createdAt.toISOString(),
+        summary: t.summary,
+        category: t.category.name,
+        requestedPriority: t.requestedPriority,
+        itPriority: t.itPriority,
+        currentStatus: t.currentStatus,
+        ticketOwner: null, // BR-8: not yet assigned in Lab 2
+        updatedAt: t.updatedAt.toISOString(),
+      })),
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+      filterOptions: filterOptionsRaw,
+    });
+  } catch (err) {
+    // BR-26: safe error, no internal details leaked
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
 // ─── Multer error handling middleware ──────────────────────────────────
 // Catches errors thrown by multer middleware and maps to api-spec §4 responses:
 //   - LIMIT_FILE_SIZE → 413 ATTACHMENT_TOO_LARGE
