@@ -58,12 +58,12 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-06 | BR-31 | `POST /api/tickets` where one attachment upload is forced to fail mid-request | 201; ticket created; `attachmentFailures` lists the failed file; ticket row exists in DB | `server/tests/lab-02/create-ticket-attachments.api.test.ts` (✅ Implemented — "ticket survives when 1 of 3 attachments fails to upload") |
 | API-07 | — (auth context) | Any ticket/attachment endpoint called with missing `X-Dev-Requester-Id` | 401 `INVALID_REQUESTER_CONTEXT` | `server/tests/lab-02/authContext.api.test.ts` (**Planned** — not yet implemented; auth is tested inline in API-01, API-28, API-33) |
 | API-08 | BR-05, BR-37 | Endpoint called with header referencing an inactive Requester | 401 `INVALID_REQUESTER_CONTEXT` | `server/tests/lab-02/authContext.api.test.ts` (**Planned** — not yet implemented; auth is tested inline in API-01, API-28, API-33) |
-| API-09 | AC-10 | `GET /api/tickets` for Requester A vs Requester B, each with seeded tickets | Requester A's response contains only A's tickets (by id set equality); same for B | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-10 | AC-11 | `GET /api/tickets?search=laptop` | Only tickets whose ticketNumber or summary match "laptop" (case-insensitive) are returned | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-11 | AC-12 | `GET /api/tickets?categoryId=2` | Only that Requester's Hardware tickets returned | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-12 | AC-15, BR-16, BR-17 | `GET /api/tickets?page=1&pageSize=10` against 42 seeded tickets | `pagination.totalItems=42`, `totalPages=5`; page 2 returns the next distinct 10 | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-13 | BR-17 | `GET /api/tickets?page=0&pageSize=999` | Clamped to page=1, pageSize=10 (not a 400) | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-14 | BR-15 (invalid enum) | `GET /api/tickets?requestedPriority=URGENT` | 400 validation error | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
+| API-09 | AC-10 | `GET /api/tickets` for Requester A vs Requester B, each with seeded tickets | Requester A's response contains only A's tickets (by id set equality); same for B | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
+| API-10 | AC-11 | `GET /api/tickets?search=laptop` | Only tickets whose ticketNumber or summary match "laptop" (case-insensitive) are returned | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 3 tests) |
+| API-11 | AC-12 | `GET /api/tickets?categoryId=2` | Only that Requester's Hardware tickets returned | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
+| API-12 | AC-15, BR-16, BR-17 | `GET /api/tickets?page=1&pageSize=10` against 42 seeded tickets | `pagination.totalItems=42`, `totalPages=5`; page 2 returns the next distinct 10 | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 3 tests) |
+| API-13 | BR-17 | `GET /api/tickets?page=0&pageSize=999` | Clamped to page=1, pageSize=10 (not a 400) | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 6 tests) |
+| API-14 | BR-15 (invalid enum) | `GET /api/tickets?requestedPriority=URGENT` | 400 validation error | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 4 tests: invalid requestedPriority, sortBy, sortDir, currentStatus) |
 | API-15 | AC-03 | `GET /api/tickets/:ticketNumber` for a ticket owned by a different Requester | 404 `TICKET_NOT_FOUND` (not 403) | `server/tests/lab-02/ticket-detail.api.test.ts` (**Planned** — file exists but empty) |
 | API-16 | AC-16 | `GET /api/tickets/:ticketNumber` for own ticket | 200; all header fields present and correct; attachments split into active/removed | `server/tests/lab-02/ticket-detail.api.test.ts` (**Planned** — file exists but empty) |
 | API-17 | AC-17, FR-11 | `POST /api/tickets/:ticketNumber/attachments` valid file on owned ticket | 201; attachment appears in subsequent `GET` of the ticket | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
@@ -85,12 +85,12 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-33 | FR-16, BR-05, BR-37 | `GET /api/related-systems` — wrapped format `{ relatedSystems: [...] }`, all 6 seeded systems returned, id/name fields, ascending id order, 401 without header, 401 inactive, 401 non-existent | 200 with correct wrapped shape; 7 seed data assertions; 3 auth rejection cases | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 7 tests) |
 | API-34 | BR-05, BR-19–BR-22 | `POST /api/tickets` — requestedPriority validation: rejects URGENT, accepts lowercase medium, rejects missing, rejects empty string; error response shape follows Common Error Shape | 400 for invalid/missing/empty; 201 for normalized lowercase; error.body has code/message/fieldErrors | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — 5 priority tests + 1 error shape test) |
 | API-35 | BR-05 | `POST /api/tickets` — auth: 401 without header, 401 with inactive requester, 401 with non-existent id | 401 `INVALID_REQUESTER_CONTEXT` in all three cases | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — 3 auth tests) |
-| API-36 | BR-15 | `GET /api/tickets` — filterOptions.categories contains only distinct categories from the current Requester's tickets (not all categories in the system) | `filterOptions.categories` array has entries only for categories that appear in at least one of the Requester's tickets; categories with zero tickets for that Requester are absent | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-37 | BR-15 | `GET /api/tickets` — filterOptions.requestedPriorities contains only distinct priority values present in the Requester's tickets | `filterOptions.requestedPriorities` is a subset of `["LOW", "MEDIUM", "HIGH"]`; only values that appear in at least one ticket are included | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-38 | BR-15 | `GET /api/tickets` — filterOptions.currentStatuses contains only distinct status values present in the Requester's tickets | `filterOptions.currentStatuses` only contains values that appear in at least one ticket (Lab 2: always `["NEW"]` if tickets exist) | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-39 | BR-15 | `GET /api/tickets` — filterOptions is independent of active search/filter/sort params; applying `categoryId=2` does not narrow filterOptions.categories | Same `filterOptions` returned whether or not a `categoryId` filter is supplied; options reflect the full ticket set, not the filtered subset | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-40 | BR-15, BR-39 | `GET /api/tickets` — filterOptions empty when requester has zero tickets (totalItems=0) | `filterOptions.categories = []`, `filterOptions.requestedPriorities = []`, `filterOptions.currentStatuses = []`; `pagination.totalItems = 0` | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
-| API-41 | BR-12, BR-15 | `GET /api/tickets` — filterOptions does not include categories/priorities/statuses from a different Requester's tickets | Requester A's `filterOptions` contains no values that exist only in Requester B's tickets; cross-Requester isolation applies to filterOptions as well | `server/tests/lab-02/my-tickets.api.test.ts` (**Planned** — file exists but empty) |
+| API-36 | BR-15 | `GET /api/tickets` — filterOptions.categories contains only distinct categories from the current Requester's tickets (not all categories in the system) | `filterOptions.categories` array has entries only for categories that appear in at least one of the Requester's tickets; categories with zero tickets for that Requester are absent | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
+| API-37 | BR-15 | `GET /api/tickets` — filterOptions.requestedPriorities contains only distinct priority values present in the Requester's tickets | `filterOptions.requestedPriorities` is a subset of `["LOW", "MEDIUM", "HIGH"]`; only values that appear in at least one ticket are included | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
+| API-38 | BR-15 | `GET /api/tickets` — filterOptions.currentStatuses contains only distinct status values present in the Requester's tickets | `filterOptions.currentStatuses` only contains values that appear in at least one ticket (Lab 2: always `["NEW"]` if tickets exist) | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
+| API-39 | BR-15 | `GET /api/tickets` — filterOptions is independent of active search/filter/sort params; applying `categoryId=2` does not narrow filterOptions.categories | Same `filterOptions` returned whether or not a `categoryId` filter is supplied; options reflect the full ticket set, not the filtered subset | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
+| API-40 | BR-15, BR-39 | `GET /api/tickets` — filterOptions empty when requester has zero tickets (totalItems=0) | `filterOptions.categories = []`, `filterOptions.requestedPriorities = []`, `filterOptions.currentStatuses = []`; `pagination.totalItems = 0` | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
+| API-41 | BR-12, BR-15 | `GET /api/tickets` — filterOptions does not include categories/priorities/statuses from a different Requester's tickets | Requester A's `filterOptions` contains no values that exist only in Requester B's tickets; cross-Requester isolation applies to filterOptions as well | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
 
 ### 2.3 UI Component Tests
 
@@ -251,16 +251,17 @@ artifacts/lab-02/screenshots/ticket-detail/{desktop,tablet,mobile}.png
 | Visual | 0 | 0 | 0 | 0 |
 | Responsive | 0 | 0 | 0 | 0 |
 | E2E | 0 | 0 | 0 | 0 |
-| **Total (implemented)** | **262** | **262** | **0** | **0** |
-| _Planned (files exist but empty)_ | _65_ | — | — | — |
+| **Total (implemented)** | **346** | **346** | **0** | **0** |
+| _Planned (files exist but empty)_ | _14_ | — | — | — |
 
 **Implemented test file breakdown** (files with real tests on disk):
 
-Backend (90 tests across 9 files):
+Backend (134 tests across 12 files; 127 in lab-02 + 7 in lab-01):
 - `ticket-number.test.ts` — 18 tests (unit + concurrency)
 - `create-ticket.api.test.ts` — 33 tests (happy path 9, summary 6, description 5, priority 4+1 shape, reference 4, auth 3, multi-field 1)
 - `create-ticket-attachments.api.test.ts` — 10 tests (happy 3, limit 1, size 1, type 3, partial failure 1, disk 1)
 - `create-ticket-attachments-db-failure.api.test.ts` — 1 test (RECORD_CREATION_FAILED)
+- `my-tickets.api.test.ts` — 37 tests (ownership 2, search 3, filter 2, pagination 3, clamping 6, enum 4, filterOptions 7, response shape 4, sort 3, cross-requester 1, empty requester 1, empty filterOptions 1)
 - `related-systems.api.test.ts` — 7 tests (wrapped format, seed data, fields, ordering, auth 3)
 - `dev-requesters.api.test.ts` — 6 tests
 - `dev-requesters-empty-state.test.ts` — 2 tests
@@ -282,9 +283,9 @@ Frontend (212 tests across 14 files):
 - `apiClient.requesterCleared.test.tsx` — 3 tests
 - `RequesterFlow.integration.test.tsx` — 3 tests
 
-**Empty stub files** (exist on disk but contain no tests yet — 40 planned tests):
-- Backend: `attachments.api.test.ts` (API-17–23), `my-tickets.api.test.ts` (API-09–14, API-36–41), `ticket-detail.api.test.ts` (API-15–16)
-- Frontend: `AttachmentSection.test.tsx` (UI-13–15), `RequesterTicketDetail.test.tsx` (UI-12), `CreateTicket.accessibility.test.tsx` (UI-16)
+**Empty stub files** (exist on disk but contain no tests yet — 14 planned tests):
+- Backend: `attachments.api.test.ts` (API-17–23, 7 tests planned), `ticket-detail.api.test.ts` (API-15–16, 2 tests planned)
+- Frontend: `AttachmentSection.test.tsx` (UI-13–15, 3 tests planned), `RequesterTicketDetail.test.tsx` (UI-12, 1 test planned), `CreateTicket.accessibility.test.tsx` (UI-16, 1 test planned)
 - Not yet created: `validation.unit.test.ts` (UNIT-03/04/07), `pagination.unit.test.ts` (UNIT-05), `attachmentValidation.unit.test.ts` (UNIT-06), `authContext.api.test.ts` (API-07/08), `errorHandling.api.test.ts` (API-25), all STYLE/VISUAL/RESP/E2E files
 
 No test may remain skipped/disabled at submission time (Definition of Done, Section 10 of `specification.md`).
@@ -298,6 +299,6 @@ No test may remain skipped/disabled at submission time (Definition of Done, Sect
 - **Cross-browser matrix testing** is limited to the Playwright default browser project in Lab 2; multi-browser matrix expansion is deferred to a later lab if required.
 - **`categories.test.ts` (Lab 1)** uses hardcoded category IDs (1–4) which drift from actual DB state after repeated seed/reset cycles during development. This is a known test-fragility issue predating Lab 2 (see `specification.md` §11 item 9); **resolved in lab2/05** — test rewritten to use dynamic ID lookup via `prisma.category.findMany()`.
 - **Vitest config silent-skip bug** — `client/vite.config.ts` originally used `include: ["tests/**/*.test.tsx"]` which silently excluded `.test.ts` files (discovered during self-audit when `apiClient.test.ts` with 14 tests was missing from vitest output). Fixed to `include: ["tests/**/*.test.{ts,tsx}"]`. The server config (`server/vitest.config.ts`) uses `include: ["tests/**/*.test.ts"]` which is correct for its all-`.ts` test files. No CI or lint step currently validates that the number of test files on disk matches the number discovered by the test runner — recommend adding such a check in a future sprint to prevent silent config regressions (see `specification.md` §11 item 11).
-- **`seed.idempotency.test.ts`** deletes all rows across every table in `beforeAll`, which races with other test files when Vitest runs suites in parallel — observed manifesting as different symptoms depending on what other test queries at that moment (ID mismatch, 'not iterable' errors, etc.). This is a pre-existing test-isolation issue not introduced by any Lab 2 branch. Recommended fix (not implemented yet): either run `seed.idempotency.test.ts` with Vitest's sequential/singleFork mode, or move its cleanup into an isolated schema/transaction.
+- **`seed.idempotency.test.ts`** deletes all rows across every table in `beforeAll`, which races with other test files when Vitest runs suites in parallel. **Resolved in lab2/06:** Fixed by adding `poolOptions.forks.singleFork: true` to `server/vitest.config.ts`, forcing all test files to run sequentially. Eliminates the race entirely — 127 tests pass deterministically (see `specification.md` §11 item 12).
 - **`create-ticket-attachments-db-failure.api.test.ts`** is isolated in its own file because `vi.spyOn` on Prisma's proxy-based client does not cleanly restore, which would break subsequent tests in the same file.
 - **Real-session-based ownership testing** (replacing `X-Dev-Requester-Id`) is explicitly deferred to Lab 3 per BR-41/BR-42.
