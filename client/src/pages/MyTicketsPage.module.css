@@ -1,0 +1,41 @@
+/* ============================================================
+   MyTicketsPage — §8 My Tickets screen (desktop ≥992px)
+   ============================================================ */
+
+/* §8: Full-width page, max-width ~1200px centered */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* §8: Page header — title + subtitle + Create Ticket button */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: var(--font-size-h1, 24px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin: 4px 0 0 0;
+}
+
+/* §8: Controls section — search + filters */
+.controlsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
