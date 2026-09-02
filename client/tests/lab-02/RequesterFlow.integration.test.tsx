@@ -66,13 +66,30 @@ describe("Requester flow (integration)", () => {
   it("full flow: select requester → land on protected page with correct badge", async () => {
     const user = userEvent.setup();
 
-    // Mock GET /api/dev-requesters
+    // Mock fetch — route different API endpoints to correct response shapes
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ requesters: SEED_REQUESTERS }),
-      })),
+      vi.fn(async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/tickets")) {
+          return {
+            ok: true,
+            json: async () => ({
+              tickets: [],
+              pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+              filterOptions: {
+                categories: [],
+                requestedPriorities: [],
+                currentStatuses: [],
+              },
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({ requesters: SEED_REQUESTERS }),
+        };
+      }),
     );
 
     render(<App />);
@@ -118,13 +135,30 @@ describe("Requester flow (integration)", () => {
     // Seed localStorage so RequireRequester lets us through
     localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_REQUESTERS[0]));
 
-    // Mock fetch (not needed for this flow, but App might call it)
+    // Mock fetch — route different API endpoints to correct response shapes
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({ requesters: SEED_REQUESTERS }),
-      })),
+      vi.fn(async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/tickets")) {
+          return {
+            ok: true,
+            json: async () => ({
+              tickets: [],
+              pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+              filterOptions: {
+                categories: [],
+                requestedPriorities: [],
+                currentStatuses: [],
+              },
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({ requesters: SEED_REQUESTERS }),
+        };
+      }),
     );
 
     render(<App />);
