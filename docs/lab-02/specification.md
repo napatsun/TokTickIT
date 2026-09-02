@@ -281,6 +281,8 @@ All ticket/attachment endpoints require an `X-Dev-Requester-Id` header (Lab 2 st
 | AC-22 | Given the Requester switches from Requester A to Requester B via Change Requester, when the switch completes, then My Tickets reloads and shows only Requester B's tickets, with no flash of Requester A's data. |
 | AC-23 | Given the viewport is <768px, when any of the four screens render, then no horizontal page scrolling occurs and all buttons remain touch-usable. |
 | AC-24 | Given a screen reader or keyboard-only user, when they tab through Create Ticket, then every control is reachable, has a visible focus indicator, and every icon-only control has an accessible label. |
+| AC-25 | Given My Tickets is loading data from the API (initial load or after a filter/search/sort/page change), when the response has not yet arrived, then skeleton loading rows are displayed and no table data is shown. |
+| AC-26 | Given My Tickets encounters an API error or a non-200 response, when the error occurs, then an error banner with a message and a Retry button is shown, and clicking Retry re-fetches the tickets successfully. |
 
 ---
 
