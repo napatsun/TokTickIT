@@ -4,8 +4,8 @@ import { getPrisma } from "./prisma.js";
 import { requesterContext } from "./middleware/requester-context.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
-import { saveAttachmentFile, generateSafeFileName } from "./services/attachmentStorage.js";
-import { findOwnedTicket } from "./lib/ownership.js";
+import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
+import { findOwnedTicket, findOwnedAttachment } from "./lib/ownership.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
@@ -692,6 +692,330 @@ app.get("/api/tickets/:ticketNumber", requesterContext, async (req: Request, res
     });
   } catch (err) {
     // BR-26: safe error, no internal details leaked
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
+// ─── POST /api/tickets/:ticketNumber/attachments ──────────────────────
+// §7 API Contract: Add one or more Attachments to an existing, owned Ticket.
+// Auth header required: Yes.
+// Content-Type: multipart/form-data.
+//
+// Business rules enforced:
+//   BR-12  Ownership: only current Requester's ticket
+//   BR-30  Max 5 active attachments per ticket
+//   BR-33  Only owning Requester may add attachments
+//   BR-41  Ownership check via findOwnedTicket() single access point
+
+app.post(
+  "/api/tickets/:ticketNumber/attachments",
+  upload.array("attachments", 5),
+  requesterContext,
+  async (req: Request, res: Response) => {
+  try {
+    const requester = req.currentRequester!;
+    const { ticketNumber } = req.params;
+
+    // BR-41: ownership check through single access point
+    const ticket = await findOwnedTicket(ticketNumber, requester.id);
+
+    if (!ticket) {
+      // BR-13: identical 404 for non-existent and cross-requester
+      res.status(404).json({
+        error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+      });
+      return;
+    }
+
+    // BR-30: check active attachment count before processing
+    const activeCount = await getPrisma().attachment.count({
+      where: { ticketId: ticket.id, isRemoved: false },
+    });
+
+    const files = (req.files as Express.Multer.File[]) ?? [];
+
+    if (files.length === 0) {
+      res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "No files provided.",
+          fieldErrors: { attachments: "At least one file is required." },
+        },
+      });
+      return;
+    }
+
+    if (activeCount + files.length > 5) {
+      // BR-30: reject before processing any files
+      res.status(400).json({
+        error: {
+          code: "ATTACHMENT_LIMIT_REACHED",
+          message: "This ticket already has 5 active attachments. Remove one before adding another.",
+        },
+      });
+      return;
+    }
+
+    // Process files — same pattern as POST /api/tickets (BR-28, BR-29, BR-31, BR-32)
+    const attachments: Array<{
+      id: number;
+      originalFileName: string;
+      fileSizeBytes: number;
+      mimeType: string;
+      uploadedAt: string;
+    }> = [];
+    const attachmentFailures: Array<{
+      originalFileName: string;
+      reason: string;
+    }> = [];
+
+    for (const file of files) {
+      const storedFileName = generateSafeFileName(file.originalname);
+
+      // ─── Step 1: Write file to disk ─────────────────────────
+      // If this fails, the file was never written — clean failure.
+      try {
+        await saveAttachmentFile(file.buffer, storedFileName);
+      } catch {
+        // BR-31: partial failure — file write failed, no orphan
+        attachmentFailures.push({
+          originalFileName: file.originalname,
+          reason: "UPLOAD_INTERRUPTED",
+        });
+        continue; // skip DB insert for this file
+      }
+
+      // ─── Step 2: Create attachment record in DB ─────────────
+      // If this fails after disk write succeeded, we have an orphan
+      // file on disk. This is acceptable in Lab 2 (file is harmless,
+      // soft-deletion never removes files per BR-34) but the failure
+      // reason is distinct from UPLOAD_INTERRUPTED for debugging.
+      try {
+        const attachment = await getPrisma().attachment.create({
+          data: {
+            ticketId: ticket.id,
+            originalFileName: file.originalname,
+            storedFileName,
+            mimeType: file.mimetype,
+            fileSizeBytes: file.size,
+            uploadedByRequesterId: requester.id,
+          },
+        });
+
+        attachments.push({
+          id: attachment.id,
+          originalFileName: attachment.originalFileName,
+          fileSizeBytes: attachment.fileSizeBytes,
+          mimeType: attachment.mimeType,
+          uploadedAt: attachment.uploadedAt.toISOString(),
+        });
+      } catch {
+        // File was written to disk but DB record failed — orphan file.
+        attachmentFailures.push({
+          originalFileName: file.originalname,
+          reason: "RECORD_CREATION_FAILED",
+        });
+      }
+    }
+
+    // Success — return 201 per api-spec §7
+    res.status(201).json({ attachments, attachmentFailures });
+  } catch (err) {
+    // BR-26: safe error, no internal details leaked
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
+// ─── GET /api/attachments/:id ──────────────────────────────────────────
+// §8 API Contract: Retrieve Attachment metadata only.
+// Auth header required: Yes.
+// Ownership checked via parent Ticket (BR-33, BR-41).
+
+app.get("/api/attachments/:id", requesterContext, async (req: Request, res: Response) => {
+  try {
+    const requester = req.currentRequester!;
+    const attachmentId = Number(req.params.id);
+
+    if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." },
+      });
+      return;
+    }
+
+    // BR-41: ownership check through single access point
+    const attachment = await findOwnedAttachment(attachmentId, requester.id);
+
+    if (!attachment) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." },
+      });
+      return;
+    }
+
+    // Success — return 200 per api-spec §8
+    res.status(200).json({
+      attachment: {
+        id: attachment.id,
+        ticketId: attachment.ticketId,
+        originalFileName: attachment.originalFileName,
+        mimeType: attachment.mimeType,
+        fileSizeBytes: attachment.fileSizeBytes,
+        uploadedAt: attachment.uploadedAt.toISOString(),
+        isRemoved: attachment.isRemoved,
+        removedAt: attachment.removedAt?.toISOString() ?? null,
+        removedReason: attachment.removedReason,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
+// ─── GET /api/attachments/:id/download ─────────────────────────────────
+// §9 API Contract: Download the binary content of an active Attachment.
+// Auth header required: Yes.
+// BR-35: removed attachments return 404 (indistinguishable from nonexistent).
+
+app.get("/api/attachments/:id/download", requesterContext, async (req: Request, res: Response) => {
+  try {
+    const requester = req.currentRequester!;
+    const attachmentId = Number(req.params.id);
+
+    if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." },
+      });
+      return;
+    }
+
+    // BR-41: ownership check through single access point
+    const attachment = await findOwnedAttachment(attachmentId, requester.id);
+
+    if (!attachment) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." },
+      });
+      return;
+    }
+
+    // BR-35: removed attachments are indistinguishable from nonexistent
+    if (attachment.isRemoved) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found." },
+      });
+      return;
+    }
+
+    // Stream file content — binary response per api-spec §9
+    const filePath = getAttachmentFilePath(attachment.storedFileName);
+    res.download(filePath, attachment.originalFileName);
+  } catch (err) {
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
+// ─── DELETE /api/attachments/:id ───────────────────────────────────────
+// §10 API Contract: Soft-remove an active Attachment on an owned Ticket.
+// Auth header required: Yes.
+// Request body: { removalReason: string } — required, 3-200 chars (BR-34).
+
+app.delete("/api/attachments/:id", requesterContext, async (req: Request, res: Response) => {
+  try {
+    const requester = req.currentRequester!;
+    const attachmentId = Number(req.params.id);
+
+    if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found or already removed." },
+      });
+      return;
+    }
+
+    // BR-41: ownership check through single access point
+    const attachment = await findOwnedAttachment(attachmentId, requester.id);
+
+    if (!attachment) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found or already removed." },
+      });
+      return;
+    }
+
+    // BR-35/idempotent: already removed → 404 (not silently succeeded)
+    if (attachment.isRemoved) {
+      res.status(404).json({
+        error: { code: "ATTACHMENT_NOT_FOUND", message: "Attachment not found or already removed." },
+      });
+      return;
+    }
+
+    // BR-34: validate removalReason — required, trimmed, 3-200 chars
+    const body = (req.body ?? {}) as { removalReason?: unknown };
+    const removalReason = typeof body.removalReason === "string"
+      ? body.removalReason.trim()
+      : "";
+
+    if (removalReason.length < 3 || removalReason.length > 200) {
+      res.status(400).json({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "A removal reason is required.",
+          fieldErrors: {
+            removalReason: "Removal reason must be between 3 and 200 characters.",
+          },
+        },
+      });
+      return;
+    }
+
+    // Perform soft removal — single atomic update
+    const updated = await getPrisma().attachment.update({
+      where: { id: attachmentId },
+      data: {
+        isRemoved: true,
+        removedAt: new Date(),
+        removedReason: removalReason,
+        removedByRequesterId: requester.id,
+      },
+      select: {
+        id: true,
+        isRemoved: true,
+        removedAt: true,
+        removedReason: true,
+      },
+    });
+
+    // Success — return 200 per api-spec §10
+    res.status(200).json({
+      attachment: {
+        id: updated.id,
+        isRemoved: updated.isRemoved,
+        removedAt: updated.removedAt?.toISOString() ?? null,
+        removedReason: updated.removedReason,
+      },
+    });
+  } catch (err) {
     res.status(500).json({
       error: {
         code: "SERVER_ERROR",
