@@ -283,6 +283,9 @@ All ticket/attachment endpoints require an `X-Dev-Requester-Id` header (Lab 2 st
 | AC-24 | Given a screen reader or keyboard-only user, when they tab through Create Ticket, then every control is reachable, has a visible focus indicator, and every icon-only control has an accessible label. |
 | AC-25 | Given My Tickets is loading data from the API (initial load or after a filter/search/sort/page change), when the response has not yet arrived, then skeleton loading rows are displayed and no table data is shown. |
 | AC-26 | Given My Tickets encounters an API error or a non-200 response, when the error occurs, then an error banner with a message and a Retry button is shown, and clicking Retry re-fetches the tickets successfully. |
+| AC-27 | Given Ticket Detail is loading data from the API (initial load or after a Retry), when the response has not yet arrived, then a skeleton loading indicator is displayed and no ticket data is shown. |
+| AC-28 | Given Ticket Detail encounters a non-404 API error (e.g., 500) or network failure, when the error occurs, then an error message with a Retry button is shown, and clicking Retry re-fetches the ticket detail successfully. |
+| AC-29 | Given an attachment operation (add, remove, or download) on Ticket Detail fails due to a server error or network failure, when the error occurs, then an error message is shown near the relevant control (not silently ignored), and the user can retry the operation. |
 
 ---
 
@@ -290,7 +293,7 @@ All ticket/attachment endpoints require an `X-Dev-Requester-Id` header (Lab 2 st
 
 See also `ai-use.md` and `reviewer.md` for process evidence. Product-completion conditions:
 - [ ] All FR-01 through FR-16 are implemented and demonstrable.
-- [ ] Every AC-01 through AC-26 has at least one passing, traceable automated test (see `tests.md`).
+- [ ] Every AC-01 through AC-29 has at least one passing, traceable automated test (see `tests.md`).
 - [ ] No required test is skipped, disabled, or commented out in the final `main` branch.
 - [ ] Data model matches Section 7 and the Prisma schema; migrations run cleanly on a fresh database plus idempotent seed.
 - [ ] API responses match `api-spec.md` exactly, including status codes and error shapes.
