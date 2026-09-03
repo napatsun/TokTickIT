@@ -45,7 +45,6 @@ export default function TicketTable({ tickets }: TicketTableProps) {
   const navigate = useNavigate();
 
   function handleRowClick(ticketNumber: string) {
-    // TODO: lab2/07 will implement the ticket detail page
     navigate(`/tickets/${ticketNumber}`);
   }
 

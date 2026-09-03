@@ -1,0 +1,92 @@
+/* ============================================================
+   RemoveAttachmentConfirm — §9 Remove flow
+   ============================================================
+   Inline confirm dialog with removal reason textarea
+   ============================================================ */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  background-color: var(--color-surface, #fff);
+  border: 1px solid #dde7e1;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 24px;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  font-size: var(--font-size-h3, 16px);
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+  margin: 0;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+}
+
+.required {
+  color: var(--color-error, #b3261e);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--color-field-editable-border, #c7d3cc);
+  border-radius: 6px;
+  background-color: var(--color-field-editable-bg, #fff);
+  color: var(--color-text, #1e2b24);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-secondary-green, #0b7a46);
+  box-shadow: 0 0 0 2px var(--color-secondary-green, #0b7a46);
+}
+
+.charCount {
+  font-size: 12px;
+  color: var(--color-text-muted, #5b6b62);
+  text-align: right;
+}
+
+.errorText {
+  font-size: 13px;
+  color: var(--color-error, #b3261e);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
