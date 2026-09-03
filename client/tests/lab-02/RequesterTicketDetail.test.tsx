@@ -7,6 +7,7 @@
  */
 
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TicketDetailPage from "../../src/pages/TicketDetailPage";
@@ -21,6 +22,7 @@ vi.mock("../../src/lib/apiClient", () => ({
     const data = await result;
     return {
       ok: data._ok !== undefined ? data._ok : true,
+      status: data.status ?? 200,
       json: async () => data,
     };
   }),
@@ -94,6 +96,149 @@ function renderPage(ticketNumber = "TKT-2026-000501") {
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────
+
+describe("UI-36 — Ticket Detail loading state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows skeleton loading indicator while fetching ticket detail", () => {
+    // Never resolve the mock — keeps loading state
+    mockApiResponse.mockReturnValue(new Promise(() => {}));
+
+    renderPage();
+
+    expect(screen.getByLabelText("Loading ticket details")).toBeInTheDocument();
+    // Back link should still be visible during loading
+    expect(screen.getByText(/← Back to My Tickets/)).toBeInTheDocument();
+  });
+
+  it("hides skeleton after data loads successfully", async () => {
+    mockApiResponse.mockReturnValue(
+      createMockResponse({
+        ticket: mockTicket,
+        attachments: mockAttachments,
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("TKT-2026-000501")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByLabelText("Loading ticket details")).not.toBeInTheDocument();
+  });
+});
+
+describe("UI-37 — Ticket Detail not-found state (BR-13)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows 'Ticket not found.' message when API returns 404", async () => {
+    mockApiResponse.mockReturnValue(
+      createMockResponse({ _ok: false, status: 404 }),
+    );
+
+    // Override the mock to return 404
+    mockApiResponse.mockReturnValue({ _ok: false, status: 404 });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Ticket not found.")).toBeInTheDocument();
+    });
+
+    // Back button should be present
+    expect(screen.getByText("Back to My Tickets")).toBeInTheDocument();
+  });
+
+  it("navigates to My Tickets when Back button is clicked", async () => {
+    mockApiResponse.mockReturnValue({ _ok: false, status: 404 });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Ticket not found.")).toBeInTheDocument();
+    });
+
+    const backButton = screen.getByText("Back to My Tickets");
+    await userEvent.click(backButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/tickets");
+  });
+
+  it("does NOT show header block or attachments in not-found state", async () => {
+    mockApiResponse.mockReturnValue({ _ok: false, status: 404 });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Ticket not found.")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Ticket Detail")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Attachments/)).not.toBeInTheDocument();
+  });
+});
+
+describe("UI-38 — Ticket Detail error state + retry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows error message when API returns 500", async () => {
+    mockApiResponse.mockReturnValue({ _ok: false, status: 500 });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't load ticket details.")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Retry")).toBeInTheDocument();
+  });
+
+  it("shows error message on network failure", async () => {
+    mockApiResponse.mockRejectedValue(new Error("Network error"));
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't load ticket details.")).toBeInTheDocument();
+    });
+  });
+
+  it("Retry button re-fetches ticket detail successfully", async () => {
+    // First call fails
+    mockApiResponse.mockReturnValueOnce({ _ok: false, status: 500 });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't load ticket details.")).toBeInTheDocument();
+    });
+
+    // Second call succeeds
+    mockApiResponse.mockReturnValueOnce(
+      createMockResponse({
+        ticket: mockTicket,
+        attachments: mockAttachments,
+      }),
+    );
+
+    const retryButton = screen.getByText("Retry");
+    await userEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("TKT-2026-000501")).toBeInTheDocument();
+    });
+
+    // Error should be gone
+    expect(screen.queryByText("Couldn't load ticket details.")).not.toBeInTheDocument();
+  });
+});
 
 describe("UI-12 — Ticket Detail renders with correct fields", () => {
   beforeEach(() => {
