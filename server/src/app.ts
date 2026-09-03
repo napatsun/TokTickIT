@@ -5,6 +5,7 @@ import { requesterContext } from "./middleware/requester-context.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName } from "./services/attachmentStorage.js";
+import { findOwnedTicket } from "./lib/ownership.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
@@ -595,6 +596,99 @@ app.get("/api/tickets", requesterContext, async (req: Request, res: Response) =>
         totalPages,
       },
       filterOptions: filterOptionsRaw,
+    });
+  } catch (err) {
+    // BR-26: safe error, no internal details leaked
+    res.status(500).json({
+      error: {
+        code: "SERVER_ERROR",
+        message: "Something went wrong. Please try again.",
+      },
+    });
+  }
+});
+
+// ─── GET /api/tickets/:ticketNumber ──────────────────────────────────
+// §6 API Contract: Retrieve one Ticket owned by the current Requester,
+// with its Attachments split into active and removed arrays.
+// Auth header required: Yes.
+//
+// Business rules enforced:
+//   BR-12  Ownership: only current Requester's ticket
+//   BR-13  404 for non-existent OR cross-requester (no information leak)
+//   BR-40  Re-fetches from backend on every page load (no cache trust)
+//   BR-41  Ownership check via findOwnedTicket() single access point
+
+app.get("/api/tickets/:ticketNumber", requesterContext, async (req: Request, res: Response) => {
+  try {
+    const requester = req.currentRequester!;
+    const { ticketNumber } = req.params;
+
+    // BR-41: ownership check through single access point
+    const ticket = await findOwnedTicket(ticketNumber, requester.id);
+
+    if (!ticket) {
+      // BR-13: identical 404 for non-existent and cross-requester
+      res.status(404).json({
+        error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+      });
+      return;
+    }
+
+    // Fetch attachments, split into active and removed (api-spec §6)
+    const allAttachments = await getPrisma().attachment.findMany({
+      where: { ticketId: ticket.id },
+      orderBy: { uploadedAt: "asc" },
+      select: {
+        id: true,
+        originalFileName: true,
+        fileSizeBytes: true,
+        mimeType: true,
+        uploadedAt: true,
+        isRemoved: true,
+        removedAt: true,
+        removedReason: true,
+      },
+    });
+
+    const active = allAttachments
+      .filter((a) => !a.isRemoved)
+      .map((a) => ({
+        id: a.id,
+        originalFileName: a.originalFileName,
+        fileSizeBytes: a.fileSizeBytes,
+        mimeType: a.mimeType,
+        uploadedAt: a.uploadedAt.toISOString(),
+      }));
+
+    const removed = allAttachments
+      .filter((a) => a.isRemoved)
+      .map((a) => ({
+        id: a.id,
+        originalFileName: a.originalFileName,
+        fileSizeBytes: a.fileSizeBytes,
+        removedAt: a.removedAt?.toISOString() ?? null,
+        removedReason: a.removedReason,
+      }));
+
+    // Success — return 200 per api-spec §6
+    res.status(200).json({
+      ticket: {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        ticketDate: ticket.createdAt.toISOString(),
+        requester: ticket.requester,
+        category: ticket.category,
+        relatedSystem: ticket.relatedSystem,
+        summary: ticket.summary,
+        description: ticket.description,
+        requestedPriority: ticket.requestedPriority,
+        itPriority: ticket.itPriority,
+        currentStatus: ticket.currentStatus,
+        ticketOwner: null, // BR-08: not yet assigned in Lab 2
+        resolutionSummary: ticket.resolutionSummary,
+      },
+      attachments: { active, removed },
     });
   } catch (err) {
     // BR-26: safe error, no internal details leaked
