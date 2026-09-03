@@ -163,3 +163,54 @@
   margin: 0;
   font-weight: 500;
 }
+
+/* ============================================================
+   §11: Responsive — Tablet 768–991px
+   Header grid 2-column; summary/description full width.
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 991px) {
+  .fieldGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .headerBlock {
+    padding: 24px;
+  }
+
+  .summarySection {
+    padding: 24px;
+  }
+}
+
+/* ============================================================
+   §11: Responsive — Mobile <768px
+   Header fields stack single-column; summary/description full width;
+   touch targets ≥44px; no horizontal scroll.
+   ============================================================ */
+@media (max-width: 767px) {
+  .page {
+    padding: 16px 12px;
+    gap: 16px;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .headerBlock {
+    padding: 20px 16px;
+  }
+
+  .summarySection {
+    padding: 20px 16px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .errorBanner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -90,3 +90,37 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ============================================================
+   §11: Responsive — Mobile <768px
+   Dialog stays within viewport; buttons ≥44px touch targets;
+   textarea usable on mobile.
+   ============================================================ */
+@media (max-width: 767px) {
+  .overlay {
+    padding: 16px;
+    align-items: flex-end;
+  }
+
+  .dialog {
+    max-width: 100%;
+    padding: 20px 16px;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .textarea {
+    min-height: 100px;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+
+  /* Buttons full-width and ≥44px */
+  .actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .actions button {
+    min-height: 44px;
+    width: 100%;
+  }
+}

@@ -124,3 +124,53 @@
   font-style: italic;
   flex-shrink: 0;
 }
+
+/* ============================================================
+   §11: Responsive — Mobile <768px
+   Attachment rows stack: file info on top, full-width buttons below.
+   Touch targets ≥44px. No horizontal scroll.
+   ============================================================ */
+@media (max-width: 767px) {
+  .attachmentRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .attachmentInfo {
+    min-width: 0;
+  }
+
+  .attachmentActions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* Ensure Download/Remove buttons are ≥44px touch targets */
+  .attachmentActions button {
+    min-height: 44px;
+    flex: 1;
+  }
+
+  .fileName {
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  /* Removed attachment rows — same stacking */
+  .removedRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .removedSection {
+    padding-top: 12px;
+  }
+
+  .heading {
+    font-size: 15px;
+  }
+}
