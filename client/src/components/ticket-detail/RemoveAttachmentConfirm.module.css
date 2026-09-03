@@ -79,6 +79,20 @@
   text-align: right;
 }
 
+.errorBanner {
+  background-color: var(--color-error-bg, #fbeae9);
+  border: 1px solid var(--color-error, #b3261e);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.errorBanner p {
+  color: var(--color-error, #b3261e);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .errorText {
   font-size: 13px;
   color: var(--color-error, #b3261e);

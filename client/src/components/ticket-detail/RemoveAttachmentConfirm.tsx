@@ -19,11 +19,14 @@ const MAX_REASON_LENGTH = 200;
 interface RemoveAttachmentConfirmProps {
   onConfirm: (reason: string) => void;
   onCancel: () => void;
+  /** Server-side error from failed DELETE request */
+  error?: string | null;
 }
 
 export default function RemoveAttachmentConfirm({
   onConfirm,
   onCancel,
+  error,
 }: RemoveAttachmentConfirmProps) {
   const [reason, setReason] = useState("");
   const trimmedReason = reason.trim();
@@ -45,6 +48,12 @@ export default function RemoveAttachmentConfirm({
     <div className={styles.overlay}>
       <form className={styles.dialog} onSubmit={handleSubmit}>
         <h3 className={styles.title}>Remove Attachment</h3>
+
+        {error && (
+          <div className={styles.errorBanner} role="alert">
+            <p>{error}</p>
+          </div>
+        )}
 
         <div className={styles.fieldGroup}>
           <label htmlFor="removal-reason" className={styles.label}>

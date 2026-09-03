@@ -76,6 +76,8 @@ export default function AttachmentSection({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const activeCount = activeAttachments.length;
   const canAddMore = activeCount < MAX_ACTIVE;
@@ -83,24 +85,30 @@ export default function AttachmentSection({
   // ─── Download handler ─────────────────────────────────────────────
   const handleDownload = useCallback(
     (attachmentId: number, fileName: string) => {
-      // Open download in new tab — apiClient attaches auth header
+      setDownloadError(null);
       const baseUrl =
         import.meta.env.VITE_API_URL ?? "http://localhost:3000";
       const url = `${baseUrl}/api/attachments/${attachmentId}/download`;
 
-      // Use apiClient to get the blob, then trigger download
-      apiClient(url).then(async (response) => {
-        if (!response.ok) return;
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      });
+      apiClient(url)
+        .then(async (response) => {
+          if (!response.ok) {
+            setDownloadError("Download failed. The file may have been removed.");
+            return;
+          }
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        })
+        .catch(() => {
+          setDownloadError("Download failed. Please check your connection and try again.");
+        });
     },
     [],
   );
@@ -148,6 +156,8 @@ export default function AttachmentSection({
     async (reason: string) => {
       if (removingId === null) return;
 
+      setRemoveError(null);
+
       try {
         const response = await apiClient(
           `/api/attachments/${removingId}`,
@@ -159,14 +169,18 @@ export default function AttachmentSection({
         );
 
         if (!response.ok) {
-          // Error handled by parent
+          const errorData = await response.json().catch(() => null);
+          setRemoveError(
+            errorData?.error?.message ?? "Failed to remove attachment. Please try again.",
+          );
           return;
         }
 
         setRemovingId(null);
+        setRemoveError(null);
         onAttachmentRemoved();
       } catch {
-        // Error handled by parent
+        setRemoveError("Failed to remove attachment. Please check your connection and try again.");
       }
     },
     [removingId, onAttachmentRemoved],
@@ -267,11 +281,19 @@ export default function AttachmentSection({
         </div>
       )}
 
+      {/* Download error feedback */}
+      {downloadError && (
+        <p className={styles.uploadError} role="alert">
+          {downloadError}
+        </p>
+      )}
+
       {/* Remove confirmation dialog */}
       {removingId !== null && (
         <RemoveAttachmentConfirm
           onConfirm={handleRemoveConfirm}
-          onCancel={() => setRemovingId(null)}
+          onCancel={() => { setRemovingId(null); setRemoveError(null); }}
+          error={removeError}
         />
       )}
     </section>
