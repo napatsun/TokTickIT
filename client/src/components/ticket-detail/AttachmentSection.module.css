@@ -1,0 +1,176 @@
+/* ============================================================
+   AttachmentSection — §9.5-6 Attachments panel
+   ============================================================ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.heading {
+  font-size: var(--font-size-h3, 16px);
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+  margin: 0;
+}
+
+/* ─── Active attachment list ──────────────────────────────────────── */
+
+.attachmentList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background-color: #dde7e1;
+  border: 1px solid #dde7e1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.attachmentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background-color: var(--color-surface, #fff);
+  gap: 16px;
+}
+
+.attachmentInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fileName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text, #1e2b24);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileMeta {
+  font-size: 12px;
+  color: var(--color-text-muted, #5b6b62);
+}
+
+.attachmentActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.emptyText {
+  font-size: 14px;
+  color: var(--color-text-muted, #5b6b62);
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+}
+
+/* ─── Add attachment section ──────────────────────────────────────── */
+
+.addSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uploadError {
+  font-size: 13px;
+  color: var(--color-error, #b3261e);
+  margin: 0;
+}
+
+.limitText {
+  font-size: 14px;
+  color: var(--color-text-muted, #5b6b62);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ─── Removed attachments sub-section ─────────────────────────────── */
+
+.removedSection {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #dde7e1;
+}
+
+.removedHeading {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted, #5b6b62);
+  margin: 0 0 12px 0;
+}
+
+.removedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background-color: var(--color-disabled-bg, #e9ecea);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  gap: 16px;
+}
+
+.unavailableLabel {
+  font-size: 12px;
+  color: var(--color-text-muted, #5b6b62);
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   §11: Responsive — Mobile <768px
+   Attachment rows stack: file info on top, full-width buttons below.
+   Touch targets ≥44px. No horizontal scroll.
+   ============================================================ */
+@media (max-width: 767px) {
+  .attachmentRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .attachmentInfo {
+    min-width: 0;
+  }
+
+  .attachmentActions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* Ensure Download/Remove buttons are ≥44px touch targets */
+  .attachmentActions button {
+    min-height: 44px;
+    flex: 1;
+  }
+
+  .fileName {
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  /* Removed attachment rows — same stacking */
+  .removedRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .removedSection {
+    padding-top: 12px;
+  }
+
+  .heading {
+    font-size: 15px;
+  }
+}

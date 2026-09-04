@@ -64,15 +64,15 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-12 | AC-15, BR-16, BR-17 | `GET /api/tickets?page=1&pageSize=10` against 42 seeded tickets | `pagination.totalItems=42`, `totalPages=5`; page 2 returns the next distinct 10 | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 3 tests) |
 | API-13 | BR-17 | `GET /api/tickets?page=0&pageSize=999` | Clamped to page=1, pageSize=10 (not a 400) | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 6 tests) |
 | API-14 | BR-15 (invalid enum) | `GET /api/tickets?requestedPriority=URGENT` | 400 validation error | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 4 tests: invalid requestedPriority, sortBy, sortDir, currentStatus) |
-| API-15 | AC-03 | `GET /api/tickets/:ticketNumber` for a ticket owned by a different Requester | 404 `TICKET_NOT_FOUND` (not 403) | `server/tests/lab-02/ticket-detail.api.test.ts` (**Planned** — file exists but empty) |
-| API-16 | AC-16 | `GET /api/tickets/:ticketNumber` for own ticket | 200; all header fields present and correct; attachments split into active/removed | `server/tests/lab-02/ticket-detail.api.test.ts` (**Planned** — file exists but empty) |
-| API-17 | AC-17, FR-11 | `POST /api/tickets/:ticketNumber/attachments` valid file on owned ticket | 201; attachment appears in subsequent `GET` of the ticket | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
-| API-18 | AC-08, BR-30 | Adding a 6th active attachment to a ticket that already has 5 | 400 `ATTACHMENT_LIMIT_REACHED`; no 6th record created | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty; note: attachment limit is also tested at creation time in `create-ticket-attachments.api.test.ts`) |
-| API-19 | AC-18 | `GET /api/attachments/:id/download` for an active, owned attachment | 200; correct `Content-Disposition` filename and bytes | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
-| API-20 | AC-19, BR-35 | `GET /api/attachments/:id/download` for a soft-removed attachment | 404 `ATTACHMENT_NOT_FOUND` | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
-| API-21 | AC-19, BR-34 | `DELETE /api/attachments/:id` with a valid reason on an owned, active attachment | 200; `isRemoved=true`, `removedReason` stored | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
-| API-22 | AC-20 | `DELETE /api/attachments/:id` with empty `removalReason` | 400 validation error; attachment remains active | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
-| API-23 | BR-33 | `DELETE /api/attachments/:id` for an attachment on a ticket owned by a different Requester | 404 (ownership never confirmed nor denied explicitly) | `server/tests/lab-02/attachments.api.test.ts` (**Planned** — file exists but empty) |
+| API-15 | AC-03 | `GET /api/tickets/:ticketNumber` for a ticket owned by a different Requester | 404 `TICKET_NOT_FOUND` (not 403) | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 3 tests: cross-requester 404, non-existent 404, BR-13 identical response) |
+| API-16 | AC-16 | `GET /api/tickets/:ticketNumber` for own ticket | 200; all header fields present and correct; attachments split into active/removed | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 3 tests: full fields, active/removed split, no removed fields in active) |
+| API-17 | AC-17, FR-11 | `POST /api/tickets/:ticketNumber/attachments` valid file on owned ticket | 201; attachment appears in subsequent `GET` of the ticket | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 3 tests: upload success, appears in GET, cross-requester 404) |
+| API-18 | AC-08, BR-30 | Adding a 6th active attachment to a ticket that already has 5 | 400 `ATTACHMENT_LIMIT_REACHED`; no 6th record created | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: limit reached returns 400) |
+| API-19 | AC-18 | `GET /api/attachments/:id/download` for an active, owned attachment | 200; correct `Content-Disposition` filename and bytes | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: download returns correct content) |
+| API-20 | AC-19, BR-35 | `GET /api/attachments/:id/download` for a soft-removed attachment | 404 `ATTACHMENT_NOT_FOUND` | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 3 tests: removed 404, cross-requester 404, non-existent 404) |
+| API-21 | AC-19, BR-34 | `DELETE /api/attachments/:id` with a valid reason on an owned, active attachment | 200; `isRemoved=true`, `removedReason` stored | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: soft-remove returns 200 with isRemoved=true) |
+| API-22 | AC-20 | `DELETE /api/attachments/:id` with empty `removalReason` | 400 validation error; attachment remains active | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 4 tests: missing reason, too short, too long, remains active after failure) |
+| API-23 | BR-33 | `DELETE /api/attachments/:id` for an attachment on a ticket owned by a different Requester | 404 (ownership never confirmed nor denied explicitly) | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: cross-requester DELETE returns 404) |
 | API-24 | AC-21, BR-02 | `GET /api/dev-requesters` with one seeded inactive Requester | Response excludes the inactive Requester | `server/tests/lab-02/dev-requesters.api.test.ts` (✅ Implemented — 6 tests) |
 | API-25 | BR-26 | Force an unexpected server error (e.g., DB disconnect mock) on any endpoint | 500 with generic safe message, no stack trace/SQL in body | `server/tests/lab-02/errorHandling.api.test.ts` (**Planned** — not yet implemented; safe error is tested client-side in UI-08) |
 | API-26 | specification.md Section 7.1 (RelatedSystem.isActive, added in branch lab2/02) | `GET /api/related-systems` must exclude RelatedSystem rows where `isActive=false` | Response does not include any inactive RelatedSystem | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 7 tests including inactive requester rejection) |
@@ -107,10 +107,16 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | UI-09 | AC-13 | Mocked empty ticket list (zero ever) | Empty-state illustration/message shown, not no-results message | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 5 tests: empty message, create button, navigate, hides controls, heading) |
 | UI-10 | AC-14 | Mocked filtered list returning zero results while a filter is active | No-results message + Clear Filters button shown | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 4 tests: no-results message, clear button, controls visible, BR-39 distinction) |
 | UI-11 | AC-15 | Mocked paginated response (42 items) | "Showing 1 to 10 of 42 tickets" text renders; Next/page controls match `totalPages` | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 4 tests: pagination text, Previous disabled, Next enabled, page buttons) |
-| UI-12 | AC-16 | Render Ticket Detail with mocked owned-ticket response | All header fields render as read-only (no editable input elements present) | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (**Planned** — file exists but empty) |
-| UI-13 | AC-17 | Mocked successful attachment add | New attachment appears in the active list without a full remount/reload call | `client/tests/lab-02/AttachmentSection.test.tsx` (**Planned** — file exists but empty) |
-| UI-14 | AC-19, AC-20 | Attempt removal without reason, then with reason | Confirm button disabled until reason meets length rule; enabled after; calls DELETE only once confirmed | `client/tests/lab-02/AttachmentSection.test.tsx` (**Planned** — file exists but empty) |
-| UI-15 | BR-35 | Render a mocked removed attachment | Download/preview control is absent/disabled; "Unavailable" label shown instead | `client/tests/lab-02/AttachmentSection.test.tsx` (**Planned** — file exists but empty) |
+| UI-12 | AC-16 | Render Ticket Detail with mocked owned-ticket response | All header fields render as read-only (no editable input elements present); summary, description, resolution summary, attachments, back link all present | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 8 tests) |
+| UI-13 | AC-17 | Mocked successful attachment add | Active attachments display with filename/size/date; attachment count in heading; Add Attachment picker shown when under 5; limit message at 5; empty message when none | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 5 tests) |
+| UI-14 | AC-19, AC-20 | Attempt removal without reason, then with reason | Confirm button disabled until reason meets length rule; enabled after; Cancel closes dialog; remove error shown in dialog on failure | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 4 tests) |
+| UI-15 | BR-35 | Render a mocked removed attachment | Download/preview control is absent/disabled; "Unavailable" label shown instead; removed section heading with count | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 4 tests) |
+| UI-36 | AC-27, FR-14 | Ticket Detail loading state | Skeleton loading indicator shown while fetching; skeleton hides after data loads | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 2 tests) |
+| UI-37 | AC-03, BR-13 | Ticket Detail not-found state (404) | "Ticket not found." message shown; Back to My Tickets button present and navigates; header block and attachments NOT shown | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 3 tests) |
+| UI-38 | AC-28, BR-26 | Ticket Detail error state + retry | Error message shown on 500/network failure; Retry button present and re-fetches successfully | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 3 tests) |
+| UI-39 | AC-29, BR-33 | Attachment add error display | Server error message displayed near AttachmentPicker; generic error shown on network failure | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 2 tests) |
+| UI-40 | AC-19, AC-20 | Attachment remove error display | Error shown in RemoveAttachmentConfirm dialog on DELETE failure; dialog stays open for retry; Cancel clears error | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 3 tests) |
+| UI-41 | AC-18, BR-35 | Attachment download error feedback | Error message shown when download fails (non-ok response or network error) | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 2 tests) |
 | UI-16 | AC-24 | Tab through Create Ticket form | Every control reachable in a logical order; focus ring visible via computed style/class | `client/tests/lab-02/CreateTicket.accessibility.test.tsx` (**Planned** — file exists but empty; partial AC-24 coverage via UI-25) |
 | UI-17 | ui-spec §4 (Buttons) | Button component renders variant classes (primary/secondary/tertiary/destructive/destructive-confirm/busy) | Each variant maps to its expected CSS module class name | `client/tests/lab-02/Button.test.tsx` (✅ Implemented — 13 tests) |
 | UI-18 | ui-spec §4, BR-23 | Button disabled and busy states | `disabled` attr + `aria-disabled` when disabled; spinner + `busyLabel` + onClick suppressed when busy | `client/tests/lab-02/Button.test.tsx` (✅ Implemented — covered within 13 Button tests) |
@@ -195,7 +201,7 @@ npm run test:e2e -- --grep "lab-02"
 |---|---|
 | AC-01 | API-01, API-29, UI-07, UI-30, E2E-01 |
 | AC-02 | UI-02, UI-24, INT-01 |
-| AC-03 | API-15, E2E-03 |
+| AC-03 | API-15, UI-37, E2E-03 |
 | AC-04 | API-02, API-34, UI-03, UI-25, UI-26, UI-27 |
 | AC-05 | API-02 |
 | AC-06 | API-04, API-30, UI-04, UI-31 |
@@ -209,20 +215,23 @@ npm run test:e2e -- --grep "lab-02"
 | AC-14 | UI-10, E2E-07 |
 | AC-15 | API-12, UI-11, E2E-04 |
 | AC-16 | API-16, UI-12 |
-| AC-17 | API-17, UI-13, E2E-01 |
-| AC-18 | API-19 |
-| AC-19 | API-20, API-21, UI-14, UI-15, E2E-05 |
-| AC-20 | API-22, UI-14 |
+| AC-17 | API-17, UI-13, UI-39, E2E-01 |
+| AC-18 | API-19, UI-41 |
+| AC-19 | API-20, API-21, UI-14, UI-15, UI-40, E2E-05 |
+| AC-20 | API-22, UI-14, UI-40 |
 | AC-21 | API-24, API-26, API-27, API-33, E2E-06 |
 | AC-22 | E2E-02, INT-01 |
 | AC-23 | VISUAL-01, VISUAL-02, VISUAL-03, RESP-01, RESP-02, RESP-03 |
+| AC-27 | UI-36 |
+| AC-28 | UI-38 |
+| AC-29 | UI-39, UI-40, UI-41 |
 | AC-24 | UI-16, UI-25 |
 | AC-25 | UI-34 |
 | AC-26 | UI-35 |
 
 Every AC has ≥1 automated test (planned or implemented). No test row is orphaned from an AC or a Business Rule.
 
-**Note on implementation status:** AC-01, AC-04 through AC-09 now have real implemented tests across both backend and frontend (via API-29 through API-35 and UI-25 through UI-31). AC-02, AC-21, and AC-22 were already implemented in prior branches. AC-25 and AC-26 are implemented via UI-34 and UI-35. AC-03, AC-10 through AC-20, AC-23, and AC-24 still map to planned test IDs (files exist but are currently empty stubs awaiting implementation in future branches).
+**Note on implementation status:** AC-01, AC-04 through AC-09 have real implemented tests across both backend and frontend (API-29 through API-35 and UI-25 through UI-31). AC-02, AC-21, and AC-22 were implemented in prior branches. AC-25 and AC-26 are implemented via UI-34 and UI-35. AC-03, AC-16 through AC-20 have backend tests via API-15 through API-23 and frontend tests via UI-12 through UI-15. AC-27 through AC-29 are implemented via UI-36 through UI-41. AC-23 and AC-24 still map to planned test IDs (VISUAL/RESP tests not yet implemented; CreateTicket.accessibility.test.tsx does not exist).
 
 ---
 

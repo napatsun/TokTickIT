@@ -5,6 +5,7 @@ import AppShell from "./components/layout/AppShell.js";
 import SelectRequesterPage from "./pages/SelectRequesterPage.js";
 import MyTicketsPage from "./pages/MyTicketsPage.js";
 import CreateTicketPage from "./pages/CreateTicketPage.js";
+import TicketDetailPage from "./pages/TicketDetailPage.js";
 
 /**
  * Root component — sets up routing and Application Shell (§6).
@@ -31,7 +32,7 @@ export default function App() {
           <Route element={<RequireRequester><AppShell /></RequireRequester>}>
             <Route path="/tickets" element={<MyTicketsPage />} />
             <Route path="/tickets/new" element={<CreateTicketPage />} />
-            <Route path="/tickets/:ticketNumber" element={<div className="container py-4"><h1>Ticket Detail</h1><p className="text-muted">Coming in lab2/07</p></div>} />
+            <Route path="/tickets/:ticketNumber" element={<TicketDetailPage />} />
           </Route>
 
           {/* Catch-all → /tickets → RequireRequester → /select-requester if no selection */}

@@ -1,0 +1,216 @@
+/* ============================================================
+   TicketDetailPage — §9 Requester Ticket Screen (View Mode)
+   ============================================================
+   Desktop ≥992px: two-region layout, max-width ~840px centered
+   ============================================================ */
+
+/* §9: Page layout */
+.page {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* §9.1: Back link */
+.backLink {
+  margin-bottom: 8px;
+}
+
+/* §9.2: Header block */
+.headerBlock {
+  background-color: var(--color-surface, #fff);
+  border: 1px solid #dde7e1;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.title {
+  font-size: var(--font-size-h1, 24px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text, #1e2b24);
+  margin: 0;
+}
+
+/* §9.2: 2-3 column grid on desktop */
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+/* Badge fields (Priority, Status) */
+.badgeField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+}
+
+.mutedText {
+  font-size: 14px;
+  color: var(--color-text-muted, #5b6b62);
+  font-style: italic;
+}
+
+/* §9.3: Summary / Description */
+.summarySection {
+  background-color: var(--color-surface, #fff);
+  border: 1px solid #dde7e1;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summaryTitle {
+  font-size: var(--font-size-h2, 20px);
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+  margin: 0;
+}
+
+/* §9.4: Resolution Summary */
+.resolutionSection {
+  padding: 0 4px;
+}
+
+.resolutionText {
+  font-size: 14px;
+  color: var(--color-text-muted, #5b6b62);
+  font-style: italic;
+  margin: 0;
+}
+
+/* Divider between header and attachments */
+.divider {
+  border: none;
+  border-top: 1px solid #dde7e1;
+  margin: 8px 0;
+}
+
+/* ─── States ──────────────────────────────────────────────────────── */
+
+/* Loading skeleton */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+}
+
+.skeletonLine {
+  height: 20px;
+  background: linear-gradient(
+    90deg,
+    var(--color-pale-green, #eaf6ef) 25%,
+    #dde7e1 50%,
+    var(--color-pale-green, #eaf6ef) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Not found */
+.notFound {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.notFound h2 {
+  font-size: var(--font-size-h2, 20px);
+  color: var(--color-text, #1e2b24);
+  margin: 0 0 24px 0;
+}
+
+/* Error banner */
+.errorBanner {
+  background-color: var(--color-error-bg, #fbeae9);
+  border: 1px solid var(--color-error, #b3261e);
+  border-radius: 8px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.errorBanner p {
+  color: var(--color-error, #b3261e);
+  margin: 0;
+  font-weight: 500;
+}
+
+/* ============================================================
+   §11: Responsive — Tablet 768–991px
+   Header grid 2-column; summary/description full width.
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 991px) {
+  .fieldGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .headerBlock {
+    padding: 24px;
+  }
+
+  .summarySection {
+    padding: 24px;
+  }
+}
+
+/* ============================================================
+   §11: Responsive — Mobile <768px
+   Header fields stack single-column; summary/description full width;
+   touch targets ≥44px; no horizontal scroll.
+   ============================================================ */
+@media (max-width: 767px) {
+  .page {
+    padding: 16px 12px;
+    gap: 16px;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .headerBlock {
+    padding: 20px 16px;
+  }
+
+  .summarySection {
+    padding: 20px 16px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .errorBanner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

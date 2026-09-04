@@ -80,6 +80,19 @@ export async function readAttachmentFile(
   return fs.readFile(filePath);
 }
 
+// ─── File path helper ───────────────────────────────────────────────────
+
+/**
+ * Get the full filesystem path for an attachment's stored file.
+ * Used by GET /api/attachments/:id/download with res.download().
+ *
+ * @param safeFileName - UUID-based filename with extension
+ * @returns The full path to the file on disk
+ */
+export function getAttachmentFilePath(safeFileName: string): string {
+  return path.join(UPLOADS_DIR, safeFileName);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 /**

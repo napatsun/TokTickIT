@@ -1,0 +1,96 @@
+================================================================================
+ tests.md Sync Gap Discovery — lab2/07-ticket-detail-and-attachments
+ Date: 2026-09-03
+================================================================================
+
+## 1. Symptom
+
+During the self-audit, the initial audit report contained a contradiction
+within the same document:
+
+- Section 1 (BR Coverage) cited server/tests/lab-02/ticket-detail.api.test.ts:243
+  as evidence that BR-13 was implemented.
+- Section 9 (Known Issues) stated: "API-15 (ticket-detail.api.test.ts ownership
+  test) — Planned — file exists but empty" and "API-16 (ticket-detail.api.test.ts
+  happy path) — Planned — file exists but empty."
+
+Both sections referenced the same file but drew opposite conclusions about its
+implementation status. The user flagged this contradiction.
+
+
+## 2. Root Cause
+
+The tests.md document was written during the planning phase (Phase 0) when all
+API test IDs were marked as "Planned — file exists but empty". When the actual
+tests were implemented in later phases:
+
+- ticket-detail.api.test.ts: 14 tests implemented (351 lines)
+- attachments.api.test.ts: 22 tests implemented (634 lines)
+
+...the tests.md status column was NEVER updated. The "Planned" labels were
+copied forward from the original plan without verification against actual
+file contents.
+
+The self-audit blindly trusted the tests.md status without opening the files
+to verify — a classic documentation drift error.
+
+
+## 3. Scope of the Gap
+
+9 test entries in tests.md were incorrectly marked as "Planned — file exists
+but empty" when they were actually fully implemented:
+
+| Test ID | File                               | Actual Tests | tests.md Status (Before) |
+|---------|------------------------------------|--------------|--------------------------|
+| API-15  | ticket-detail.api.test.ts          | 3            | Planned — empty          |
+| API-16  | ticket-detail.api.test.ts          | 3            | Planned — empty          |
+| API-17  | attachments.api.test.ts            | 3            | Planned — empty          |
+| API-18  | attachments.api.test.ts            | 1            | Planned — empty          |
+| API-19  | attachments.api.test.ts            | 1            | Planned — empty          |
+| API-20  | attachments.api.test.ts            | 3            | Planned — empty          |
+| API-21  | attachments.api.test.ts            | 1            | Planned — empty          |
+| API-22  | attachments.api.test.ts            | 4            | Planned — empty          |
+| API-23  | attachments.api.test.ts            | 1            | Planned — empty          |
+
+Total: 21 tests misreported as not implemented.
+
+
+## 4. How It Was Discovered
+
+The user noticed that the audit's own Section 1 (BR Coverage) and Section 9
+(Known Issues) contradicted each other about the same files. The user asked
+for verification by running:
+
+  wc -l server/tests/lab-02/ticket-detail.api.test.ts
+  grep -n "describe\|it(" server/tests/lab-02/ticket-detail.api.test.ts
+  npx vitest run tests/lab-02/ticket-detail.api.test.ts --reporter=verbose
+
+All three confirmed: 351 lines, 14 it() calls, 14/14 tests passing.
+
+
+## 5. Fix Applied
+
+Changed 9 entries in tests.md from:
+
+  (**Planned** — file exists but empty)
+
+to:
+
+  (✅ Implemented — N tests: <brief description>)
+
+Also updated the "Note on implementation status" paragraph to reflect that
+AC-16 through AC-20 have backend tests via API-15 through API-23.
+
+
+## 6. Prevention Rule
+
+Every audit must verify the actual state of each referenced file before
+trusting its status in a tracking document:
+
+  1. wc -l <file>          — confirm file is not empty
+  2. grep -c "it(" <file>  — count actual test cases
+  3. npx vitest run <file>  — confirm tests pass
+
+Never copy a "Planned" or "Implemented" label from tests.md without
+independent verification. Tests.md is a PLAN, not a record of truth.
+The filesystem is the source of truth.

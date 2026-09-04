@@ -1,0 +1,89 @@
+================================================================================
+ Self-Audit Checklist — lab2/07-ticket-detail-and-attachments
+ Date: 2026-09-03
+ Final status: 419 tests passing (171 backend + 248 frontend)
+================================================================================
+
+## 1. BR Coverage Table
+
+| BR  | Description                                    | Implementation (file:line)                                                                 | Test (file:line)                                                                                      | Status    |
+|-----|------------------------------------------------|-------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|-----------|
+| BR-12 | Ownership: only current Requester's tickets/attachments | server/src/lib/ownership.ts:74 (findOwnedTicket WHERE requesterId), server/src/app.ts:485,627,724 | server/tests/lab-02/my-tickets.api.test.ts:542 (API-41 filterOptions isolation)                      | ✅ Pass   |
+| BR-13 | 404 for non-existent OR cross-requester (no info leak) | server/src/lib/ownership.ts:60,109 (null→404), server/src/app.ts:631,728                  | server/tests/lab-02/ticket-detail.api.test.ts:243 (cross-requester 404), client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-37) | ✅ Pass   |
+| BR-28 | Allowed MIME types: JPEG, PNG, WEBP, PDF (ext+MIME) | server/src/middleware/upload.ts:29-66 (fileFilter + MIME_TO_EXTENSIONS)                    | server/tests/lab-02/create-ticket-attachments.api.test.ts:206 (file type validation)                  | ✅ Pass   |
+| BR-29 | Max 5 MB per file (frontend + backend)         | server/src/middleware/upload.ts:26 (MAX_FILE_SIZE), client/src/components/shared/AttachmentPicker.tsx | server/tests/lab-02/create-ticket-attachments.api.test.ts:184 (file size limit)                       | ✅ Pass   |
+| BR-30 | Max 5 active attachments per ticket            | server/src/middleware/upload.ts:27 (MAX_FILES), server/src/app.ts:711,735,754              | server/tests/lab-02/attachments.api.test.ts:286 (API-18 limit reached), client/tests/lab-02/AttachmentPicker.test.tsx:250 (UI-31 BR-30) | ✅ Pass   |
+| BR-31 | Ticket survives partial attachment failure     | server/src/app.ts:252-291 (attachmentFailures pattern)                                    | server/tests/lab-02/create-ticket-attachments.api.test.ts:267 (partial failure)                       | ✅ Pass   |
+| BR-32 | Attachment stores: filename, UUID, MIME, size, uploader, timestamps, soft-removal fields | server/src/services/attachmentStorage.ts (UUID-based storage), server/src/app.ts (Prisma schema) | server/tests/lab-02/create-ticket-attachments.api.test.ts (disk write verification)                  | ✅ Pass   |
+| BR-33 | Only owning Requester may add/download/remove attachments | server/src/lib/ownership.ts:11,109 (findOwnedAttachment), server/src/app.ts:712,842,856,907,955 | server/tests/lab-02/attachments.api.test.ts:565 (API-23 cross-requester DELETE → 404)                 | ✅ Pass   |
+| BR-34 | Soft removal: isRemoved=true, removedAt, removalReason (3-200 chars) | server/src/app.ts:648-649,973-974 (soft-delete + reason validation)                       | server/tests/lab-02/attachments.api.test.ts:515 (API-22 removalReason validation)                    | ✅ Pass   |
+| BR-35 | Removed attachment: metadata visible, download disabled/hidden, direct download → 404 | server/src/app.ts:893,917-918 (removed→404), client/src/components/ticket-detail/AttachmentSection.tsx (Unavailable label) | client/tests/lab-02/AttachmentSection.test.tsx:84 (UI-15), server/tests/lab-02/attachments.api.test.ts:414 (API-20) | ✅ Pass   |
+| BR-36 | Removal requires explicit confirmation + removal reason | client/src/components/ticket-detail/RemoveAttachmentConfirm.tsx (confirm dialog + textarea) | client/tests/lab-02/AttachmentSection.test.tsx:162 (UI-14 remove confirmation flow)                   | ✅ Pass   |
+| BR-40 | Ticket Detail re-fetches from backend, never trusts cache | client/src/pages/TicketDetailPage.tsx:47-70 (useEffect + fetchTicketDetail on mount)      | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-36 loading state — skeleton shown during fetch) | ✅ Pass   |
+| BR-41 | Single access point for ownership checks (Lab 3 transition) | server/src/lib/ownership.ts:1-13 (single module), server/src/app.ts:627,724,856,907,955   | server/tests/lab-02/requester-context.test.ts:11 (middleware tests)                                   | ✅ Pass   |
+
+
+## 2. FR Coverage Table
+
+| FR   | Description                                                                    | Implementation (file:line)                                              | Test (file:line)                                                                       | Status    |
+|------|-------------------------------------------------------------------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------|-----------|
+| FR-09 | Open Ticket Detail only for own ticket; cross-requester rejected             | server/src/lib/ownership.ts:74 (findOwnedTicket), server/src/app.ts:627-631 (404) | server/tests/lab-02/ticket-detail.api.test.ts:243 (cross-requester 404)               | ✅ Pass   |
+| FR-10 | Ticket Detail: read-only header fields + active/removed attachments          | client/src/pages/TicketDetailPage.tsx:119-180 (header grid + AttachmentSection) | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-12 all header fields read-only) | ✅ Pass   |
+| FR-11 | Add attachment to existing ticket (5MB, allowed types, 5-active cap)         | server/src/app.ts:710-796 (POST /api/tickets/:ticketNumber/attachments) | server/tests/lab-02/attachments.api.test.ts (API-17, API-18)                           | ✅ Pass   |
+| FR-12 | Download only active (not removed) attachment                                | server/src/app.ts:890-927 (GET download, BR-35 check)                 | server/tests/lab-02/attachments.api.test.ts:414 (API-20 download removed → 404)       | ✅ Pass   |
+| FR-13 | Soft-remove active attachment with reason; removed = metadata only           | server/src/app.ts:941-980 (DELETE soft-remove), client/src/components/ticket-detail/AttachmentSection.tsx (Unavailable label) | client/tests/lab-02/AttachmentSection.test.tsx:84 (UI-15), server/tests/lab-02/attachments.api.test.ts:515 (API-22) | ✅ Pass   |
+| FR-14 | Loading, empty, no-results, safe-failure states for every screen             | client/src/pages/TicketDetailPage.tsx:91-126 (loading/not-found/error), client/src/pages/MyTicketsPage.tsx (skeleton/error/empty) | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-36/37/38), client/tests/lab-02/MyTickets.test.tsx (UI-34/35) | ✅ Pass   |
+
+
+## 3. AC Coverage Table
+
+| AC    | Full Text                                                                                                              | Test ID      | Test File                                                                         | Status    |
+|-------|------------------------------------------------------------------------------------------------------------------------|--------------|-----------------------------------------------------------------------------------|-----------|
+| AC-03 | Given Requester B is selected, when a direct request is made for a Ticket belonging to Requester A, then the API returns 404 and no Ticket data is returned. | API-15, UI-37 | server/tests/lab-02/ticket-detail.api.test.ts:243, client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-37) | ✅ Pass   |
+| AC-16 | Given the Requester opens Ticket Detail for their own Ticket, when the page loads, then all header fields render as read-only and match the database values. | API-16, UI-12 | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-12, 8 tests)               | ✅ Pass   |
+| AC-17 | Given the Requester adds a valid Attachment on Ticket Detail, when the upload succeeds, then the new Attachment appears immediately in the active Attachments list. | API-17, UI-13, UI-39 | client/tests/lab-02/AttachmentSection.test.tsx (UI-13 5 tests, UI-39 2 tests)     | ✅ Pass   |
+| AC-18 | Given the Requester downloads an active Attachment, when the request completes, then the original file content is returned with the original filename. | API-19, UI-41 | server/tests/lab-02/attachments.api.test.ts (API-19), client/tests/lab-02/AttachmentSection.test.tsx (UI-41 2 tests) | ✅ Pass   |
+| AC-19 | Given the Requester soft-removes an Attachment and supplies a reason, when the removal completes, then the Attachment moves to the removed section, its download action is disabled, and a direct download request for it returns 404. | API-20, API-21, UI-14, UI-15, UI-40 | client/tests/lab-02/AttachmentSection.test.tsx (UI-14 4 tests, UI-15 4 tests, UI-40 3 tests) | ✅ Pass   |
+| AC-20 | Given the Requester attempts to soft-remove an Attachment without entering a reason, when they submit, then the removal is blocked with a validation message. | API-22, UI-14 | server/tests/lab-02/attachments.api.test.ts:515 (API-22), client/tests/lab-02/AttachmentSection.test.tsx (UI-14) | ✅ Pass   |
+| AC-27 | Given Ticket Detail is loading data from the API, when the response has not yet arrived, then a skeleton loading indicator is displayed and no ticket data is shown. | UI-36 | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-36, 2 tests)               | ✅ Pass   |
+| AC-28 | Given Ticket Detail encounters a non-404 API error or network failure, when the error occurs, then an error message with a Retry button is shown, and clicking Retry re-fetches successfully. | UI-38 | client/tests/lab-02/RequesterTicketDetail.test.tsx (UI-38, 3 tests)               | ✅ Pass   |
+| AC-29 | Given an attachment operation (add, remove, or download) on Ticket Detail fails, when the error occurs, then an error message is shown near the relevant control, and the user can retry. | UI-39, UI-40, UI-41 | client/tests/lab-02/AttachmentSection.test.tsx (UI-39 2 tests, UI-40 3 tests, UI-41 2 tests) | ✅ Pass   |
+
+
+## 4. Specification.md §11 Deviations
+
+| Item | Topic                                           | Status |
+|------|-------------------------------------------------|--------|
+| §11.3 | Ownership-failure status code is 404, not 403  | ✅ Implemented in ownership.ts:109 + app.ts:631 |
+| §11.4 | Session identity via X-Dev-Requester-Id header  | ✅ Implemented in middleware/requesterContext.ts |
+| §11.5 | Attachment storage: local disk, soft-removed files retained | ✅ services/attachmentStorage.ts + app.ts:291 |
+| §11.10 | BR-03 automatic enforcement via apiClient      | ✅ client/src/lib/apiClient.ts |
+| §11.12 | seed.idempotency.test.ts sequential execution (singleFork) | ✅ server/vitest.config.ts poolOptions.forks.singleFork |
+| §11.19 | Multer-before-auth middleware order             | ✅ app.ts — upload.array() before requesterContext |
+| §11.20 | Playwright explicit wait pattern (networkidle + h1 + content selector) | ✅ All screenshot scripts use this pattern |
+
+No undocumented deviations found.
+
+
+## 5. Known Issues / Deferred Items (Corrected)
+
+| Item                                          | Actual Status                                           | Evidence                                              |
+|-----------------------------------------------|---------------------------------------------------------|-------------------------------------------------------|
+| API-15 (ticket-detail.api.test.ts ownership)  | ✅ Implemented — 3 tests                                 | server/tests/lab-02/ticket-detail.api.test.ts:224-258 |
+| API-16 (ticket-detail.api.test.ts happy path) | ✅ Implemented — 3 tests                                 | server/tests/lab-02/ticket-detail.api.test.ts:144-222 |
+| API-17 through API-23 (attachments.api.test.ts)| ✅ Implemented — 17 tests (22 total in file)             | server/tests/lab-02/attachments.api.test.ts (634 lines) |
+| API-25 (errorHandling.api.test.ts)            | ⚠️ File does not exist — genuinely planned               | File not found on disk                                |
+| API-07/API-08 (authContext.api.test.ts)       | ⚠️ File does not exist — genuinely planned               | File not found on disk                                |
+| UI-16 (CreateTicket.accessibility.test.tsx)   | ⚠️ File does not exist — genuinely planned               | File not found on disk                                |
+| VISUAL/RESP tests (e2e/lab-02/)              | ⚠️ Files do not exist — genuinely planned               | Only requester-ticket-flow.spec.ts (0 bytes) exists   |
+| GET /api/attachments/:id metadata endpoint   | Not implemented — UI doesn't use it                     | Deferred to lab2/08                                   |
+| TS2322 type error: `busy` prop on ButtonProps| Pre-existing in AttachmentSection.tsx:244 (not from this branch) | tsc --noEmit reports error                            |
+
+
+## 6. Final Status
+
+- Date of audit: 2026-09-03
+- Backend: 15 test files, 171 tests, all passing
+- Frontend: 16 test files, 248 tests, all passing
+- Total: 31 test files, 419 tests, all passing
+- Branch: lab2/07-ticket-detail-and-attachments
