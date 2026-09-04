@@ -1,0 +1,615 @@
+================================================================================
+  evidence/lab-02/lab2-08-reference-data-api — summary-and-test-output.txt
+  Branch: lab2/08-reference-data-api
+  Date: 2026-09-04
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. BRANCH SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Originally, lab2/08 was flagged for fixing known issues with the reference-data
+API endpoints (wrapped response format, auth middleware for categories and
+related-systems). Investigation found these issues were already resolved in
+lab2/05 (see specification.md §11 items 7–8).
+
+Scope was therefore changed to cleanup (per specification.md §11 item 21):
+
+  (a) Added inactive-filtering test coverage for both GET /api/categories and
+      GET /api/related-systems — each test creates an isActive=false record via
+      Prisma, asserts it is excluded from the API response, and cleans up the
+      record. This closes a regression-risk gap where removing the
+      isActive: true filter in the handler would go undetected.
+
+  (b) Deleted client/src/api.ts — a Lab 1 leftover (checkSystem() function
+      using raw fetch without auth headers, parsing the old bare-array response
+      shape). No runtime component imported this file; only a Lab 1 test
+      (tests/lab-01/App.test.tsx) dynamically imported it with mocked fetch.
+      The Lab 1 checkSystem test block (2 tests) was removed; the 3 App tests
+      in the same file were retained.
+
+Additionally, a pre-existing TS2322 type error in
+client/src/components/ticket-detail/AttachmentSection.tsx was fixed as part of
+this branch (busy/busyLabel props don't exist on Button — changed to
+variant={isUploading ? "busy" : "primary"}).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. CHANGED FILES (5 files, per git diff 85c180d..HEAD)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  D  client/src/api.ts                              (deleted — Lab 1 leftover)
+  M  client/tests/lab-01/App.test.tsx               (removed 2 checkSystem tests)
+  M  docs/lab-02/specification.md                   (§11 item 21 — scope docs)
+  M  server/tests/lab-01/categories.test.ts         (added inactive-filtering test)
+  M  server/tests/lab-02/related-systems.api.test.ts (added inactive-filtering test)
+
+  Additionally (uncommitted fixes for pre-existing TS2322 bug from lab2/07):
+  M  client/src/components/ticket-detail/AttachmentSection.tsx
+     (fixed TS2322: busy prop → variant={isUploading ? 'busy' : 'primary'})
+  M  client/tests/lab-02/AttachmentSection.test.tsx
+     (added test verifying 'Uploading…' busyLabel appears during upload)
+  M  docs/lab-02/specification.md
+     (added item 22: tsc --noEmit lesson; updated item 21 with (c) fix note)
+
+  Total: 5 committed files + 3 uncommitted fixes = 8 files changed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. TYPE CHECK — npx tsc --noEmit
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+--- server (npx tsc --noEmit) ---
+
+$ cd server && npx tsc --noEmit
+(no output — exit code 0, no type errors)
+
+--- client (npx tsc --noEmit) ---
+
+$ cd client && npx tsc --noEmit
+(no output — exit code 0, no type errors)
+
+NOTE: After deleting client/src/api.ts, tsc confirms no remaining references to
+the deleted file anywhere in the client codebase. The pre-existing TS2322 in
+AttachmentSection.tsx (unused busy/busyLabel props on Button) was also fixed to
+ensure a clean typecheck.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  4. TESTS — npx vitest run --reporter=verbose
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+=== SERVER (173 tests, 15 files) ===
+
+$ cd server && npx vitest run --reporter=verbose
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server
+
+stdout | tests/lab-02/my-tickets.api.test.ts
+Seed completed.
+
+stdout | tests/lab-02/my-tickets.api.test.ts
+Seed completed.
+
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-09: requestor isolation (AC-10) > returns only requesterA's tickets, never requesterB's
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-09: requestor isolation (AC-10) > returns only requesterB's tickets, never requesterA's
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-10: search (AC-11) > search matches ticket number substring (case-insensitive)
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-10: search (AC-11) > search matches summary substring (case-insensitive)
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-10: search (AC-11) > search returns empty when no match
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-11: filter by categoryId (AC-12) > returns only Hardware tickets for requesterA
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-11: filter by categoryId (AC-12) > returns only Software tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-12: pagination (AC-15) > page 1 shows 10 tickets with correct pagination metadata
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-12: pagination (AC-15) > page 2 returns the next distinct 10 tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-12: pagination (AC-15) > page 5 shows the last 2 tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > clamps page=0 to page=1 (not a 400)
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > clamps negative page to 1
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > clamps pageSize=999 to pageSize=10 (fallback)
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > clamps pageSize=0 to pageSize=10
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > accepts valid pageSize=20
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-13: parameter clamping (BR-17) > accepts valid pageSize=50
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-14: invalid enum values > returns 400 for invalid requestedPriority
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-14: invalid enum values > returns 400 for invalid sortBy
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-14: invalid enum values > returns 400 for invalid sortDir
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-14: invalid enum values > returns 400 for invalid currentStatus
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-36: filterOptions.categories (BR-15) > contains only distinct categories from requesterA's tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-36: filterOptions.categories (BR-15) > does not include categories that have no tickets for this requester
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-37: filterOptions.requestedPriorities (BR-15) > contains only distinct priorities present in requesterA's tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-38: filterOptions.currentStatuses (BR-15) > contains only distinct statuses present in requesterA's tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-39: filterOptions independent of filters (BR-15) > returns same filterOptions whether or not a categoryId filter is applied
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-39: filterOptions independent of filters (BR-15) > returns same filterOptions when search is active
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-40: filterOptions empty when zero tickets (BR-15) > returns empty filterOptions arrays when requester has zero tickets
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > API-41: filterOptions cross-requester isolation (BR-12) > requesterB's filterOptions does not include values only from requesterA
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > response shape > returns tickets, pagination, and filterOptions at top level
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > response shape > each ticket has all required fields
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > response shape > itPriority and ticketOwner are null in Lab 2
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > response shape > pagination has all required fields
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > default sort (BR-16) > defaults to createdAt desc (newest first)
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > sortBy and sortDir > sorts by updatedAt asc
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > sortBy and sortDir > sorts by createdAt asc
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > auth > returns 401 without X-Dev-Requester-Id header
+ ✓ tests/lab-02/my-tickets.api.test.ts > GET /api/tickets > auth > returns 401 with non-existent requester id
+stdout | tests/lab-02/attachments.api.test.ts
+Seed completed.
+
+stdout | tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-17 — POST add attachment to owned ticket > attachment appears in subsequent GET of the ticket
+Seed completed.
+
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-17 — POST add attachment to owned ticket > returns 201 with attachment metadata on successful upload
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-17 — POST add attachment to owned ticket > attachment appears in subsequent GET of the ticket
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-17 extra — POST on cross-requester ticket > returns 404 when adding attachment to another requester's ticket
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-18 — POST attachment limit reached (BR-30) > returns 400 ATTACHMENT_LIMIT_REACHED when 5 active attachments exist
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > GET /api/attachments/:id — metadata > returns 200 with full attachment metadata for owned attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > GET /api/attachments/:id — metadata > returns 404 for cross-requester attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > GET /api/attachments/:id — metadata > returns 404 for non-existent attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-19 — GET download active attachment > returns 200 with correct content and Content-Disposition
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-20 — GET download removed attachment (BR-35) > returns 404 for a soft-removed attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-20 — GET download removed attachment (BR-35) > returns 404 for cross-requester download
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-20 — GET download removed attachment (BR-35) > returns 404 for non-existent attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-21 — DELETE soft-remove attachment > returns 200 with isRemoved=true on valid removal
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-22 — DELETE validation (AC-20, BR-34) > returns 400 when removalReason is missing
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-22 — DELETE validation (AC-20, BR-34) > returns 400 when removalReason is too short (<3 chars)
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-22 — DELETE validation (AC-20, BR-34) > returns 400 when removalReason is too long (>200 chars)
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-22 — DELETE validation (AC-20, BR-34) > attachment remains active after failed removal attempt
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > API-23 — DELETE cross-requester (BR-33) > returns 404 when removing another requester's attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > DELETE already-removed attachment — idempotent rejection > returns 404 when trying to remove an already-removed attachment
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > Auth — 401 without X-Dev-Requester-Id header > POST returns 401 without header
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > Auth — 401 without X-Dev-Requester-Id header > GET metadata returns 401 without header
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > Auth — 401 without X-Dev-Requester-Id header > GET download returns 401 without header
+ ✓ tests/lab-02/attachments.api.test.ts > Attachment Endpoints > Auth — 401 without X-Dev-Requester-Id header > DELETE returns 401 without header
+stdout | tests/lab-02/create-ticket.api.test.ts > POST /api/tickets
+Seed completed.
+
+stdout | tests/lab-02/create-ticket.api.test.ts > POST /api/tickets
+Seed completed.
+
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > returns 201 with ticket, empty attachments, and empty attachmentFailures
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > generates a valid ticket number (BR-06)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > sets currentStatus to NEW (BR-07)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > sets itPriority and ticketOwnerId to null (BR-08)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > sets ticketDate from backend (BR-09)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > includes requester, category, and relatedSystem objects
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > accepts all three priority values
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > trims summary and description (BR-19/BR-20)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > happy path > returns unique ticket numbers on successive requests
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > rejects empty summary with 400
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > rejects summary shorter than 5 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > rejects summary longer than 120 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > accepts summary at exactly 5 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > accepts summary at exactly 120 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > summary validation (BR-19) > rejects missing summary field
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > description validation (BR-20) > rejects empty description with 400
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > description validation (BR-20) > rejects description shorter than 20 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > description validation (BR-20) > rejects description longer than 2000 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > description validation (BR-20) > accepts description at exactly 20 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > description validation (BR-20) > accepts description at exactly 2000 chars
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > requestedPriority validation (BR-22) > rejects invalid priority value
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > requestedPriority validation (BR-22) > accepts lowercase priority (normalized to uppercase)
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > requestedPriority validation (BR-22) > rejects missing priority field
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > requestedPriority validation (BR-22) > rejects empty string priority
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > reference validation (BR-21) > rejects non-existent categoryId
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > reference validation (BR-21) > rejects non-existent relatedSystemId
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > reference validation (BR-21) > rejects inactive categoryId
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > reference validation (BR-21) > rejects inactive relatedSystemId
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > multiple field errors > returns all field errors at once when multiple fields are invalid
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > auth > returns 401 without X-Dev-Requester-Id header
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > auth > returns 401 with inactive requester
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > auth > returns 401 with non-existent requester id
+ ✓ tests/lab-02/create-ticket.api.test.ts > POST /api/tickets > error response shape > follows Common Error Shape for validation errors
+stdout | tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > happy path > creates ticket with 1 JPG attachment
+Seed completed.
+
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > happy path > creates ticket with 1 JPG attachment
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > happy path > creates ticket with 5 attachments (BR-30 max)
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > happy path > creates ticket with no attachments (optional per FR-04)
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > attachment limit (BR-30) > rejects 6 files with 400
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > file size limit (BR-29) > rejects file exceeding 5MB with 413
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > file type validation (BR-28) > rejects .docx file with 415
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > file type validation (BR-28) > rejects .gif file with 415
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > file type validation (BR-28) > rejects MIME/extension mismatch (BR-28)
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > partial failure (BR-31) > ticket survives when 1 of 3 attachments fails to upload
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts > POST /api/tickets — attachments > disk write verification > writes the actual file to server/uploads/
+stdout | tests/lab-02/ticket-detail.api.test.ts
+Seed completed.
+
+stdout | tests/lab-02/ticket-detail.api.test.ts
+Seed completed.
+
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-16 — Happy path: own ticket with active + removed attachments > returns 200 with full ticket fields
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-16 — Happy path: own ticket with active + removed attachments > returns attachments split into active and removed arrays
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-16 — Happy path: own ticket with active + removed attachments > does not include removed attachment fields in active array
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-15 — Cross-requester: 404 when accessing another requester's ticket > returns 404 with TICKET_NOT_FOUND for a different requester's ticket
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-15 — Cross-requester: 404 when accessing another requester's ticket > returns identical 404 for a non-existent ticketNumber
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > API-15 — Cross-requester: 404 when accessing another requester's ticket > cross-requester 404 response matches non-existent 404 response (BR-13)
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Auth — 401 for missing or invalid header > returns 401 without X-Dev-Requester-Id header
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Auth — 401 for missing or invalid header > returns 401 with non-numeric header
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Auth — 401 for missing or invalid header > returns 401 with non-existent requester id
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Response shape validation > ticket object has all required fields per api-spec §6
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Response shape validation > attachments object has active and removed arrays
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Response shape validation > active attachment has correct fields
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Response shape validation > removed attachment has correct fields including removal metadata
+ ✓ tests/lab-02/ticket-detail.api.test.ts > GET /api/tickets/:ticketNumber > Response shape validation > ticket with no attachments returns empty arrays
+stdout | tests/lab-02/ticket-number.test.ts > ticket-number generator
+Seed completed.
+
+stdout | tests/lab-02/ticket-number.test.ts > ticket-number generator
+Seed completed.
+
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > accepts valid format TKT-2026-000001
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > accepts zero-padded sequence
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > accepts high sequence number
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > rejects missing prefix
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > rejects wrong prefix
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > rejects 7-digit sequence
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > rejects non-numeric year
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > isValidTicketNumber > rejects empty string
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > returns a string matching BR-06 format
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > uses the current year
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > returns sequence 000001 when no tickets exist for current year
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > returns different numbers on successive calls (after insert)
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > pads sequence to 6 digits
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > generateTicketNumber > prefix is always TKT-
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > concurrent generation (unit-level) > 10 concurrent calls all return valid format without crashing
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > concurrent generation (unit-level) > concurrent calls may return duplicates — this is expected and safe
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > concurrent generation (unit-level) > after inserting a ticket, concurrent calls still return valid candidates
+ ✓ tests/lab-02/ticket-number.test.ts > ticket-number generator > P2002 retry simulation (integration-level) > retries on unique constraint violation and succeeds
+stdout | tests/lab-02/requester-context.test.ts > requesterContext middleware
+Seed completed.
+
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when X-Dev-Requester-Id header is missing
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when header is an empty string
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when header is non-numeric text
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when header is a decimal number
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when header is zero
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when header is negative
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when requester does not exist
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > rejects invalid requests > returns 401 when requester is inactive
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > accepts valid requests > returns 200 and attaches currentRequester for a valid active requester
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > accepts valid requests > attaches correct requester data for a different active requester
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > accepts valid requests > works with string numeric header (common client behavior)
+ ✓ tests/lab-02/requester-context.test.ts > requesterContext middleware > error response shape > follows Common Error Shape from api-spec.md
+stdout | tests/lab-02/attachments-partial-failure.api.test.ts > POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
+Seed completed.
+
+stdout | tests/lab-02/attachments-partial-failure.api.test.ts > POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
+Seed completed.
+
+stdout | tests/lab-02/attachments-partial-failure.api.test.ts > POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
+Seed completed.
+
+ ✓ tests/lab-02/attachments-partial-failure.api.test.ts > POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED > returns RECORD_CREATION_FAILED when disk write succeeds but DB insert fails
+stdout | tests/lab-02/related-systems.api.test.ts > GET /api/related-systems
+Seed completed.
+
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns 200 with wrapped format { relatedSystems: [...] }
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns all 6 seeded active related systems
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns related systems with id and name fields
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns related systems in ascending id order
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns 401 without X-Dev-Requester-Id header
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns 401 with inactive requester
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > returns 401 with non-existent requester id
+ ✓ tests/lab-02/related-systems.api.test.ts > GET /api/related-systems > excludes inactive related systems from response
+stdout | tests/lab-01/categories.test.ts > GET /api/categories
+Seed completed.
+
+stdout | tests/lab-01/categories.test.ts > GET /api/categories
+Seed completed.
+
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns 200 with wrapped format { categories: [...] }
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns only active categories
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns categories with id and name fields
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns categories in ascending id order
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns 401 without X-Dev-Requester-Id header
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > returns 401 with inactive requester
+ ✓ tests/lab-01/categories.test.ts > GET /api/categories > excludes inactive categories from response
+stdout | tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason
+Seed completed.
+
+stdout | tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason
+Seed completed.
+
+ ✓ tests/lab-02/create-ticket-attachments-db-failure.api.test.ts > POST /api/tickets — RECORD_CREATION_FAILED reason > returns RECORD_CREATION_FAILED when disk write succeeds but DB insert fails
+stdout | tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters
+Seed completed.
+
+stdout | tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters
+Seed completed.
+
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > returns 200 with only active requesters
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > returns requesters with id, fullName, and email fields
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > excludes inactive requesters (Robert Wilson)
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > returns requesters in ascending id order
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > does not require an X-Dev-Requester-Id header
+ ✓ tests/lab-02/dev-requesters.api.test.ts > GET /api/dev-requesters > returns inactive requester count confirming seed data integrity
+ ✓ tests/lab-02/dev-requesters-empty-state.test.ts > GET /api/dev-requesters — empty state > returns 200 with empty requesters array when no active requesters exist
+ ✓ tests/lab-02/dev-requesters-empty-state.test.ts > GET /api/dev-requesters — empty state > returns valid JSON with correct shape even when empty
+stdout | tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+Seed completed.
+
+stdout | tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+Seed completed.
+
+ ✓ tests/lab-02/seed.idempotency.test.ts > Seed idempotency > running seed twice produces the same row counts in every table
+ ✓ tests/lab-01/health.test.ts > GET /api/health > returns 200 with status ok and the service name
+
+ Test Files  15 passed (15)
+      Tests  173 passed (173)
+   Start at  11:15:05
+   Duration  1.12s (transform 83ms, setup 0ms, collect 227ms, tests 795ms, environment 0ms, prepare 162ms)
+   Slowest test  35 ms (node_modules/.vitest/deps/chai-JYYIb4op.js)
+
+
+=== CLIENT (246 tests, 16 files) ===
+
+$ cd client && npx vitest run --reporter=verbose
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client
+
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > X-Dev-Requester-Id header > attaches header when requester is in localStorage
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > X-Dev-Requester-Id header > does NOT attach header when no requester in localStorage
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > X-Dev-Requester-Id header > does NOT attach header when localStorage has invalid data
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > X-Dev-Requester-Id header > uses correct requester ID from localStorage
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > 401 INVALID_REQUESTER_CONTEXT > clears localStorage when 401 INVALID_REQUESTER_CONTEXT is received
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > 401 INVALID_REQUESTER_CONTEXT > dispatches requester:cleared event when 401 INVALID_REQUESTER_CONTEXT is received
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > 401 INVALID_REQUESTER_CONTEXT > does NOT clear localStorage when 401 has a different error code
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > 401 INVALID_REQUESTER_CONTEXT > does NOT dispatch event when 401 has a different error code
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > other HTTP errors > does NOT clear localStorage on 400 validation error
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > other HTTP errors > does NOT dispatch event on 400 validation error
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > other HTTP errors > does NOT clear localStorage on 500 server error
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > other HTTP errors > does NOT dispatch event on 500 server error
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > URL resolution > prepends BASE_URL to relative paths
+ ✓ tests/lab-02/apiClient.test.ts > apiClient > URL resolution > does not modify absolute URLs
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > initial state > starts with requester=null when localStorage is empty
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > initial state > restores requester from localStorage on mount
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > initial state > returns null for corrupted localStorage data
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > initial state > returns null when localStorage has wrong shape (missing fields)
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > setRequester > updates requester in React state
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > setRequester > persists to localStorage
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > setRequester > replaces previous requester (BR-04: no stale data)
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > clearRequester > sets requester to null
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > clearRequester > removes from localStorage
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > clearRequester > is safe to call when nothing is stored
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > error handling > throws when useRequester is used outside provider
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > BR-03 event listener lifecycle > removes window.removeEventListener is called on unmount (cleanup)
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > BR-03 event listener lifecycle > does not accumulate duplicate listeners on remount
+ ✓ tests/lab-02/RequesterContext.test.tsx > RequesterContext + useRequester > BR-03 event listener lifecycle > dispatching requester:cleared clears state and navigates to /select-requester
+stderr | tests/lab-02/Field.test.tsx > Field > select with numeric value > renders the select with the correct option selected when value is a number
+Warning: You provided a `value` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultValue`. Otherwise, set either `onChange` or `readOnly`.
+    at select
+    at div
+    at Field (/Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/src/components/shared/Field.tsx:8:3)
+
+ ✓ tests/lab-02/Field.test.tsx > Field > states > renders default state with editable styling
+ ✓ tests/lab-02/Field.test.tsx > Field > states > renders focused state with focused styling
+ ✓ tests/lab-02/Field.test.tsx > Field > states > renders invalid state with error border
+ ✓ tests/lab-02/Field.test.tsx > Field > states > renders readonly state — not tabbable
+ ✓ tests/lab-02/Field.test.tsx > Field > states > renders disabled state with aria-disabled
+ ✓ tests/lab-02/Field.test.tsx > Field > required asterisk > shows asterisk when required=true
+ ✓ tests/lab-02/Field.test.tsx > Field > required asterisk > does not show asterisk when required=false
+ ✓ tests/lab-02/Field.test.tsx > Field > validation message > renders error message below the field when invalid
+ ✓ tests/lab-02/Field.test.tsx > Field > validation message > links error message via aria-describedby
+ ✓ tests/lab-02/Field.test.tsx > Field > validation message > does not render error message when state is default
+ ✓ tests/lab-02/Field.test.tsx > Field > validation message > errorMessage alone (without state=invalid) triggers invalid styling and message
+ ✓ tests/lab-02/Field.test.tsx > Field > input vs textarea > renders <input> by default
+ ✓ tests/lab-02/Field.test.tsx > Field > input vs textarea > renders <textarea> when type='textarea'
+ ✓ tests/lab-02/Field.test.tsx > Field > input vs textarea > textarea has vertical resize only
+ ✓ tests/lab-02/Field.test.tsx > Field > character counter > shows counter when maxLength is set
+ ✓ tests/lab-02/Field.test.tsx > Field > character counter > shows 0/maxLength when value is empty
+ ✓ tests/lab-02/Field.test.tsx > Field > character counter > does not show counter when maxLength is not set
+ ✓ tests/lab-02/Field.test.tsx > Field > label > renders label with correct htmlFor
+ ✓ tests/lab-02/Field.test.tsx > Field > label > label has CSS class for 600 font weight
+ ✓ tests/lab-02/Field.test.tsx > Field > select with numeric value > does not produce React warnings when value is a number
+ ✓ tests/lab-02/Field.test.tsx > Field > select with numeric value > renders the select with the correct option selected when value is a number
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-36 — Ticket Detail loading state > shows skeleton loading indicator while fetching ticket detail
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-36 — Ticket Detail loading state > hides skeleton after data loads successfully
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-37 — Ticket Detail not-found state (BR-13) > shows 'Ticket not found.' message when API returns 404
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > file size display > shows bytes for files under 1 KB
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > file size display > shows KB with one decimal for files under 1 MB
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > file size display > shows MB with one decimal for files over 1 MB
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > file size display > shows exactly 5.0 MB for the max size threshold
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > file size display > does NOT show raw bytes for large files
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > shows error message for a file with wrong type
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > shows correct error for oversized file
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > shows correct error for unsupported file type
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > does NOT show size for rejected files (error shown instead)
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > shows valid file size alongside errored file
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > inline error messages > error message has role=alert for accessibility
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > counter > shows 0/5 when no files
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > counter > shows 1/5 for one valid file
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > counter > counts only valid files (no error) in counter
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > counter > counts 3 valid files out of 5 total (2 errored)
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > counter > uses custom maxFiles when provided
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders TokTickIT wordmark
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-34 — Loading state > shows skeleton rows while loading
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-15 — Removed attachment renders correctly (BR-35) > shows removed attachments with Unavailable label
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-15 — Removed attachment renders correctly (BR-35) > does NOT show Download button for removed attachments
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-15 — Removed attachment renders correctly (BR-35) > does NOT show Remove button for removed attachments
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-15 — Removed attachment renders correctly (BR-35) > shows removed section heading with count
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-13 — Active attachments display and Add Attachment > renders active attachments with filename, size, and date
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-13 — Active attachments display and Add Attachment > shows attachment count in heading
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-13 — Active attachments display and Add Attachment > shows Add Attachment picker when under 5 active
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-13 — Active attachments display and Add Attachment > shows limit message when 5 active attachments exist
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-13 — Active attachments display and Add Attachment > shows empty message when no active attachments
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-37 — Ticket Detail not-found state (BR-13) > navigates to My Tickets when Back button is clicked
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-37 — Ticket Detail not-found state (BR-13) > does NOT show header block or attachments in not-found state
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-38 — Ticket Detail error state + retry > shows error message when API returns 500
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-38 — Ticket Detail error state + retry > shows error message on network failure
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders heading 'Select Development Requester'
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders amber 'testing only' banner
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders Lab 3 info callout
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders Cancel button (disabled)
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > static elements > renders Continue button (disabled initially)
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > loading state > shows loading spinner and text on mount
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > loading state > dropdown is not shown during loading
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > remove button > calls onFilesChange without the removed file
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > remove button > remove button has accessible name (aria-label)
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > remove button > remove button has title tooltip
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submitting empty form > shows all field-level errors when submitting completely empty form
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-14 — Remove confirmation flow (AC-19, AC-20) > opens confirm dialog when Remove is clicked
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-34 — Loading state > hides skeleton after loading completes
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > remove button > removing first file preserves others
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-09 — Empty ticket list > shows empty state message when zero tickets and no filters active
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > success state > shows dropdown with requesters after loading
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > success state > renders requester names in dropdown options
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > success state > shows helper text
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-14 — Remove confirmation flow (AC-19, AC-20) > Confirm Removal is disabled when reason is too short
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submitting empty form > shows form-level validation summary banner
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > remove button > removing last file results in empty array
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > BR-30: max files limit > shows 5/5 when 5 valid files are present
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > BR-30: max files limit > drop zone is disabled when at max files
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > BR-30: max files limit > drop zone is NOT disabled when under max files
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-09 — Empty ticket list > shows 'Create your first ticket' button in empty state
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > BR-30: max files limit > drop zone returns to enabled after removing a file from max
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > filename display > shows the filename
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > filename display > filename element has title attribute for full name on hover
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > drop zone hints > shows accepted file types in hint text
+ ✓ tests/lab-02/AttachmentPicker.test.tsx > AttachmentPicker > drop zone hints > shows max file size in hint text
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-38 — Ticket Detail error state + retry > Retry button re-fetches ticket detail successfully
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders all header fields as read-only
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders summary and description
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders resolution summary as muted text when null
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders active attachments
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders removed attachments with Unavailable label
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders attachment count in heading
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > renders Back to My Tickets link
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-09 — Empty ticket list > navigates to /tickets/new when 'Create your first ticket' is clicked
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-09 — Empty ticket list > hides search and filter controls in empty state
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-09 — Empty ticket list > renders My Tickets heading in empty state
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx > UI-12 — Ticket Detail renders with correct fields > no editable input elements present (all readonly)
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > success state > Continue is disabled until a requester is selected
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > empty state > shows empty message when no active requesters
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > empty state > Continue button is disabled in empty state
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > empty state > does not show dropdown in empty state
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > error state > shows error banner when API fails
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > error state > shows Retry button in error state
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-14 — Remove confirmation flow (AC-19, AC-20) > Confirm Removal is enabled when reason is valid (3+ chars)
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-10 — No-results state > shows no-results message when filters active and zero matches
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > error state > Retry re-fetches from API
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-14 — Remove confirmation flow (AC-19, AC-20) > Cancel closes the dialog without removing
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > Continue interaction > calls setRequester and navigates to /tickets on Continue
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-10 — No-results state > shows 'Clear filters' button in no-results state
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-39 — Attachment add error display > shows error message when upload fails with server error
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > Continue interaction > calls setRequester with correct data for second requester
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > API call > calls GET /api/dev-requesters on mount via apiClient
+ ✓ tests/lab-02/SelectRequester.test.tsx > SelectRequesterPage > API call > does NOT send X-Dev-Requester-Id header when no requester in localStorage
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-39 — Attachment add error display > shows generic error message on network failure during upload
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-10 — No-results state > keeps search/filter controls visible in no-results state
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submitting empty form > does NOT call POST /api/tickets when validation fails
+stderr | tests/lab-02/AppShell.test.tsx > Application Shell > change requester button > clicking Change Requester calls clearRequester
+No routes matched location "/select-requester"
+
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > nav active state > highlights My Tickets when at /tickets
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > nav active state > highlights Create Ticket when at /tickets/new
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > nav active state > My Tickets is NOT active when at /tickets/new
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > wordmark > renders TokTickIT wordmark
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > wordmark > wordmark links to /tickets
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > requester badge > shows requester name from context
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > requester badge > requester badge is present (never hidden entirely per §6)
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > change requester button > renders Change Requester button (not disabled)
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > change requester button > clicking Change Requester calls clearRequester
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > hamburger menu > hamburger button exists in DOM
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > hamburger menu > clicking hamburger toggles mobile menu and shows Close label
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > hamburger menu > mobile menu shows nav links after opening
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > hamburger menu > requester badge is visible inside mobile menu (§6)
+ ✓ tests/lab-02/AppShell.test.tsx > Application Shell > content area > renders child route placeholder content
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-10 — No-results state > does NOT show empty state when filters are active (BR-39 distinction)
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-35 — Error state > shows error banner when API returns non-ok response
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-35 — Error state > shows error banner when API throws an error
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-35 — Error state > shows Retry button in error state
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > summary validation (BR-19) > rejects summary shorter than 5 characters
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-35 — Error state > Retry button re-fetches tickets
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-40 — Attachment remove error display > shows error in dialog when DELETE fails
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-35 — Error state > hides error banner after successful retry
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-11 — Paginated response > renders "Showing 1 to 10 of 42 tickets" text
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-11 — Paginated response > renders Previous button (disabled on page 1)
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-11 — Paginated response > renders Next button (enabled when more pages exist)
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-40 — Attachment remove error display > shows generic error on network failure during remove
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders primary with correct class and text
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders secondary with correct class
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders tertiary with correct class
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders destructive with correct class
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders destructive-confirm with correct class
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders busy with spinner and busyLabel
+ ✓ tests/lab-02/Button.test.tsx > Button > variants > renders busy with custom busyLabel
+ ✓ tests/lab-02/Button.test.tsx > Button > busy state > sets disabled attribute on the DOM element
+ ✓ tests/lab-02/Button.test.tsx > Button > busy state > does not fire onClick when clicked
+ ✓ tests/lab-02/Button.test.tsx > Button > disabled state > sets aria-disabled and disabled attribute
+ ✓ tests/lab-02/Button.test.tsx > Button > disabled state > applies disabled styling class
+ ✓ tests/lab-02/Button.test.tsx > Button > disabled state > does not fire onClick when clicked
+ ✓ tests/lab-02/Button.test.tsx > Button > focus ring > has focus-visible CSS with 2px box-shadow
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-11 — Paginated response > renders page number buttons
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-32 — Filter dropdowns from filterOptions > Category dropdown options come from filterOptions.categories
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > summary validation (BR-19) > accepts summary at exactly 5 characters
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-40 — Attachment remove error display > Cancel closes dialog and clears error
+ ✓ tests/lab-02/RequesterFlow.integration.test.tsx > Requester flow (integration) > redirects to /select-requester when localStorage is empty
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > summary validation (BR-19) > has maxLength=120 attribute preventing >120 characters
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-32 — Filter dropdowns from filterOptions > Requested Priority dropdown options come from filterOptions.requestedPriorities
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-32 — Filter dropdowns from filterOptions > Current Status dropdown options come from filterOptions.currentStatuses
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-32 — Filter dropdowns from filterOptions > Sort dropdown has 4 options per D4
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-33 — Empty filterOptions > Category dropdown has no filter options when filterOptions.categories is empty
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-33 — Empty filterOptions > Requested Priority dropdown has no filter options when empty
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-33 — Empty filterOptions > Current Status dropdown has no filter options when empty
+ ✓ tests/lab-02/MyTickets.test.tsx > UI-33 — Empty filterOptions > does not throw an error when filterOptions arrays are all empty
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-41 — Attachment download error feedback > shows error message when download fails with non-ok response
+ ✓ tests/lab-02/AttachmentSection.test.tsx > UI-41 — Attachment download error feedback > shows error message when download throws network error
+ ✓ tests/lab-02/apiClient.requesterCleared.test.tsx > apiClient → RequesterProvider BR-03 redirect > dispatching requester:cleared event clears React state and navigates to /select-requester
+ ✓ tests/lab-02/apiClient.requesterCleared.test.tsx > apiClient → RequesterProvider BR-03 redirect > event dispatch does NOT navigate when not on a protected route
+ ✓ tests/lab-02/apiClient.requesterCleared.test.tsx > apiClient → RequesterProvider BR-03 redirect > multiple event dispatches do not cause errors
+ ✓ tests/lab-02/RouteGuard.test.tsx > RequireRequester > renders nothing while isLoaded is false (no flash redirect)
+ ✓ tests/lab-02/RouteGuard.test.tsx > RequireRequester > redirects to /select-requester when isLoaded=true and requester=null
+ ✓ tests/lab-02/RouteGuard.test.tsx > RequireRequester > renders children when isLoaded=true and requester is present
+ ✓ tests/lab-02/RouteGuard.test.tsx > RequireRequester > does not render children before isLoaded resolves, even if requester was previously set
+ ✓ tests/lab-02/RequesterFlow.integration.test.tsx > Requester flow (integration) > full flow: select requester → land on protected page with correct badge
+ ✓ tests/lab-02/RequesterFlow.integration.test.tsx > Requester flow (integration) > Change Requester clears state and returns to selection screen
+ ✓ tests/lab-02/Badge.test.tsx > Badge > priority variant > renders LOW with correct text and styling
+ ✓ tests/lab-02/Badge.test.tsx > Badge > priority variant > renders MEDIUM with correct text and styling
+ ✓ tests/lab-02/Badge.test.tsx > Badge > priority variant > renders HIGH with correct text and styling
+ ✓ tests/lab-02/Badge.test.tsx > Badge > status variant > renders NEW with correct text and styling
+ ✓ tests/lab-02/Badge.test.tsx > Badge > accessibility > has role=status for screen readers
+ ✓ tests/lab-02/Badge.test.tsx > Badge > accessibility > text content is always visible (not sr-only)
+ ✓ tests/lab-02/Badge.test.tsx > Badge > unknown values > renders unknown priority without crashing
+ ✓ tests/lab-02/Badge.test.tsx > Badge > unknown values > renders unknown status without crashing
+ ✓ tests/lab-01/App.test.tsx > App > renders the TokTickIT heading
+ ✓ tests/lab-01/App.test.tsx > App > renders the My Tickets nav link
+ ✓ tests/lab-01/App.test.tsx > App > renders the Create Ticket nav link
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > summary validation (BR-19) > accepts summary at exactly 120 characters 394ms
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > description validation (BR-20) > rejects description shorter than 20 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > description validation (BR-20) > accepts description at exactly 20 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > priority validation (BR-22) > shows error when no priority is selected
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > blur re-validation > clears summary error when user fixes the value and blurs
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > blur re-validation > keeps summary error when user types but value is still invalid on blur
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > focus management (AC-24) > focuses the first invalid field after submit fails
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > BR-24 field value preservation > preserves all entered values after validation failure
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > trimming behavior > trims summary before validation (BR-19)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > trimming behavior > trims description before validation (BR-20)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > validateForm() — direct unit tests > rejects summary longer than 120 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > validateForm() — direct unit tests > rejects description longer than 2000 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > validateForm() — direct unit tests > accepts summary at exactly 120 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > validateForm() — direct unit tests > accepts description at exactly 2000 characters
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > validateForm() — direct unit tests > returns empty object when all fields are valid
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > maxLength bypass protection > catches summary >120 chars set via fireEvent.change (bypasses maxLength)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > maxLength bypass protection > catches description >2000 chars set via fireEvent.change (bypasses maxLength)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > shows success panel with ticket number on 201 response
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > shows attachmentFailures when partial failure occurs (BR-31)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > displays backend 400 VALIDATION_ERROR field errors (different from client messages)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > displays backend 400 INVALID_REFERENCE error
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > shows banner error on 500 response, all field values preserved (AC-09)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > shows banner error on network failure, all field values preserved (AC-09)
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > submit button shows busy state while request is in flight 636ms
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > sends correct FormData fields to apiClient
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > shows attachment error for 413 response
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > sends attachment files in FormData with correct field name
+ ✓ tests/lab-02/CreateTicket.test.tsx > CreateTicketPage — validation > submit handler — API integration > excludes files with client-side validation errors from FormData
+
+ Test Files  16 passed (16)
+      Tests  247 passed (247)
+   Start at  17:55:25
+   (note: 247 = 246 original + 1 new "Uploading…" busyLabel test)
+   Duration  4.27s (transform 617ms, setup 2.32s, collect 2.23s, tests 6.52s, environment 4.29s)
+   Slowest test  636 ms (tests/lab-02/CreateTicket.test.tsx)
+
+================================================================================
+  END OF EVIDENCE — lab2/08-reference-data-api
+================================================================================
