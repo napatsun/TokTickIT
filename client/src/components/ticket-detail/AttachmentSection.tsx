@@ -240,8 +240,7 @@ export default function AttachmentSection({
           />
           {pendingFiles.some((f) => !f.error) && (
             <Button
-              variant="primary"
-              busy={isUploading}
+              variant={isUploading ? "busy" : "primary"}
               busyLabel="Uploading…"
               onClick={handleUpload}
               disabled={isUploading}

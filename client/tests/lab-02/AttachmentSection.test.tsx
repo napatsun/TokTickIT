@@ -290,6 +290,41 @@ describe("UI-39 — Attachment add error display", () => {
       expect(screen.getByText("Failed to upload attachment.")).toBeInTheDocument();
     });
   });
+
+  it("shows 'Uploading…' busyLabel while upload is in flight", async () => {
+    const user = userEvent.setup();
+
+    // Delay the response by 500ms so the busy state is observable
+    mockApiResponse.mockReturnValue(
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ _ok: true, status: 201, id: "a1" }), 500)
+      )
+    );
+
+    renderSection({ activeAttachments: [], removedAttachments: [] });
+
+    // Add a file via the file input
+    const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    // Wait for the upload button to appear
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /upload attachment/i })).toBeInTheDocument();
+    });
+
+    // Click upload
+    const uploadButton = screen.getByRole("button", { name: /upload attachment/i });
+    await user.click(uploadButton);
+
+    // Button should now show busy label "Uploading…" (not the original children text)
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Uploading/i })).toBeInTheDocument();
+    });
+
+    // Button should be disabled during upload
+    expect(screen.getByRole("button", { name: /Uploading/i })).toBeDisabled();
+  });
 });
 
 describe("UI-40 — Attachment remove error display", () => {
