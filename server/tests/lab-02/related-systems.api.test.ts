@@ -113,4 +113,28 @@ describe("GET /api/related-systems", () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
   });
+
+  it("excludes inactive related systems from response", async () => {
+    // Create an inactive related system directly via Prisma
+    const inactiveSystem = await prisma.relatedSystem.create({
+      data: { name: "__TEST_INACTIVE_SYSTEM__", isActive: false },
+    });
+
+    try {
+      const res = await request(app)
+        .get("/api/related-systems")
+        .set("X-Dev-Requester-Id", String(activeRequesterId));
+
+      expect(res.status).toBe(200);
+
+      const ids = res.body.relatedSystems.map((rs: { id: number }) => rs.id);
+      expect(ids).not.toContain(inactiveSystem.id);
+
+      const names = res.body.relatedSystems.map((rs: { name: string }) => rs.name);
+      expect(names).not.toContain("__TEST_INACTIVE_SYSTEM__");
+    } finally {
+      // Cleanup: remove the test record
+      await prisma.relatedSystem.delete({ where: { id: inactiveSystem.id } });
+    }
+  });
 });

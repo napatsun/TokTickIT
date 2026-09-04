@@ -103,4 +103,28 @@ describe("GET /api/categories", () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
   });
+
+  it("excludes inactive categories from response", async () => {
+    // Create an inactive category directly via Prisma
+    const inactiveCategory = await prisma.category.create({
+      data: { name: "__TEST_INACTIVE_CATEGORY__", isActive: false },
+    });
+
+    try {
+      const res = await request(app)
+        .get("/api/categories")
+        .set("X-Dev-Requester-Id", String(activeRequesterId));
+
+      expect(res.status).toBe(200);
+
+      const ids = res.body.categories.map((c: { id: number }) => c.id);
+      expect(ids).not.toContain(inactiveCategory.id);
+
+      const names = res.body.categories.map((c: { name: string }) => c.name);
+      expect(names).not.toContain("__TEST_INACTIVE_CATEGORY__");
+    } finally {
+      // Cleanup: remove the test record
+      await prisma.category.delete({ where: { id: inactiveCategory.id } });
+    }
+  });
 });
