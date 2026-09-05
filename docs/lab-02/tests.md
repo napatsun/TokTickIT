@@ -64,9 +64,9 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-12 | AC-15, BR-16, BR-17 | `GET /api/tickets?page=1&pageSize=10` against 42 seeded tickets | `pagination.totalItems=42`, `totalPages=5`; page 2 returns the next distinct 10 | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 3 tests) |
 | API-13 | BR-17 | `GET /api/tickets?page=0&pageSize=999` | Clamped to page=1, pageSize=10 (not a 400) | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 6 tests) |
 | API-14 | BR-15 (invalid enum) | `GET /api/tickets?requestedPriority=URGENT` | 400 validation error | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 4 tests: invalid requestedPriority, sortBy, sortDir, currentStatus) |
-| API-15 | AC-03 | `GET /api/tickets/:ticketNumber` for a ticket owned by a different Requester | 404 `TICKET_NOT_FOUND` (not 403) | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 3 tests: cross-requester 404, non-existent 404, BR-13 identical response) |
-| API-16 | AC-16 | `GET /api/tickets/:ticketNumber` for own ticket | 200; all header fields present and correct; attachments split into active/removed | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 3 tests: full fields, active/removed split, no removed fields in active) |
-| API-17 | AC-17, FR-11 | `POST /api/tickets/:ticketNumber/attachments` valid file on owned ticket | 201; attachment appears in subsequent `GET` of the ticket | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 3 tests: upload success, appears in GET, cross-requester 404) |
+| API-15 | AC-03 | `GET /api/tickets/:ticketNumber` for a ticket owned by a different Requester | 404 `TICKET_NOT_FOUND` (not 403) | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 14 tests in file: API-15 3 (cross-requester 404, non-existent 404, BR-13 identical response) + API-16 3 + auth 3 + response shape 5) |
+| API-16 | AC-16 | `GET /api/tickets/:ticketNumber` for own ticket | 200; all header fields present and correct; attachments split into active/removed | `server/tests/lab-02/ticket-detail.api.test.ts` (✅ Implemented — 3 tests: full fields, active/removed split, no removed fields in active; file total 14 tests) |
+| API-17 | AC-17, FR-11 | `POST /api/tickets/:ticketNumber/attachments` valid file on owned ticket | 201; attachment appears in subsequent `GET` of the ticket | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 22 tests in file: API-17–23 14 + GET metadata 3 + DELETE already-removed 1 + auth 4) |
 | API-18 | AC-08, BR-30 | Adding a 6th active attachment to a ticket that already has 5 | 400 `ATTACHMENT_LIMIT_REACHED`; no 6th record created | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: limit reached returns 400) |
 | API-19 | AC-18 | `GET /api/attachments/:id/download` for an active, owned attachment | 200; correct `Content-Disposition` filename and bytes | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: download returns correct content) |
 | API-20 | AC-19, BR-35 | `GET /api/attachments/:id/download` for a soft-removed attachment | 404 `ATTACHMENT_NOT_FOUND` | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 3 tests: removed 404, cross-requester 404, non-existent 404) |
@@ -75,15 +75,15 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-23 | BR-33 | `DELETE /api/attachments/:id` for an attachment on a ticket owned by a different Requester | 404 (ownership never confirmed nor denied explicitly) | `server/tests/lab-02/attachments.api.test.ts` (✅ Implemented — 1 test: cross-requester DELETE returns 404) |
 | API-24 | AC-21, BR-02 | `GET /api/dev-requesters` with one seeded inactive Requester | Response excludes the inactive Requester | `server/tests/lab-02/dev-requesters.api.test.ts` (✅ Implemented — 6 tests) |
 | API-25 | BR-26 | Force an unexpected server error (e.g., DB disconnect mock) on any endpoint | 500 with generic safe message, no stack trace/SQL in body | `server/tests/lab-02/errorHandling.api.test.ts` (**Planned** — not yet implemented; safe error is tested client-side in UI-08) |
-| API-26 | specification.md Section 7.1 (RelatedSystem.isActive, added in branch lab2/02) | `GET /api/related-systems` must exclude RelatedSystem rows where `isActive=false` | Response does not include any inactive RelatedSystem | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 7 tests including inactive requester rejection) |
+| API-26 | specification.md Section 7.1 (RelatedSystem.isActive, added in branch lab2/02) | `GET /api/related-systems` must exclude RelatedSystem rows where `isActive=false` | Response does not include any inactive RelatedSystem | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 8 tests including inactive requester rejection) |
 | API-27 | FR-01, BR-27 | `GET /api/dev-requesters` returns 200 with empty `requesters` array when no active requesters exist (empty state) | 200; `{ requesters: [] }`; valid JSON shape with no error field | `server/tests/lab-02/dev-requesters-empty-state.test.ts` (✅ Implemented — 2 tests) |
 | API-28 | BR-41, BR-05, BR-37 | `requesterContext` middleware: rejects missing/invalid/inactive `X-Dev-Requester-Id` (401); accepts valid active Requester and attaches `req.currentRequester` | 401 `INVALID_REQUESTER_CONTEXT` for missing/empty/non-numeric/negative/zero/nonexistent/inactive; 200 + correct requester data for valid | `server/tests/lab-02/requester-context.test.ts` (✅ Implemented — 12 tests) |
 | API-29 | AC-01, BR-06–BR-09, BR-19–BR-22 | `POST /api/tickets` — full create-ticket happy path + defaults verification (multipart/form-data) | 201; valid ticketNumber, currentStatus=NEW, itPriority=null, ticketOwner=null, ticketDate set, requester/category/relatedSystem objects included, all 3 priorities accepted, summary+description trimmed, unique numbers on successive requests | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — "happy path" group, 9 tests) |
 | API-30 | BR-28–BR-32 | `POST /api/tickets` — attachment upload at creation: happy path (1 file, 5 files, 0 files), rejection (>5 files, >5MB, unsupported type, MIME/extension mismatch), partial failure (BR-31), disk write verification | 201 with attachments array; 400/413/415 on rejection; 201 + attachmentFailures on partial failure; file verified on disk | `server/tests/lab-02/create-ticket-attachments.api.test.ts` (✅ Implemented — 10 tests) |
 | API-31 | BR-31 | `POST /api/tickets` — RECORD_CREATION_FAILED scenario: disk write succeeds but `prisma.attachment.create()` fails | 201; ticket created; attachmentFailures[0].reason = `RECORD_CREATION_FAILED` | `server/tests/lab-02/create-ticket-attachments-db-failure.api.test.ts` (✅ Implemented — 1 test; isolated in own file due to Prisma spy cleanup) |
 | API-32 | BR-06 | Ticket number generator: format validation (8 cases), generation (6 cases including current year, sequence padding, prefix) | `isValidTicketNumber()` accepts/rejects correct patterns; `generateTicketNumber()` returns valid format with correct year and padding | `server/tests/lab-02/ticket-number.test.ts` (✅ Implemented — 14 format/generation tests + 4 concurrency tests = 18 total) |
-| API-33 | FR-16, BR-05, BR-37 | `GET /api/related-systems` — wrapped format `{ relatedSystems: [...] }`, all 6 seeded systems returned, id/name fields, ascending id order, 401 without header, 401 inactive, 401 non-existent | 200 with correct wrapped shape; 7 seed data assertions; 3 auth rejection cases | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 7 tests) |
-| API-34 | BR-05, BR-19–BR-22 | `POST /api/tickets` — requestedPriority validation: rejects URGENT, accepts lowercase medium, rejects missing, rejects empty string; error response shape follows Common Error Shape | 400 for invalid/missing/empty; 201 for normalized lowercase; error.body has code/message/fieldErrors | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — 5 priority tests + 1 error shape test) |
+| API-33 | FR-16, BR-05, BR-37 | `GET /api/related-systems` — wrapped format `{ relatedSystems: [...] }`, all 6 seeded systems returned, id/name fields, ascending id order, 401 without header, 401 inactive, 401 non-existent | 200 with correct wrapped shape; seed data assertions; 3 auth rejection cases; inactive excluded | `server/tests/lab-02/related-systems.api.test.ts` (✅ Implemented — 8 tests) |
+| API-34 | BR-05, BR-19–BR-22 | `POST /api/tickets` — requestedPriority validation: rejects URGENT, accepts lowercase medium, rejects missing, rejects empty string; error response shape follows Common Error Shape | 400 for invalid/missing/empty; 201 for normalized lowercase; error.body has code/message/fieldErrors | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — 4 priority tests + 1 error shape test) |
 | API-35 | BR-05 | `POST /api/tickets` — auth: 401 without header, 401 with inactive requester, 401 with non-existent id | 401 `INVALID_REQUESTER_CONTEXT` in all three cases | `server/tests/lab-02/create-ticket.api.test.ts` (✅ Implemented — 3 auth tests) |
 | API-36 | BR-15 | `GET /api/tickets` — filterOptions.categories contains only distinct categories from the current Requester's tickets (not all categories in the system) | `filterOptions.categories` array has entries only for categories that appear in at least one of the Requester's tickets; categories with zero tickets for that Requester are absent | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
 | API-37 | BR-15 | `GET /api/tickets` — filterOptions.requestedPriorities contains only distinct priority values present in the Requester's tickets | `filterOptions.requestedPriorities` is a subset of `["LOW", "MEDIUM", "HIGH"]`; only values that appear in at least one ticket are included | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
@@ -91,6 +91,7 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | API-39 | BR-15 | `GET /api/tickets` — filterOptions is independent of active search/filter/sort params; applying `categoryId=2` does not narrow filterOptions.categories | Same `filterOptions` returned whether or not a `categoryId` filter is supplied; options reflect the full ticket set, not the filtered subset | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 2 tests) |
 | API-40 | BR-15, BR-39 | `GET /api/tickets` — filterOptions empty when requester has zero tickets (totalItems=0) | `filterOptions.categories = []`, `filterOptions.requestedPriorities = []`, `filterOptions.currentStatuses = []`; `pagination.totalItems = 0` | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
 | API-41 | BR-12, BR-15 | `GET /api/tickets` — filterOptions does not include categories/priorities/statuses from a different Requester's tickets | Requester A's `filterOptions` contains no values that exist only in Requester B's tickets; cross-Requester isolation applies to filterOptions as well | `server/tests/lab-02/my-tickets.api.test.ts` (✅ Implemented — 1 test) |
+| API-42 | BR-31 | POST attachments RECORD_CREATION_FAILED (simulates partial DB failure during attachment creation) | 201; `attachmentFailures[0].reason = "RECORD_CREATION_FAILED"`; no attachment record created; ticket unaffected | `server/tests/lab-02/attachments-partial-failure.api.test.ts` (✅ Implemented — 1 test) |
 
 ### 2.3 UI Component Tests
 
@@ -114,10 +115,10 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | UI-36 | AC-27, FR-14 | Ticket Detail loading state | Skeleton loading indicator shown while fetching; skeleton hides after data loads | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 2 tests) |
 | UI-37 | AC-03, BR-13 | Ticket Detail not-found state (404) | "Ticket not found." message shown; Back to My Tickets button present and navigates; header block and attachments NOT shown | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 3 tests) |
 | UI-38 | AC-28, BR-26 | Ticket Detail error state + retry | Error message shown on 500/network failure; Retry button present and re-fetches successfully | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (✅ Implemented — 3 tests) |
-| UI-39 | AC-29, BR-33 | Attachment add error display | Server error message displayed near AttachmentPicker; generic error shown on network failure | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 2 tests) |
+| UI-39 | AC-29, BR-33 | Attachment add error display | Server error message displayed near AttachmentPicker; generic error shown on network failure | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 3 tests: server error, network failure, and "Uploading…" busyLabel state) |
 | UI-40 | AC-19, AC-20 | Attachment remove error display | Error shown in RemoveAttachmentConfirm dialog on DELETE failure; dialog stays open for retry; Cancel clears error | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 3 tests) |
 | UI-41 | AC-18, BR-35 | Attachment download error feedback | Error message shown when download fails (non-ok response or network error) | `client/tests/lab-02/AttachmentSection.test.tsx` (✅ Implemented — 2 tests) |
-| UI-16 | AC-24 | Tab through Create Ticket form | Every control reachable in a logical order; focus ring visible via computed style/class | `client/tests/lab-02/CreateTicket.accessibility.test.tsx` (**Planned** — file exists but empty; partial AC-24 coverage via UI-25) |
+| UI-16 | AC-24 | Tab through Create Ticket form | Every control reachable in a logical order; focus ring visible via computed style/class | `client/tests/lab-02/CreateTicket.accessibility.test.tsx` (**Planned** — file does not exist yet; partial AC-24 coverage via UI-25) |
 | UI-17 | ui-spec §4 (Buttons) | Button component renders variant classes (primary/secondary/tertiary/destructive/destructive-confirm/busy) | Each variant maps to its expected CSS module class name | `client/tests/lab-02/Button.test.tsx` (✅ Implemented — 13 tests) |
 | UI-18 | ui-spec §4, BR-23 | Button disabled and busy states | `disabled` attr + `aria-disabled` when disabled; spinner + `busyLabel` + onClick suppressed when busy | `client/tests/lab-02/Button.test.tsx` (✅ Implemented — covered within 13 Button tests) |
 | UI-19 | ui-spec §3 (Fields), §10 | Field component renders states (default/focused/invalid/readonly/disabled), required asterisk, validation messages, input vs textarea, character counter | Correct CSS classes per state; `aria-describedby` linked; `role="alert"` for error; textarea resize=vertical; counter shows `n/max` | `client/tests/lab-02/Field.test.tsx` (✅ Implemented — 21 tests) |
@@ -133,8 +134,8 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 | UI-28 | BR-19, BR-20 | Trimming: whitespace-only summary/description treated as required error | "Summary is required" shown for spaces-only input; "Description is required" shown for spaces-only input | `client/tests/lab-02/CreateTicket.test.tsx` (✅ Implemented — 2 tests under "trimming behavior") |
 | UI-29 | AC-01, BR-31 | Submit handler — backend 400 VALIDATION_ERROR field errors displayed; 400 INVALID_REFERENCE displayed; 413 ATTACHMENT_TOO_LARGE displayed | Per-field error messages shown from server; field values preserved (BR-24) | `client/tests/lab-02/CreateTicket.test.tsx` (✅ Implemented — 3 tests: VALIDATION_ERROR, INVALID_REFERENCE, ATTACHMENT_TOO_LARGE) |
 | UI-30 | AC-01, BR-31 | Submit handler — correct FormData fields sent to apiClient; attachment files included/excluded based on validation errors | FormData contains categoryId, relatedSystemId, summary, description, requestedPriority; files with client-side errors excluded from FormData | `client/tests/lab-02/CreateTicket.test.tsx` (✅ Implemented — 2 tests under "sends correct FormData" and "excludes files with validation errors") |
-| UI-31 | BR-28, BR-29, BR-30 | AttachmentPicker — file size display format (bytes, KB, MB); inline error messages; counter display; remove button; drop zone disabled at max | formatFileSize shows B/KB/MB correctly; errors shown per-file; counter shows n/5; remove calls onFilesChange; drop zone aria-disabled at 5/5 | `client/tests/lab-02/AttachmentPicker.test.tsx` (✅ Implemented — 29 tests across 6 describe groups: file size display 5, inline error messages 6, counter 5, remove button 5, BR-30 max limit 4, filename display 2, drop zone hints 2) |
-| UI-32 | BR-15 | My Tickets filter dropdowns populated from `filterOptions` in API response, not from `GET /api/categories` full list | Category dropdown options match `filterOptions.categories` from mocked API response; a category that exists in the system but has no tickets for this Requester does not appear in the dropdown | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 5 tests: category/priority/status dropdowns from filterOptions + sort dropdown 4 options per D4) |
+| UI-31 | BR-28, BR-29, BR-30 | AttachmentPicker — file size display format (bytes, KB, MB); inline error messages; counter display; remove button; drop zone disabled at max | formatFileSize shows B/KB/MB correctly; errors shown per-file; counter shows n/5; remove calls onFilesChange; drop zone aria-disabled at 5/5 | `client/tests/lab-02/AttachmentPicker.test.tsx` (✅ Implemented — 29 tests across 7 describe groups: file size display 5, inline error messages 6, counter 5, remove button 5, BR-30 max limit 4, filename display 2, drop zone hints 2) |
+| UI-32 | BR-15 | My Tickets filter dropdowns populated from `filterOptions` in API response, not from `GET /api/categories` full list | Category dropdown options match `filterOptions.categories` from mocked API response; a category that exists in the system but has no tickets for this Requester does not appear in the dropdown | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 4 tests: category/priority/status dropdowns from filterOptions + sort dropdown 4 options per D4) |
 | UI-33 | BR-15 | When `filterOptions.categories` is empty (Requester has zero tickets), Category dropdown shows no options or is hidden | Category dropdown is empty or disabled when `filterOptions.categories = []`; no error occurs | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 4 tests: category/priority/status dropdowns empty + no error on empty filterOptions) |
 | UI-34 | AC-25 | Loading state: skeleton rows shown while API request in-flight | Skeleton/loading indicator visible during fetch; table not rendered until data arrives; skeleton disappears after load completes | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 2 tests: skeleton shown while loading, skeleton hidden after load) |
 | UI-35 | AC-26 | Error state: API returns non-ok or throws | Error banner with message shown; Retry button present; Retry re-fetches tickets successfully | `client/tests/lab-02/MyTickets.test.tsx` (✅ Implemented — 5 tests: non-ok response, thrown error, retry button present, retry re-fetches, hides banner after retry) |
@@ -181,17 +182,23 @@ Every row in Section 2 maps to at least one AC from `specification.md` Section 9
 
 ## 2.8 Test Commands
 
+> **Note:** There is no root-level `package.json` or `playwright.config` in this repository. The `test:lab2:unit`, `test:lab2:api`, `test:lab2`, and `test:e2e` npm scripts referenced in earlier versions of this document do **not** exist. To run tests, `cd` into the `server` or `client` directory and run `npm test` (which runs `vitest run`), or invoke Vitest directly:
+
 ```bash
-# Unit + API (backend)
-cd server && npm run test:lab2:unit
-cd server && npm run test:lab2:api
+# Backend — unit + API tests (requires a seeded test DB)
+cd server && npm test
 
-# UI component + style (frontend)
-cd client && npm run test:lab2
+# Backend — Lab-02 tests only
+cd server && npx vitest run tests/lab-02/
 
-# Responsive + visual + E2E (Playwright, requires app running against seeded test DB)
-npm run test:e2e -- --grep "lab-02"
+# Frontend — UI component + integration tests
+cd client && npm test
+
+# Frontend — Lab-02 tests only
+cd client && npx vitest run tests/lab-02/
 ```
+
+Responsive/visual/E2E suites are still planned (Sections 2.5–2.7); the only E2E file on disk is the empty stub `e2e/lab-02/requester-ticket-flow.spec.ts`, and no Playwright config exists yet, so `npm run test:e2e` is not runnable.
 
 ---
 
@@ -231,7 +238,7 @@ npm run test:e2e -- --grep "lab-02"
 
 Every AC has ≥1 automated test (planned or implemented). No test row is orphaned from an AC or a Business Rule.
 
-**Note on implementation status:** AC-01, AC-04 through AC-09 have real implemented tests across both backend and frontend (API-29 through API-35 and UI-25 through UI-31). AC-02, AC-21, and AC-22 were implemented in prior branches. AC-25 and AC-26 are implemented via UI-34 and UI-35. AC-03, AC-16 through AC-20 have backend tests via API-15 through API-23 and frontend tests via UI-12 through UI-15. AC-27 through AC-29 are implemented via UI-36 through UI-41. AC-23 and AC-24 still map to planned test IDs (VISUAL/RESP tests not yet implemented; CreateTicket.accessibility.test.tsx does not exist).
+**Note on implementation status:** AC-01, AC-04 through AC-09 have real implemented tests across both backend and frontend (API-29 through API-35 and UI-25 through UI-31). AC-02, AC-21, and AC-22 were implemented in prior branches. AC-25 and AC-26 are implemented via UI-34 and UI-35. AC-03, AC-16 through AC-20 have backend tests via API-15 through API-23 and frontend tests via UI-12 through UI-15. AC-27 through AC-29 are implemented via UI-36 through UI-41. AC-24 is now satisfied by the implemented UI-25. Only AC-23 remains mapped to planned-only test IDs (VISUAL-01–03, RESP-01–03).
 
 ---
 
@@ -248,39 +255,47 @@ artifacts/lab-02/screenshots/ticket-detail/{desktop,tablet,mobile}.png
 
 ## 5. Final Results
 
-*Actual test run from `lab2/05-create-ticket-full` branch, 2026-09-01:*
+*Actual test run on `lab2/09-docs-finalization` branch, 2026-09-05:*
 
 | Level | Total | Passing | Failing | Skipped |
 |---|---|---|---|---|
 | Unit (ticket-number + seed) | 19 | 19 | 0 | 0 |
-| API (create-ticket + attachments + db-failure + related-systems + dev-requesters + requester-context) | 71 | 71 | 0 | 0 |
-| UI Component (CreateTicket + AttachmentPicker + SelectRequester + Field + Badge + Button + AppShell + RequesterContext + apiClient + RouteGuard) | 166 | 166 | 0 | 0 |
+| API (create-ticket + create-ticket-attachments + create-ticket-attachments-db-failure + attachments + attachments-partial-failure + ticket-detail + my-tickets + related-systems + dev-requesters + dev-requesters-empty-state + requester-context) | 146 | 146 | 0 | 0 |
+| UI Component (CreateTicket + MyTickets + AttachmentPicker + AttachmentSection + RequesterTicketDetail + SelectRequester + Field + Badge + Button + AppShell + RequesterContext + apiClient + RouteGuard) | 238 | 238 | 0 | 0 |
 | Integration (RequesterFlow + apiClient.requesterCleared) | 6 | 6 | 0 | 0 |
 | UI Style | 0 | 0 | 0 | 0 |
 | Visual | 0 | 0 | 0 | 0 |
 | Responsive | 0 | 0 | 0 | 0 |
 | E2E | 0 | 0 | 0 | 0 |
-| **Total (implemented)** | **346** | **346** | **0** | **0** |
-| _Planned (files exist but empty)_ | _14_ | — | — | — |
+| **Lab-02 Total (implemented)** | **409** | **409** | **0** | **0** |
+| _Planned test IDs (not yet implemented)_ | _26_ | — | — | — |
+
+*Plus 11 tests from Lab-01 (categories: 7, health: 1, App: 3), making the Grand Total 420 tests across the codebase.*
 
 **Implemented test file breakdown** (files with real tests on disk):
 
-Backend (134 tests across 12 files; 127 in lab-02 + 7 in lab-01):
+Backend (165 tests / 13 files in Lab-02 + 8 tests in Lab-01):
 - `ticket-number.test.ts` — 18 tests (unit + concurrency)
+- `seed.idempotency.test.ts` — 1 test
 - `create-ticket.api.test.ts` — 33 tests (happy path 9, summary 6, description 5, priority 4+1 shape, reference 4, auth 3, multi-field 1)
 - `create-ticket-attachments.api.test.ts` — 10 tests (happy 3, limit 1, size 1, type 3, partial failure 1, disk 1)
-- `create-ticket-attachments-db-failure.api.test.ts` — 1 test (RECORD_CREATION_FAILED)
-- `my-tickets.api.test.ts` — 37 tests (ownership 2, search 3, filter 2, pagination 3, clamping 6, enum 4, filterOptions 7, response shape 4, sort 3, cross-requester 1, empty requester 1, empty filterOptions 1)
-- `related-systems.api.test.ts` — 7 tests (wrapped format, seed data, fields, ordering, auth 3)
+- `create-ticket-attachments-db-failure.api.test.ts` — 1 test (RECORD_CREATION_FAILED at create)
+- `attachments.api.test.ts` — 22 tests (API-17–23 14, GET metadata 3, DELETE already-removed 1, auth 4)
+- `attachments-partial-failure.api.test.ts` — 1 test (RECORD_CREATION_FAILED on POST attachments)
+- `ticket-detail.api.test.ts` — 14 tests (API-15/API-16 6, auth 3, response shape 5)
+- `my-tickets.api.test.ts` — 37 tests (ownership 2, search 3, category filter 2, pagination 3, clamping 6, enum 4, filterOptions 8, response shape 4, sort 3, auth 2)
+- `related-systems.api.test.ts` — 8 tests (wrapped format, seed data, fields, ordering, auth 3, inactive exclusion)
 - `dev-requesters.api.test.ts` — 6 tests
 - `dev-requesters-empty-state.test.ts` — 2 tests
 - `requester-context.test.ts` — 12 tests
-- `seed.idempotency.test.ts` — 1 test
+- Lab-01: `categories.test.ts` — 7 tests, `health.test.ts` — 1 test
 
-Frontend (212 tests across 14 files):
+Frontend (247 tests / 16 files — 244 for Lab-02 + 3 for App.test.tsx):
 - `CreateTicket.test.tsx` — 34 tests
-- `MyTickets.test.tsx` — 28 tests (UI-09 empty 5, UI-10 no-results 4, UI-11 pagination 4, UI-32 filterOptions 5, UI-33 empty filterOptions 4, UI-34 loading 2, UI-35 error 5)
+- `MyTickets.test.tsx` — 28 tests (UI-09 empty 5, UI-10 no-results 4, UI-11 pagination 4, UI-32 filterOptions 4, UI-33 empty filterOptions 4, UI-34 loading 2, UI-35 error 5)
 - `AttachmentPicker.test.tsx` — 29 tests (file size 5, errors 6, counter 5, remove 5, BR-30 max 4, filename 2, hints 2)
+- `AttachmentSection.test.tsx` — 21 tests (UI-13 5, UI-14 4, UI-15 4, UI-39 3, UI-40 3, UI-41 2)
+- `RequesterTicketDetail.test.tsx` — 16 tests (UI-12 8, UI-36 2, UI-37 3, UI-38 3)
 - `SelectRequester.test.tsx` — 22 tests
 - `Field.test.tsx` — 21 tests
 - `RequesterContext.test.tsx` — 14 tests
@@ -291,11 +306,19 @@ Frontend (212 tests across 14 files):
 - `RouteGuard.test.tsx` — 4 tests
 - `apiClient.requesterCleared.test.tsx` — 3 tests
 - `RequesterFlow.integration.test.tsx` — 3 tests
+- Lab-01: `App.test.tsx` — 3 tests
 
-**Empty stub files** (exist on disk but contain no tests yet — 14 planned tests):
-- Backend: `attachments.api.test.ts` (API-17–23, 7 tests planned), `ticket-detail.api.test.ts` (API-15–16, 2 tests planned)
-- Frontend: `AttachmentSection.test.tsx` (UI-13–15, 3 tests planned), `RequesterTicketDetail.test.tsx` (UI-12, 1 test planned), `CreateTicket.accessibility.test.tsx` (UI-16, 1 test planned)
-- Not yet created: `validation.unit.test.ts` (UNIT-03/04/07), `pagination.unit.test.ts` (UNIT-05), `attachmentValidation.unit.test.ts` (UNIT-06), `authContext.api.test.ts` (API-07/08), `errorHandling.api.test.ts` (API-25), all STYLE/VISUAL/RESP/E2E files
+**Empty stub files** (exist on disk but contain no tests yet):
+- `e2e/lab-02/requester-ticket-flow.spec.ts` (E2E-01/02/03, 3 planned tests) — the only test file on disk that exists but is empty.
+
+**Planned test IDs (not yet implemented — 26 total):**
+- Backend unit: UNIT-03/04/07 (`validation.unit.test.ts`), UNIT-05 (`pagination.unit.test.ts`), UNIT-06 (`attachmentValidation.unit.test.ts`)
+- Backend API: API-07/08 (`authContext.api.test.ts`), API-25 (`errorHandling.api.test.ts`)
+- Frontend: UI-16 (`CreateTicket.accessibility.test.tsx` — file does not exist yet)
+- Style: STYLE-01–04
+- Visual: VISUAL-01–03
+- Responsive: RESP-01–03
+- E2E: E2E-01–07 (`e2e/lab-02/requester-ticket-flow.spec.ts` exists as an empty stub; the remaining E2E spec files are not yet created)
 
 No test may remain skipped/disabled at submission time (Definition of Done, Section 10 of `specification.md`).
 
@@ -308,6 +331,11 @@ No test may remain skipped/disabled at submission time (Definition of Done, Sect
 - **Cross-browser matrix testing** is limited to the Playwright default browser project in Lab 2; multi-browser matrix expansion is deferred to a later lab if required.
 - **`categories.test.ts` (Lab 1)** uses hardcoded category IDs (1–4) which drift from actual DB state after repeated seed/reset cycles during development. This is a known test-fragility issue predating Lab 2 (see `specification.md` §11 item 9); **resolved in lab2/05** — test rewritten to use dynamic ID lookup via `prisma.category.findMany()`.
 - **Vitest config silent-skip bug** — `client/vite.config.ts` originally used `include: ["tests/**/*.test.tsx"]` which silently excluded `.test.ts` files (discovered during self-audit when `apiClient.test.ts` with 14 tests was missing from vitest output). Fixed to `include: ["tests/**/*.test.{ts,tsx}"]`. The server config (`server/vitest.config.ts`) uses `include: ["tests/**/*.test.ts"]` which is correct for its all-`.ts` test files. No CI or lint step currently validates that the number of test files on disk matches the number discovered by the test runner — recommend adding such a check in a future sprint to prevent silent config regressions (see `specification.md` §11 item 11).
-- **`seed.idempotency.test.ts`** deletes all rows across every table in `beforeAll`, which races with other test files when Vitest runs suites in parallel. **Resolved in lab2/06:** Fixed by adding `poolOptions.forks.singleFork: true` to `server/vitest.config.ts`, forcing all test files to run sequentially. Eliminates the race entirely — 127 tests pass deterministically (see `specification.md` §11 item 12).
+- **`seed.idempotency.test.ts`** deletes all rows across every table in `beforeAll`, which races with other test files when Vitest runs suites in parallel. **Resolved in lab2/06:** Fixed by adding `poolOptions.forks.singleFork: true` to `server/vitest.config.ts`, forcing all test files to run sequentially. Eliminates the race entirely — 165 tests pass deterministically (see `specification.md` §11 item 12).
 - **`create-ticket-attachments-db-failure.api.test.ts`** is isolated in its own file because `vi.spyOn` on Prisma's proxy-based client does not cleanly restore, which would break subsequent tests in the same file.
+- **Multer runs before the auth middleware** (see `specification.md` §11 item 19) — On multipart endpoints (`POST /api/tickets` and `POST /api/tickets/:ticketNumber/attachments`), `upload.array()` executes before `requesterContext`, so file size/type validation happens first. As a result, API-04/API-05/API-30 return 413/415 **before** a missing or invalid header would return 401. Accepted in Lab 2; to be revisited in Lab 3 (real auth).
+- **Playwright screenshots require explicit waits** (see `specification.md` §11 item 20) — Visual tests (VISUAL-01–03) must wait for `networkidle` plus a content-specific selector before capturing with `fullPage: true`; a bare `waitForTimeout(N)` can capture a mid-transition layout (e.g., sticky header at the wrong y position). Verified in lab2/08.
+- **lab2/08 test cleanup** (see `specification.md` §11 item 21) — lab2/08 added inactive-filtering coverage for `GET /api/categories` and `GET /api/related-systems` (each creates an `isActive=false` record, asserts it is excluded, and cleans up), and added the "Uploading…" busyLabel test to `AttachmentSection.test.tsx` (included in UI-39's 3 tests).
+- **`tsc --noEmit` required before closing a branch** (see `specification.md` §11 item 22) — Vitest transpiles TypeScript without full type-checking, so type errors (e.g., the pre-existing TS2322 `busy` prop on `Button` fixed in lab2/08) can pass `vitest run` silently. Every branch must pass `tsc --noEmit` in both `server/` and `client/` before close.
 - **Real-session-based ownership testing** (replacing `X-Dev-Requester-Id`) is explicitly deferred to Lab 3 per BR-41/BR-42.
+- **Lab-01 tests tracked** — `server/tests/lab-01/health.test.ts` (1 test) and `client/tests/lab-01/App.test.tsx` (3 tests) exist on disk and pass normally, even though they are not bound to any Lab-02 AC. `server/tests/lab-01/categories.test.ts` (7 tests) is also counted in Section 5; together these are the 11 Lab-01 tests included in the Grand Total of 420.
