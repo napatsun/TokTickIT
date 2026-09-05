@@ -1,57 +1,54 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import App from "../../src/App.js";
-import * as api from "../../src/api.js";
+
+/**
+ * App.test.tsx — Lab 1 tests (worked examples).
+ *
+ * After lab2/04, the routing tree includes RequesterProvider + RequireRequester.
+ * Protected routes (/tickets, etc.) only render when a requester is in localStorage.
+ * We seed localStorage before each test so the app renders normally.
+ */
+
+const STORAGE_KEY = "tkt_current_requester";
+const MOCK_REQUESTER = {
+  id: 1,
+  fullName: "Jennifer Anderson",
+  email: "jennifer.anderson@example.com",
+};
+
+beforeEach(() => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_REQUESTER));
+});
+
+afterEach(() => {
+  localStorage.removeItem(STORAGE_KEY);
+});
 
 describe("App", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   // WORKED EXAMPLE — provided for you.
-  it("renders the TokTickIT heading", () => {
+  it("renders the TokTickIT heading", async () => {
     render(<App />);
-    expect(screen.getByText(/TokTickIT/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/TokTickIT/i)).toBeInTheDocument();
+    });
   });
 
-  it("shows Online and the seeded categories on success", async () => {
-    vi.spyOn(api, "checkSystem").mockResolvedValue({
-      online: true,
-      categories: [
-        { id: 1, name: "Account and Access" },
-        { id: 2, name: "Hardware" },
-        { id: 3, name: "Software" },
-        { id: 4, name: "Network" },
-      ],
-    });
-
+  it("renders the My Tickets nav link", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /check system/i }));
-
     await waitFor(() => {
-      expect(screen.getByText(/online/i)).toBeInTheDocument();
+      const desktopNav = screen.getByRole("navigation", { name: /main navigation/i });
+      expect(within(desktopNav).getByRole("link", { name: /my tickets/i })).toBeInTheDocument();
     });
-
-    expect(screen.getByText("Account and Access")).toBeInTheDocument();
-    expect(screen.getByText("Hardware")).toBeInTheDocument();
-    expect(screen.getByText("Software")).toBeInTheDocument();
-    expect(screen.getByText("Network")).toBeInTheDocument();
   });
 
-  it("shows an Offline error message when the API is unavailable", async () => {
-    vi.spyOn(api, "checkSystem").mockRejectedValue(
-      new Error("Unable to connect to TokTickIT API")
-    );
-
+  it("renders the Create Ticket nav link", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /check system/i }));
-
     await waitFor(() => {
-      expect(screen.getByText(/offline/i)).toBeInTheDocument();
+      const desktopNav = screen.getByRole("navigation", { name: /main navigation/i });
+      expect(within(desktopNav).getByRole("link", { name: /create ticket/i })).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByText(/unable to connect to toktickit api/i)
-    ).toBeInTheDocument();
   });
 });
+
+

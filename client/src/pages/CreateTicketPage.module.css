@@ -1,0 +1,371 @@
+/* ============================================================
+   CreateTicketPage — ui-spec.md §7 (Create Ticket screen)
+   ============================================================ */
+
+/* -----------------------------------------------------------
+   Page layout — single card, max-width ~840px, centered
+   §7: "Single card, max-width ~840px, centered, sections stacked
+   top-to-bottom"
+   ----------------------------------------------------------- */
+.page {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid #DDE7E1;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px; /* §2: 24px between field groups/sections */
+}
+
+/* -----------------------------------------------------------
+   §7.1: Header row — title + ticket number chip
+   ----------------------------------------------------------- */
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  font-size: var(--font-size-h1, 24px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.ticketChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background-color: var(--color-pale-green);
+  color: var(--color-secondary-green);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* -----------------------------------------------------------
+   §7.2: System-generated info (read-only)
+   ----------------------------------------------------------- */
+.sectionLabel {
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+/* -----------------------------------------------------------
+   §7.3: Classification — 2-column grid on desktop, stacked on
+   mobile. "two-column sub-grid within the Classification section
+   only"
+   ----------------------------------------------------------- */
+.classificationGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* §11: Tablet 768–991px — single column */
+@media (max-width: 991px) {
+  .classificationGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* §11: Mobile <768px — already single column from tablet rule,
+   but ensure no horizontal scroll */
+@media (max-width: 767px) {
+  .classificationGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* -----------------------------------------------------------
+   §7.4: Requested Priority — segmented control
+   Uses shared Button component with CSS overrides to create
+   a seamless segmented strip (no gaps between buttons).
+   ----------------------------------------------------------- */
+.priorityGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prioritySegmented {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Override Button component defaults to create segmented look.
+   Button.module.css sets: height 40px, border-radius 6px, padding 0 16px.
+   We override to: height 100% (fill the segment container), no individual
+   border-radius, no individual border, zero margin/gap between segments. */
+.priorityOption {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Override Button defaults */
+  height: auto !important;
+  min-height: 40px;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 10px 12px !important;
+  /* Button's border-right separator between segments */
+  border-right: 1px solid var(--color-field-editable-border) !important;
+  /* Inherit Button font styling */
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.priorityOption:last-child {
+  border-right: none !important;
+}
+
+/* Unselected: white background, secondary-green border on outer container */
+.priorityOption:not(.priorityOptionActive) {
+  background-color: var(--color-field-editable-bg) !important;
+  color: var(--color-text) !important;
+}
+
+.priorityOption:not(.priorityOptionActive):hover {
+  background-color: var(--color-bg-page) !important;
+}
+
+/* Selected: secondary-green fill (overrides Button primary variant) */
+.priorityOptionActive {
+  background-color: var(--color-secondary-green) !important;
+  border-color: var(--color-secondary-green) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+}
+
+.priorityOptionActive:hover {
+  background-color: var(--color-secondary-green) !important;
+}
+
+/* §3: focus ring on the segmented control container, not individual buttons */
+.priorityOption:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-ring-color, #0B7A46);
+  z-index: 1;
+}
+
+/* §11: Mobile — full width, stacked */
+@media (max-width: 767px) {
+  .prioritySegmented {
+    flex-direction: column;
+  }
+
+  .priorityOption {
+    border-right: none;
+    border-bottom: 1px solid var(--color-field-editable-border);
+    justify-content: flex-start;
+    padding: 12px 16px;
+  }
+
+  .priorityOption:last-child {
+    border-bottom: none;
+  }
+}
+
+/* -----------------------------------------------------------
+   §7.8: Actions row
+   ----------------------------------------------------------- */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-field-editable-border);
+}
+
+/* §11: Mobile — buttons stack full-width */
+@media (max-width: 767px) {
+  .actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
+}
+
+/* -----------------------------------------------------------
+   Post-submit: Success panel (§7)
+   ----------------------------------------------------------- */
+.successPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 24px;
+  background-color: var(--color-success-bg);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.successIcon {
+  font-size: 48px;
+}
+
+.successTicketNumber {
+  font-size: 28px;
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-primary-green);
+  letter-spacing: 0.5px;
+}
+
+.successMessage {
+  font-size: 16px;
+  color: var(--color-text);
+  max-width: 400px;
+}
+
+.successActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* §11: Mobile — success action buttons stack full-width */
+@media (max-width: 767px) {
+  .successActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .successActions > * {
+    width: 100%;
+  }
+}
+
+/* -----------------------------------------------------------
+   Post-submit: API error banner (§7)
+   ----------------------------------------------------------- */
+.apiErrorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  border-radius: 6px;
+  color: var(--color-error);
+  font-size: 14px;
+}
+
+.apiErrorBanner::before {
+  content: "\26A0";
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* -----------------------------------------------------------
+   Post-submit: Form-level validation summary (§7)
+   ----------------------------------------------------------- */
+.validationSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  border-radius: 6px;
+  color: var(--color-error);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.validationSummary::before {
+  content: "\26A0";
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* -----------------------------------------------------------
+   §7: Ref data loading/error states
+   ----------------------------------------------------------- */
+.loadingArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 0;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--color-field-editable-border);
+  border-top-color: var(--color-secondary-green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.refErrorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  border-radius: 6px;
+  color: var(--color-error);
+  font-size: 14px;
+}
+
+/* -----------------------------------------------------------
+   Partial success — attachment failures (BR-31)
+   ----------------------------------------------------------- */
+.attachmentFailures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-warning);
+}
+
+.attachmentFailureItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.attachmentFailureItem::before {
+  content: "\26A0";
+  flex-shrink: 0;
+}

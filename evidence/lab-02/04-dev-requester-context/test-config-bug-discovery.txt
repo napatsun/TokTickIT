@@ -1,0 +1,105 @@
+================================================================================
+ TEST CONFIG BUG DISCOVERY — lab2/04-dev-requester-context
+ Branch: lab2/04-dev-requester-context
+ Date: 2026-08-28
+================================================================================
+
+TIMELINE
+========
+
+STEP 1: Self-audit identified BR-03 gap
+  - The self-audit checklist showed BR-03 was "Partial" — no automatic
+    client-side handler for 401 INVALID_REQUESTER_CONTEXT.
+  - Decision: implement global apiClient fetch wrapper before closing branch.
+
+STEP 2: Created apiClient.ts and tests
+  - Created client/src/lib/apiClient.ts (global fetch wrapper).
+  - Created client/tests/lab-02/apiClient.test.ts (14 tests).
+  - Created client/tests/lab-02/apiClient.requesterCleared.test.tsx (3 tests).
+
+STEP 3: First vitest run after implementation
+  - Command: cd client && npx vitest run
+  - Output: "Tests 102 passed (102)"
+  - Expected: 99 (original) + 14 (apiClient.test.ts) + 3 (requesterCleared) = 116
+  - Gap: 116 - 102 = 14 tests missing
+
+STEP 4: Investigation — counted tests per file
+  - Listed all test files in vitest output with per-file counts.
+  - Summed: 4+13+3+8+19+11+14+3+22+5 = 102
+  - Missing file: apiClient.test.ts (14 tests) was NOT in the output at all.
+
+STEP 5: Root cause identified
+  - Checked client/vite.config.ts:
+      include: ["tests/**/*.test.tsx"]
+  - Problem: pattern only matches .tsx files.
+  - apiClient.test.ts has extension .ts (not .tsx), so vitest silently
+    excluded it. No error, no warning — just skipped.
+
+STEP 6: Fix applied
+  - Changed vite.config.ts include pattern from:
+      ["tests/**/*.test.tsx"]
+    to:
+      ["tests/**/*.test.{ts,tsx}"]
+
+STEP 7: Verification
+  - Re-ran vitest: "Tests 116 passed (116)"
+  - All 14 apiClient.test.ts tests now discovered and passing.
+  - 116 = 99 (original) + 14 (apiClient.test.ts) + 3 (requesterCleared.test.tsx)
+
+STEP 8: Server config cross-check
+  - Checked server/vitest.config.ts:
+      include: ["tests/**/*.test.ts"]
+  - Server has 10 .test.ts files, 0 .test.tsx files.
+  - Vitest discovered 10 files (5 passed + 5 failed).
+  - 5 "failed" = 4 empty placeholder files + 1 known categories.test.ts issue.
+  - Server config is correct — no issue.
+
+STEP 9: No CI safeguard exists
+  - Checked: .github/workflows/ → does not exist.
+  - Checked: Makefile → does not exist.
+  - Checked: package.json scripts → no test-count validation.
+  - Result: No automated check to prevent this class of silent skip.
+  - Documented in specification.md §11 item 11.
+
+ROOT CAUSE SUMMARY
+==================
+
+  File:     client/vite.config.ts
+  Line:     9
+  Bug:      include: ["tests/**/*.test.tsx"] excludes .test.ts files
+  Impact:   apiClient.test.ts (14 tests) silently skipped by vitest
+  Discovery: Test count mismatch during self-audit (102 vs expected 116)
+  Fix:      include: ["tests/**/*.test.{ts,tsx}"]
+  Verified: 116/116 tests pass after fix
+
+LESSONS LEARNED
+===============
+
+  1. Vitest include patterns with explicit extensions can silently exclude
+     files if the extension doesn't match. No error or warning is emitted.
+
+  2. Manual test count verification (comparing expected vs actual) is an
+     effective way to catch this class of bug.
+
+  3. Projects should consider adding a CI step that validates the number
+     of test files on disk matches the number discovered by the test runner.
+
+  4. When creating new test files, verify the extension matches the
+     project's vitest include pattern before writing tests.
+
+FINAL STATE
+===========
+
+  client/vite.config.ts line 9:
+    include: ["tests/**/*.test.{ts,tsx}"]
+
+  Client vitest output:
+    Test Files  4 failed | 11 passed (15)
+    Tests      116 passed (116)
+
+  Server vitest output:
+    Test Files  5 failed | 5 passed (10)
+    Tests       22 passed | 1 failed (23)
+
+  4 client failed suites = empty placeholder files (not actual failures)
+  5 server failed suites = 4 empty placeholder + 1 known categories.test.ts

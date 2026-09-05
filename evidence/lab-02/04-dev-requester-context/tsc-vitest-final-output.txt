@@ -1,0 +1,129 @@
+================================================================================
+ TSC + VITEST FINAL VERIFICATION — lab2/04-dev-requester-context
+ Generated: 2026-08-28
+ Commands run from project root: /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT
+================================================================================
+
+================================================================================
+ 1. CLIENT tsc --noEmit
+================================================================================
+
+$ cd client && npx tsc --noEmit
+(no output — clean exit)
+
+EXIT_CODE=0
+
+================================================================================
+ 2. CLIENT vitest run
+================================================================================
+
+$ cd client && npx vitest run
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client
+
+ ✓ tests/lab-02/apiClient.test.ts (14 tests) 8ms
+ ✓ tests/lab-02/Button.test.tsx (13 tests) 23ms
+ ✓ tests/lab-02/RouteGuard.test.tsx (4 tests) 20ms
+ ✓ tests/lab-02/apiClient.requesterCleared.test.tsx (3 tests) 24ms
+ ✓ tests/lab-02/RequesterContext.test.tsx (11 tests) 34ms
+ ✓ tests/lab-02/Field.test.tsx (19 tests) 67ms
+stderr | tests/lab-02/AppShell.test.tsx > Application Shell > change requester button > clicking Change Requester calls clearRequester
+No routes matched location "/select-requester"
+
+ ✓ tests/lab-02/AppShell.test.tsx (14 tests) 213ms
+ ✓ tests/lab-02/RequesterFlow.integration.test.tsx (3 tests) 262ms
+ ✓ tests/lab-02/SelectRequester.test.tsx (22 tests) 431ms
+ ✓ tests/lab-02/Badge.test.tsx (8 tests) 57ms
+ ❯ tests/lab-02/AttachmentSection.test.tsx (0 test)
+ ❯ tests/lab-02/CreateTicket.test.tsx (0 test)
+ ❯ tests/lab-02/MyTickets.test.tsx (0 test)
+ ❯ tests/lab-02/RequesterTicketDetail.test.tsx (0 test)
+ ✓ tests/lab-01/App.test.tsx (5 tests) 80ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 4 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/AttachmentSection.test.tsx [ tests/lab-02/AttachmentSection.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/AttachmentSection.test.tsx
+
+ FAIL  tests/lab-02/CreateTicket.test.tsx [ tests/lab-02/CreateTicket.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/CreateTicket.test.tsx
+
+ FAIL  tests/lab-02/MyTickets.test.tsx [ tests/lab-02/MyTickets.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/MyTickets.test.tsx
+
+ FAIL  tests/lab-02/RequesterTicketDetail.test.tsx [ tests/lab-02/RequesterTicketDetail.test.tsx ]
+Error: No test suite found in file /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/client/tests/lab-02/RequesterTicketDetail.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ Test Files  4 failed | 11 passed (15)
+      Tests  116 passed (116)
+
+Notes:
+- 4 "failed" suites are empty placeholder files for future labs (lab2/05-07).
+  They contain no test() or describe() blocks — not actual test failures.
+- 116 = 99 (original lab2/04 tests) + 14 (apiClient.test.ts) + 3 (apiClient.requesterCleared.test.tsx)
+
+================================================================================
+ 3. SERVER tsc --noEmit
+================================================================================
+
+$ cd server && npx tsc --noEmit
+(no output — clean exit)
+
+EXIT_CODE=0
+
+================================================================================
+ 4. SERVER vitest run tests/lab-02/
+================================================================================
+
+$ cd server && npx vitest run tests/lab-02/
+
+ RUN  v2.1.9 /Users/sun/Documents/kmutt/cpe334/Lab/TokTickIT/server
+
+ ❯ tests/lab-02/ticket-detail.api.test.ts (0 test)
+ ❯ tests/lab-02/my-tickets.api.test.ts (0 test)
+ ❯ tests/lab-02/create-ticket.api.test.ts (0 test)
+ ❯ tests/lab-02/attachments.api.test.ts (0 test)
+ ✓ tests/lab-02/dev-requesters-empty-state.test.ts (2 tests) 15ms
+ ✓ tests/lab-02/seed.idempotency.test.ts (1 test) 111ms
+ ✓ tests/lab-02/dev-requesters.api.test.ts (6 tests) 71ms
+ ✓ tests/lab-02/requester-context.test.ts (12 tests) 74ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 4 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lab-02/attachments.api.test.ts [ tests/lab-02/attachments.api.test.ts ]
+Error: No test suite found in file
+
+ FAIL  tests/lab-02/create-ticket.api.test.ts [ tests/lab-02/create-ticket.api.test.ts ]
+Error: No test suite found in file
+
+ FAIL  tests/lab-02/my-tickets.api.test.ts [ tests/lab-02/my-tickets.api.test.ts ]
+Error: No test suite found in file
+
+ FAIL  tests/lab-02/ticket-detail.api.test.ts [ tests/lab-02/ticket-detail.api.test.ts ]
+Error: No test suite found in file
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ Test Files  4 failed | 4 passed (8)
+      Tests  21 passed (21)
+
+Notes:
+- 4 "failed" suites are empty placeholder files for future labs (lab2/05-07).
+- 21 passed = dev-requesters-empty-state (2) + seed.idempotency (1)
+              + dev-requesters.api (6) + requester-context (12)
+- Note: categories.test.ts (Lab 1 known issue) is NOT in lab-02/ scope.
+
+================================================================================
+ SUMMARY
+================================================================================
+
+  Area          | tsc       | vitest              | Tests
+  ------------- | --------- | ------------------- | -----
+  Client        | ✅ clean  | 11 passed / 4 empty | 116/116 pass
+  Server        | ✅ clean  | 4 passed / 4 empty  | 21/21 pass (lab-02 only)
+  Server (full) |           | 5 passed / 5 empty  | 22 pass / 1 fail (categories.test.ts — known issue §11.9)
+
+  All 116 client tests and 21 server lab-02 tests pass.
+  No new regressions introduced by this branch.

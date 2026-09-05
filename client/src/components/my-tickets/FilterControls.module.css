@@ -1,0 +1,68 @@
+/* ============================================================
+   FilterControls — §8 My Tickets controls row, responsive
+   ============================================================
+   Desktop ≥992px: horizontal flex-wrap layout
+   Tablet 768–991px: same but slightly tighter
+   Mobile <768px: vertical stack, full-width, ≥44px touch targets
+   ============================================================ */
+
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.filterGroup {
+  min-width: 160px;
+  flex: 1;
+  max-width: 220px;
+}
+
+.clearGroup {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2px; /* align with select control bottom */
+}
+
+/* -----------------------------------------------------------
+   §11: Tablet 768–991px — slightly tighter spacing
+   ----------------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 991px) {
+  .controlsRow {
+    gap: 12px;
+  }
+
+  .filterGroup {
+    min-width: 140px;
+  }
+}
+
+/* -----------------------------------------------------------
+   §11: Mobile <768px — vertical stack, full-width controls
+   Touch targets ≥44px per §11.
+   ----------------------------------------------------------- */
+@media (max-width: 767px) {
+  .controlsRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .filterGroup {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    /* §11: Override Field's --field-height to 44px for touch targets.
+       This sets a CSS custom property that Field.module.css reads via
+       var(--field-height, 40px), so only FilterControls selects are affected.
+       CreateTicket and other pages keep their 40px default. */
+    --field-height: 44px;
+  }
+
+  .clearGroup {
+    padding-bottom: 0;
+  }
+}
