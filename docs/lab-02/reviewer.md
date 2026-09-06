@@ -117,6 +117,21 @@
 
 ---
 
+### PR #30 — `lab2-staging`-->`main`
+🔗 https://github.com/napatsun/TokTickIT/pull/30 
+
+**Reviewer 2:** จากที่ดูหน้าตา UI ต่างๆครบถ้วนดีครับ แต่ผมรู้สึกว่าไฟล์ README.md ของคุณซันยังไม่ได้ update เป็นอันล่าสุดมั้ยครับ รบกวน update ด้วยนะครับ
+
+**Me:** เดี๋ยวเเก้ซักครู่นะครับ
+
+**Me:** เรียบร้อยครับ คุณอลงกรณ์ เเละคุณกฤตภาสสามารถมารีวิวให้ได้เลยครับ
+
+**Reviewer 2:** จากที่ตรวจๆดูแล้วครับถ้วนตรงตาม criteria ดีมากครับ
+
+**Reviewer 1:** ทุกอย่างเรียบร้อยดีครับ ผาน ผ่าน ผ้าน ผ๊านนนนน
+
+---
+
 ## Part 2 — Pull Requests I Reviewed for My Partners
 
 ### For ALONGKORN KAEWPROM — 67070501050 — [@Alongkron1234](https://github.com/Alongkron1234)
