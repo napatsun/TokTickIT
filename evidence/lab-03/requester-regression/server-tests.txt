@@ -1,0 +1,50 @@
+Lab 3 — feature/lab3-03-requester-regression
+Server suite: session-based Requester/Attachment identity + Public Comments + resolve-mark
+
+Command:
+  cd server && npx tsc --noEmit && npx vitest run
+
+Typecheck:
+  $ npx tsc --noEmit
+  (no output — 0 errors)
+
+Test run (per file):
+ ✓ tests/lab-01/categories.test.ts (7 tests) 836ms
+ ✓ tests/lab-01/health.test.ts (1 test) 1ms
+ ✓ tests/lab-02/attachments.api.test.ts (23 tests) 1029ms
+ ✓ tests/lab-02/attachments-partial-failure.api.test.ts (1 test) 729ms
+ ✓ tests/lab-02/create-ticket.api.test.ts (33 tests) 960ms
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts (10 tests) 756ms
+ ✓ tests/lab-02/create-ticket-attachments-db-failure.api.test.ts (1 test) 735ms
+ ✓ tests/lab-02/my-tickets.api.test.ts (37 tests) 1134ms
+ ✓ tests/lab-02/related-systems.api.test.ts (7 tests) 857ms
+ ✓ tests/lab-02/requester-context.test.ts (5 tests) 770ms
+ ✓ tests/lab-02/seed.idempotency.test.ts (1 test) 1171ms
+ ✓ tests/lab-02/ticket-detail.api.test.ts (14 tests) 972ms
+ ✓ tests/lab-02/ticket-number.test.ts (18 tests) 638ms
+ ✓ tests/lab-03/auth.api.test.ts (20 tests) 1623ms
+ ✓ tests/lab-03/authorization.api.test.ts (31 tests | 8 skipped) 978ms
+ ✓ tests/lab-03/comments-notes.api.test.ts (18 tests) 976ms
+ ✓ tests/lab-03/migration.api.test.ts (15 tests) 1322ms
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (14 tests) 1100ms
+
+Summary:
+ Test Files  18 passed (18)
+      Tests  248 passed | 8 skipped (256)
+
+Notes:
+- The 8 skipped tests are the SEC-01/02/03/04/06/09/10 + API-36 placeholders that
+  belong to feature/lab3-staff-ticketing / feature/lab3-admin-users.
+- Every Lab 2 ticket/attachment suite now authenticates with a cookie jar
+  (tests/helpers/session.ts: POST /api/auth/login + X-CSRF-Token) instead of the
+  removed X-Dev-Requester-Id header.
+- tests/lab-02/dev-requesters.api.test.ts and dev-requesters-empty-state.test.ts
+  were deleted with the retired GET /api/dev-requesters endpoint.
+
+New/replaced coverage this branch:
+  SEC-05  a body-supplied requesterId is ignored (ticket + list)
+  SEC-07  cross-owner ticket / comments / resolve-mark → identical 404
+  API-11  Public Comment valid / empty / whitespace / 2000 / 2001 chars, ordering, append-only
+  API-12  resolve-mark 200 + status unchanged; 409 for ineligible/already-marked
+  API-13  Requester cannot PATCH status (no route; status unchanged in DB)
+  MIG-01  migrated Requester logs in, lists + views pre-existing ticket, downloads its attachment
