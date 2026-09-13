@@ -4,6 +4,32 @@
    Desktop ≥992px: two-region layout, max-width ~840px centered
    ============================================================ */
 
+/* §4: "Problem Appears Resolved" — deliberately styled differently from the
+   Status badge so it never reads as a formal status change (BR-05/BR-20). */
+.resolveSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.resolveHint {
+  margin: 0;
+  font-size: var(--font-size-md, 14px);
+  color: var(--color-text-muted, #5b6b62);
+}
+
+.requesterResolvedMarker {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-secondary-green, #0b7a46);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--color-secondary-green, #0b7a46);
+  font-size: var(--font-size-md, 14px);
+  font-weight: 600;
+}
+
 /* §9: Page layout */
 .page {
   max-width: 840px;
