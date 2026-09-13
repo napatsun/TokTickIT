@@ -36,9 +36,9 @@ Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI c
 | SEC-02 | SEC | FR-10, AC-15 | IT Staff calls any `/api/admin/*` endpoint directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 | SEC-03 | SEC | AC-04, BR-04 | Requester calls `GET/POST /api/staff/tickets/:id/notes` | 403, no note content in response body | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 | SEC-04 | SEC | FR-09 | Requester calls `/api/staff/tickets` (Queue) directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending |
-| SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | SEC-06 | SEC | AC-17, BR-04 | IT Staff-authored Internal Note; Requester fetches same ticket's comment/notes payload | Internal Note absent entirely from Requester-facing response | `server/tests/lab-03/authorization.api.test.ts` | Pending |
-| SEC-07 | SEC | Ownership | Requester A requests Requester B's ticket by ID | 404 (not 403) to avoid existence leak | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-07 | SEC | Ownership | Requester A requests Requester B's ticket by ID | 404 (not 403) to avoid existence leak | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | SEC-08 | SEC | Unauthenticated | Any protected endpoint called with no session cookie | 401 for every protected route | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | E2E-03 | E2E | FR-08 | Role-based navigation rendering for each of the 3 roles | Only permitted nav destinations visible per role; direct URL nav to a forbidden route redirects/blocks | `e2e/lab-03/authentication.spec.ts` | Pass |
 
@@ -46,13 +46,13 @@ Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI c
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| MIG-01 | MIG | AC-16, BR-27 | Migrated Lab 2 Requester logs in and lists their pre-existing Tickets | All pre-Lab-3 Tickets visible, correctly owned, Attachments intact | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-01 | MIG | AC-16, BR-27 | Migrated Lab 2 Requester logs in and lists their pre-existing Tickets | All pre-Lab-3 Tickets visible, correctly owned, Attachments intact | `server/tests/lab-03/migration.api.test.ts` | Pass |
 | MIG-02 | MIG | §7.2 spec | Development-Requester selector code path is fully removed | No selector component renders; no client state referencing old selector remains (static check + E2E) | `e2e/lab-03/authentication.spec.ts` | Pass |
-| API-11 | API | FR-14, BR-16, BR-17 | Requester posts a Public Comment (valid, empty, whitespace-only, > 2000 chars) | Valid: 201; empty/whitespace: 422; too long: 422 | `server/tests/lab-03/comments-notes.api.test.ts` | Pending |
-| API-12 | API | FR-15, AC-11, BR-05, BR-20 | Requester marks Ticket "appears resolved" | 200, `requesterMarkedResolved=true`, `status` field unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
-| API-13 | API | BR-05 | Requester attempts to directly PATCH ticket `status` | Endpoint not reachable by Requester role / 403 if attempted via staff endpoint | `server/tests/lab-03/authorization.api.test.ts` | Pending |
-| UI-03 | UI | Requester Ticket Detail §4 | Public Comments panel renders list + post form + character counter | Correct render and disabled state for empty input | `client/.lab-03 tests/StaffTicketDetail.test.tsx` (shared component) | Pending |
-| E2E-04 | E2E | Full Requester flow | Login as migrated Requester → view ticket → post public comment → mark appears-resolved → logout | All steps succeed with correct UI feedback at each stage | `e2e/lab-03/staff-ticket-flow.spec.ts` (Requester portion) | Pending |
+| API-11 | API | FR-14, BR-16, BR-17 | Requester posts a Public Comment (valid, empty, whitespace-only, > 2000 chars) | Valid: 201; empty/whitespace: 422; too long: 422 | `server/tests/lab-03/comments-notes.api.test.ts` | Pass |
+| API-12 | API | FR-15, AC-11, BR-05, BR-20 | Requester marks Ticket "appears resolved" | 200, `requesterMarkedResolved=true`, `status` field unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
+| API-13 | API | BR-05 | Requester attempts to directly PATCH ticket `status` | Endpoint not reachable by Requester role / 403 if attempted via staff endpoint | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
+| UI-03 | UI | Requester Ticket Detail §4 | Public Comments panel renders list + post form + character counter | Correct render and disabled state for empty input | `client/tests/lab-02/RequesterTicketDetail.test.tsx` (extended) | Pass |
+| E2E-04 | E2E | Full Requester flow | Login as migrated Requester → view ticket → post public comment → mark appears-resolved → logout | All steps succeed with correct UI feedback at each stage | `e2e/lab-03/staff-ticket-flow.spec.ts` (Requester portion) | Pass |
 
 ## 4. IT Staff Ticket Queue
 

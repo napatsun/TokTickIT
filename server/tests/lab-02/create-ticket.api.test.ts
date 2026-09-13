@@ -4,6 +4,13 @@ import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
 import { isValidTicketNumber } from "../../src/services/ticket-number.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -28,17 +35,17 @@ const prisma = getPrisma();
  *   BR-26  Safe error messages
  */
 describe("POST /api/tickets", () => {
-  let activeRequesterId: number;
+  let requester: TestUser;
+  let client: SessionClient;
   let activeCategoryId: number;
   let activeRelatedSystemId: number;
 
   beforeAll(async () => {
     await seed();
 
-    const requester = await prisma.devRequester.findFirst({
-      where: { isActive: true },
-      select: { id: true },
-    });
+    requester = await createTestUser({ name: "Create Ticket Requester" });
+    client = await loginAs(app, requester.email);
+
     const category = await prisma.category.findFirst({
       where: { isActive: true },
       select: { id: true },
@@ -48,16 +55,15 @@ describe("POST /api/tickets", () => {
       select: { id: true },
     });
 
-    expect(requester).toBeDefined();
     expect(category).toBeDefined();
     expect(relatedSystem).toBeDefined();
 
-    activeRequesterId = requester!.id;
     activeCategoryId = category!.id;
     activeRelatedSystemId = relatedSystem!.id;
   });
 
   afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
     await prisma.$disconnect();
   });
 
@@ -77,10 +83,7 @@ describe("POST /api/tickets", () => {
    * Overrides replace specific fields; omitting a field means it won't
    * be included in the multipart body (simulates missing field).
    */
-  function postTicket(
-    overrides: Record<string, string> = {},
-    requesterId?: number,
-  ) {
+  function postTicket(overrides: Record<string, string> = {}) {
     const fields: Record<string, string> = {
       categoryId: String(activeCategoryId),
       relatedSystemId: String(activeRelatedSystemId),
@@ -90,9 +93,9 @@ describe("POST /api/tickets", () => {
       ...overrides,
     };
 
-    let chain = request(app)
+    let chain = client.agent
       .post("/api/tickets")
-      .set("X-Dev-Requester-Id", String(requesterId ?? activeRequesterId));
+      .set("X-CSRF-Token", client.csrfToken);
 
     // .field() each key — omitting a key means it won't be in the body
     for (const [key, value] of Object.entries(fields)) {
@@ -106,13 +109,10 @@ describe("POST /api/tickets", () => {
    * Build a multipart request with specific fields only (no defaults).
    * Used for "missing field" tests where we intentionally omit fields.
    */
-  function postTicketPartial(
-    fields: Record<string, string>,
-    requesterId?: number,
-  ) {
-    let chain = request(app)
+  function postTicketPartial(fields: Record<string, string>) {
+    let chain = client.agent
       .post("/api/tickets")
-      .set("X-Dev-Requester-Id", String(requesterId ?? activeRequesterId));
+      .set("X-CSRF-Token", client.csrfToken);
 
     for (const [key, value] of Object.entries(fields)) {
       chain = chain.field(key, value);
@@ -426,12 +426,9 @@ describe("POST /api/tickets", () => {
 
   // ─── Auth (BR-05) ────────────────────────────────────────────────────
 
-  describe("auth", () => {
-    it("returns 401 without X-Dev-Requester-Id header", async () => {
-      const res = await postTicket({}, 0); // requesterId 0 → no header set
-
-      // Actually need to not set the header at all
-      const res2 = await request(app)
+  describe("auth (BR-03)", () => {
+    it("returns 401 without a session", async () => {
+      const res = await request(app)
         .post("/api/tickets")
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
@@ -439,28 +436,46 @@ describe("POST /api/tickets", () => {
         .field("description", DEFAULTS.description)
         .field("requestedPriority", DEFAULTS.requestedPriority);
 
-      expect(res2.status).toBe(401);
-      expect(res2.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("returns 401 with inactive requester", async () => {
-      const inactive = await prisma.devRequester.findFirst({
-        where: { isActive: false },
-        select: { id: true },
+    it("returns 403 for an authenticated non-Requester", async () => {
+      const staff = await createTestUser({ role: "IT_STAFF" });
+      const staffClient = await loginAs(app, staff.email);
+
+      const res = await staffClient.agent
+        .post("/api/tickets")
+        .set("X-CSRF-Token", staffClient.csrfToken)
+        .field("categoryId", String(activeCategoryId))
+        .field("relatedSystemId", String(activeRelatedSystemId))
+        .field("summary", DEFAULTS.summary)
+        .field("description", DEFAULTS.description)
+        .field("requestedPriority", DEFAULTS.requestedPriority);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+
+      await cleanupTestUsers([staff.id]);
+    });
+
+    it("ignores a requesterId supplied in the request body (SEC-05, AC-03)", async () => {
+      const other = await createTestUser({ name: "Other Requester" });
+
+      const res = await postTicket({ requesterId: other.id });
+
+      expect(res.status).toBe(201);
+      // Ownership follows the session, not the supplied body field.
+      expect(res.body.ticket.requester.id).toBe(requester.id);
+      expect(res.body.ticket.requester.fullName).toBe(requester.name);
+
+      const stored = await prisma.ticket.findFirst({
+        where: { ticketNumber: res.body.ticket.ticketNumber },
+        select: { requesterId: true },
       });
-      if (!inactive) return;
+      expect(stored?.requesterId).toBe(requester.id);
 
-      const res = await postTicket({}, inactive.id);
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 with non-existent requester id", async () => {
-      const res = await postTicket({}, 99999);
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      await cleanupTestUsers([other.id]);
     });
   });
 

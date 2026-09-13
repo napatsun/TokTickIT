@@ -20,7 +20,8 @@ toktickit/
 │   │   ├── components/              # Reusable UI components
 │   │   │   ├── layout/              #   AppShell (identity, role nav, logout), ShellSkeleton
 │   │   │   ├── my-tickets/          #   FilterControls, TicketTable
-│   │   │   ├── ticket-detail/       #   AttachmentSection, RemoveAttachmentConfirm
+│   │   │   ├── ticket-detail/       #   AttachmentSection, RemoveAttachmentConfirm,
+│   │   │   │                        #   PublicCommentsPanel, ResolveMarkConfirm
 │   │   │   ├── RouteGuard.tsx       #   RequireAuth (mustChangePassword) + RequireRole
 │   │   │   └── shared/              #   Badge, Button, Field, Pagination, SearchInput, AttachmentPicker
 │   │   ├── contexts/                # AuthContext (session-backed identity)
@@ -31,14 +32,14 @@ toktickit/
 │   │   └── styles/                  # theme.scss (Zen Green)
 │   ├── tests/
 │   │   ├── lab-01/                  # 4 tests
-│   │   ├── lab-02/                  # 205 tests
-│   │   └── lab-03/                  # 40 tests (Login, ChangePassword, apiClient, AppShell)
+│   │   ├── lab-02/                  # 184 tests (incl. Ticket Detail comments/resolve UI)
+│   │   └── lab-03/                  # 36 tests (Login, ChangePassword, apiClient, AppShell)
 │   └── package.json
 ├── server/                          # Express + TypeScript backend
 │   ├── prisma/
-│   │   ├── schema.prisma            # 8 models, 5 enums (User/Role/TicketStatus added in Lab 3)
-│   │   ├── seed.ts                  # seed users (roles), tickets, categories, systems
-│   │   └── migrations/              # 4 migrations (incl. Lab 3 auth/authorization)
+│   │   ├── schema.prisma            # 6 models, 4 enums (DevRequester dropped in Lab 3)
+│   │   ├── seed.ts                  # seed users (roles), tickets, comments, categories, systems
+│   │   └── migrations/              # 5 migrations (incl. Lab 3 auth + requester regression)
 │   ├── src/
 │   │   ├── lib/                     # ownership.ts (BR-41 access control), password.ts
 │   │   ├── middleware/              # auth.ts (session/CSRF/role guard), requester-context.ts, upload.ts
@@ -48,9 +49,10 @@ toktickit/
 │   │   ├── index.ts                 # Server entry point
 │   │   └── prisma.ts               # Prisma client singleton
 │   ├── tests/
+│   │   ├── helpers/                 # session.ts (cookie-jar login + CSRF for tests)
 │   │   ├── lab-01/                  # 8 tests
-│   │   ├── lab-02/                  # 165 tests (regression suite, still passing)
-│   │   └── lab-03/                  # 57 tests (auth API, authorization, seed/migration)
+│   │   ├── lab-02/                  # 150 tests (regression suite, now session-authenticated)
+│   │   └── lab-03/                  # 98 tests (auth, authorization, comments, resolve-mark, migration)
 │   └── package.json
 ├── docs/
 │   ├── lab-01/                      # ai_use.md, reviewer.md, tests.md
@@ -58,7 +60,9 @@ toktickit/
 │   └── lab-03/                      # specification.md, api-spec.md, ui-spec.md, tests.md, ai-use.md, reviewer.md
 ├── e2e/
 │   ├── lab-02/requester-ticket-flow.spec.ts
-│   └── lab-03/authentication.spec.ts  # Playwright: login, forced password change, role nav
+│   └── lab-03/
+│       ├── authentication.spec.ts     # Playwright: login, forced password change, role nav
+│       └── staff-ticket-flow.spec.ts  # Playwright: Requester comment + appears-resolved flow
 ├── evidence/                        # Test/audit output kept for submission
 ├── playwright.config.ts             # Repo-root E2E config (starts API + Vite)
 ├── playwright.global-setup.ts       # Re-seeds the DB before an E2E run
@@ -137,11 +141,12 @@ cd server
 npx prisma migrate dev
 ```
 
-migration จะสร้างตารางทั้งหมด (Category, RelatedSystem, User, Ticket, Attachment, DevRequester) และ seed ข้อมูล:
+migration จะสร้างตารางทั้งหมด (Category, RelatedSystem, User, Ticket, Attachment, PublicComment) และ seed ข้อมูล:
 - 4 categories: Account and Access, Hardware, Software, Network
 - 6 related systems: Email, Campus Wi-Fi, VPN, Corporate Laptop, Printer, Grade Submission App
 - Requester accounts 4 active + 1 inactive, IT Staff 3 active + 1 inactive, Administrator 1 active (ดูหัวข้อ Seed Credentials)
 - Tickets กระจายตาม status / IT priority / owner (รวม ticket ที่ยังไม่ถูก assign)
+- Public Comments ตัวอย่าง (ไม่มีข้อมูลอ่อนไหว) — ผูกกับ ticket ที่ seed ไว้แบบ id คงที่ เพื่อให้ seed ซ้ำได้ (idempotent)
 
 รัน seed ซ้ำได้ (idempotent) — จะไม่สร้างข้อมูลซ้ำ แต่จะ reset รหัสผ่านของบัญชี seed กลับเป็นค่า default:
 
@@ -222,10 +227,10 @@ Playwright จะ seed database ใหม่แล้ว start API (3000) + Vite
 
 | Level | Files | Tests |
 |-------|-------|-------|
-| Backend (Vitest + Supertest) | 18 | 230 (220 passed, 10 skipped placeholders สำหรับ branch ถัดไป) |
-| Frontend (Vitest + Testing Library) | 13 | 210 |
-| End-to-end (Playwright) | 1 | 7 |
-| **Grand Total** | **32** | **447** |
+| Backend (Vitest + Supertest) | 18 | 256 (248 passed, 8 skipped placeholders สำหรับ branch ถัดไป) |
+| Frontend (Vitest + Testing Library) | 13 | 224 |
+| End-to-end (Playwright) | 2 | 8 |
+| **Grand Total** | **33** | **488** |
 
 ## API Endpoints
 
@@ -238,10 +243,12 @@ Playwright จะ seed database ใหม่แล้ว start API (3000) + Vite
 | GET | `/api/health` | คืนสถานะของ backend |
 | GET | `/api/categories` | คืนรายการ categories |
 | GET | `/api/related-systems` | คืนรายการ related systems |
-| GET | `/api/dev-requesters` | คืนรายการ requesters สำหรับ selector |
 | POST | `/api/tickets` | สร้าง ticket ใหม่ (multipart/form-data) |
 | GET | `/api/tickets` | คืนรายการ tickets (paginated, searchable, filterable) |
 | GET | `/api/tickets/:ticketNumber` | คืน ticket detail พร้อม attachments |
+| POST | `/api/tickets/:ticketNumber/comments` | เพิ่ม Public Comment (Requester, เฉพาะ ticket ของตัวเอง) |
+| GET | `/api/tickets/:ticketNumber/comments` | รายการ Public Comments เรียงเก่า → ใหม่ |
+| POST | `/api/tickets/:ticketNumber/resolve-mark` | แจ้ง "Problem Appears Resolved" โดยไม่เปลี่ยน `status` |
 | POST | `/api/tickets/:ticketNumber/attachments` | เพิ่ม attachments เข้า ticket |
 | GET | `/api/attachments/:id` | คืน attachment metadata |
 | GET | `/api/attachments/:id/download` | ดาวน์โหลด attachment |
@@ -252,7 +259,8 @@ Playwright จะ seed database ใหม่แล้ว start API (3000) + Vite
 - ห้าม commit ไฟล์ `.env` เด็ดขาด — ใช้ `.env.example` เป็น template แทน
 - Lab 3 ใช้ **session cookie** (HTTP-only, `SameSite=Lax`, `Secure` ใน production) ร่วมกับ CSRF double-submit token — client ไม่เก็บ token ใด ๆ เอง
 - ค่า `SESSION_SECRET` ตั้งได้ใน `server/.env` ถ้าไม่ตั้งจะใช้ค่า dev default (ห้ามใช้ default นี้ใน production)
-- `X-Dev-Requester-Id` header ยังใช้ได้ชั่วคราวกับ endpoint ของ Lab 2 (`/api/tickets*`) เพื่อไม่ให้ regression suite ของ Lab 2 พัง จนกว่า branch ถัดไปจะย้ายทั้งหมดไปใช้ session ตาม BR-03
+- **ทุก endpoint ของ Requester** (`/api/tickets*`, `/api/attachments*`) กำหนดตัวตนจาก session เท่านั้น และบังคับ `role = REQUESTER` — ค่า `requesterId` ที่ส่งมาใน body จะถูก**เพิกเฉย** (BR-03, AC-03)
+- โหมด bridge เดิม (`X-Dev-Requester-Id` header + ตาราง `DevRequester` + `GET /api/dev-requesters`) ถูก**ลบออกทั้งหมด**แล้วใน branch นี้ ตาม MIG-02/§7.2 step 5
 - การพัฒนางานทุกครั้งต้องทำบน feature branch แล้ว merge เข้า staging branch ก่อน
 - ดูรายละเอียดเพิ่มเติมของ spec, test plan, AI usage reflection, และ peer review ได้ที่โฟลเดอร์ `docs/`
 - **Follow-up (นอกขอบเขต Lab 3):** ควรเพิ่ม rate limiting ให้ `/api/auth/login` เพื่อกัน brute-force (api-spec.md §6) และเปลี่ยน in-memory session store เป็น persistent store ก่อนขึ้น production

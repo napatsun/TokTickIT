@@ -6,6 +6,13 @@ import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
 import { UPLOADS_DIR } from "../../src/services/attachmentStorage.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -54,17 +61,17 @@ function fakeLargeFile(sizeBytes: number): Buffer {
 // ─── Tests ──────────────────────────────────────────────────────────────
 
 describe("POST /api/tickets — attachments", () => {
-  let activeRequesterId: number;
+  let requester: TestUser;
+  let client: SessionClient;
   let activeCategoryId: number;
   let activeRelatedSystemId: number;
 
   beforeAll(async () => {
     await seed();
 
-    const requester = await prisma.devRequester.findFirst({
-      where: { isActive: true },
-      select: { id: true },
-    });
+    requester = await createTestUser({ name: "Attachment Upload Requester" });
+    client = await loginAs(app, requester.email);
+
     const category = await prisma.category.findFirst({
       where: { isActive: true },
       select: { id: true },
@@ -74,11 +81,9 @@ describe("POST /api/tickets — attachments", () => {
       select: { id: true },
     });
 
-    expect(requester).toBeDefined();
     expect(category).toBeDefined();
     expect(relatedSystem).toBeDefined();
 
-    activeRequesterId = requester!.id;
     activeCategoryId = category!.id;
     activeRelatedSystemId = relatedSystem!.id;
   });
@@ -88,6 +93,7 @@ describe("POST /api/tickets — attachments", () => {
   });
 
   afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
     await prisma.$disconnect();
   });
 
@@ -95,9 +101,9 @@ describe("POST /api/tickets — attachments", () => {
 
   describe("happy path", () => {
     it("creates ticket with 1 JPG attachment", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with attachment test")
@@ -119,9 +125,9 @@ describe("POST /api/tickets — attachments", () => {
     });
 
     it("creates ticket with 5 attachments (BR-30 max)", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with 5 attachments")
@@ -139,9 +145,9 @@ describe("POST /api/tickets — attachments", () => {
     });
 
     it("creates ticket with no attachments (optional per FR-04)", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket without attachments test")
@@ -158,9 +164,9 @@ describe("POST /api/tickets — attachments", () => {
 
   describe("attachment limit (BR-30)", () => {
     it("rejects 6 files with 400", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with too many files")
@@ -185,9 +191,9 @@ describe("POST /api/tickets — attachments", () => {
     it("rejects file exceeding 5MB with 413", async () => {
       const largeBuffer = fakeLargeFile(6 * 1024 * 1024); // 6MB
 
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with oversized file")
@@ -205,9 +211,9 @@ describe("POST /api/tickets — attachments", () => {
 
   describe("file type validation (BR-28)", () => {
     it("rejects .docx file with 415", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with docx file")
@@ -224,9 +230,9 @@ describe("POST /api/tickets — attachments", () => {
     });
 
     it("rejects .gif file with 415", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with gif file")
@@ -245,9 +251,9 @@ describe("POST /api/tickets — attachments", () => {
       // BR-28: "extension and MIME type are both checked; a mismatched
       // extension/MIME pair is rejected"
       // Send a file with .png extension but image/jpeg MIME type
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Ticket with mismatched MIME test")
@@ -284,9 +290,9 @@ describe("POST /api/tickets — attachments", () => {
       );
 
       try {
-        const res = await request(app)
+        const res = await client.agent
           .post("/api/tickets")
-          .set("X-Dev-Requester-Id", String(activeRequesterId))
+          .set("X-CSRF-Token", client.csrfToken)
           .field("categoryId", String(activeCategoryId))
           .field("relatedSystemId", String(activeRelatedSystemId))
           .field("summary", "Ticket with partial failure test")
@@ -315,9 +321,9 @@ describe("POST /api/tickets — attachments", () => {
 
   describe("disk write verification", () => {
     it("writes the actual file to server/uploads/", async () => {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "Disk write verification test")

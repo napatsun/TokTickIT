@@ -3,6 +3,13 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -10,34 +17,28 @@ const prisma = getPrisma();
  * GET /api/categories — api-spec.md §2
  *
  * Returns active Categories wrapped in { categories: [...] }.
- * Requires X-Dev-Requester-Id header (requesterContext middleware).
+ * Lab 3 (BR-03): identity comes from the authenticated session cookie.
  * Only isActive=true rows are returned (BR-21).
  *
  * Seed data: 4 active categories (Account and Access, Hardware, Software, Network).
  */
 describe("GET /api/categories", () => {
-  let activeRequesterId: number;
+  let requester: TestUser;
+  let client: SessionClient;
 
   beforeAll(async () => {
     await seed();
-
-    // Find an active requester for auth header
-    const requester = await prisma.devRequester.findFirst({
-      where: { isActive: true },
-      select: { id: true },
-    });
-    expect(requester).toBeDefined();
-    activeRequesterId = requester!.id;
+    requester = await createTestUser({ role: "REQUESTER" });
+    client = await loginAs(app, requester.email);
   });
 
   afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
     await prisma.$disconnect();
   });
 
   it("returns 200 with wrapped format { categories: [...] }", async () => {
-    const res = await request(app)
-      .get("/api/categories")
-      .set("X-Dev-Requester-Id", String(activeRequesterId));
+    const res = await client.agent.get("/api/categories");
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("categories");
@@ -45,9 +46,7 @@ describe("GET /api/categories", () => {
   });
 
   it("returns only active categories", async () => {
-    const res = await request(app)
-      .get("/api/categories")
-      .set("X-Dev-Requester-Id", String(activeRequesterId));
+    const res = await client.agent.get("/api/categories");
 
     // Seed has 4 active categories
     expect(res.body.categories.length).toBe(4);
@@ -60,9 +59,7 @@ describe("GET /api/categories", () => {
   });
 
   it("returns categories with id and name fields", async () => {
-    const res = await request(app)
-      .get("/api/categories")
-      .set("X-Dev-Requester-Id", String(activeRequesterId));
+    const res = await client.agent.get("/api/categories");
 
     for (const category of res.body.categories) {
       expect(category).toHaveProperty("id");
@@ -73,35 +70,33 @@ describe("GET /api/categories", () => {
   });
 
   it("returns categories in ascending id order", async () => {
-    const res = await request(app)
-      .get("/api/categories")
-      .set("X-Dev-Requester-Id", String(activeRequesterId));
+    const res = await client.agent.get("/api/categories");
 
     const ids = res.body.categories.map((c: { id: number }) => c.id);
     const sortedIds = [...ids].sort((a: number, b: number) => a - b);
     expect(ids).toEqual(sortedIds);
   });
 
-  it("returns 401 without X-Dev-Requester-Id header", async () => {
+  it("returns 401 without a session", async () => {
     const res = await request(app).get("/api/categories");
 
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
   });
 
-  it("returns 401 with inactive requester", async () => {
-    const inactive = await prisma.devRequester.findFirst({
-      where: { isActive: false },
-      select: { id: true },
-    });
-    if (!inactive) return; // No inactive requesters in DB, skip
+  it("returns 401 once the session's user is deactivated", async () => {
+    const temp = await createTestUser({ role: "REQUESTER" });
+    const tempClient = await loginAs(app, temp.email);
 
-    const res = await request(app)
-      .get("/api/categories")
-      .set("X-Dev-Requester-Id", String(inactive.id));
+    expect((await tempClient.agent.get("/api/categories")).status).toBe(200);
 
+    await prisma.user.update({ where: { id: temp.id }, data: { isActive: false } });
+
+    const res = await tempClient.agent.get("/api/categories");
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+
+    await cleanupTestUsers([temp.id]);
   });
 
   it("excludes inactive categories from response", async () => {
@@ -111,9 +106,7 @@ describe("GET /api/categories", () => {
     });
 
     try {
-      const res = await request(app)
-        .get("/api/categories")
-        .set("X-Dev-Requester-Id", String(activeRequesterId));
+      const res = await client.agent.get("/api/categories");
 
       expect(res.status).toBe(200);
 

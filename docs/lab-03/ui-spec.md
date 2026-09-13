@@ -64,7 +64,7 @@ Reuses all Lab 2 Zen Green tokens: color palette, spacing scale, typography, car
 **Regression:** All Lab 2 list/detail/create/attachment functionality is preserved, now scoped to `req.session.userId` instead of a selector value. No visual change required beyond removing the selector from the shell.
 
 **New — Public Comments panel (Ticket Detail):**
-- Reads: reverse-chronological list of Public Comments, each showing author name, role badge, timestamp, content.
+- Reads: chronological (oldest-first, newest at the bottom) list of Public Comments, each showing author name, role badge, timestamp, content. *(Authoritative ordering — matches api-spec.md §2.)*
 - Write: textarea (max 2,000 chars, live counter), "Post Comment" button, disabled while empty/whitespace-only.
 - States: Idle, Busy (posting), Success (comment appended optimistically or on confirmed response), Failure (inline banner above the textarea, comment text preserved so the user doesn't lose their draft).
 

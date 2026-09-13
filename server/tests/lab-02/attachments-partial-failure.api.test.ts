@@ -3,6 +3,13 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -37,18 +44,17 @@ function fakePng(): Buffer {
 }
 
 describe("POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED", () => {
-  let requesterId: string;
+  let requester: TestUser;
+  let client: SessionClient;
   let ticketId: number;
   let ticketNumber: string;
 
   beforeAll(async () => {
     await seed();
 
-    // Lab 3: Ticket.requesterId is a User (String) id.
-    const requester = await prisma.user.findFirst({
-      where: { isActive: true, role: "REQUESTER" },
-      select: { id: true },
-    });
+    requester = await createTestUser({ name: "Partial Failure Requester" });
+    client = await loginAs(app, requester.email);
+
     const category = await prisma.category.findFirst({
       where: { isActive: true },
       select: { id: true },
@@ -58,16 +64,13 @@ describe("POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
       select: { id: true },
     });
 
-    expect(requester).toBeDefined();
     expect(category).toBeDefined();
     expect(relatedSystem).toBeDefined();
-
-    requesterId = requester!.id;
 
     const ticket = await prisma.ticket.create({
       data: {
         ticketNumber: `TKT-2026-PARTIAL-${Date.now()}`,
-        requesterId: requester!.id,
+        requesterId: requester.id,
         categoryId: category!.id,
         relatedSystemId: relatedSystem!.id,
         summary: "Partial failure test ticket",
@@ -82,8 +85,8 @@ describe("POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
   });
 
   afterAll(async () => {
-    await prisma.attachment.deleteMany({ where: { ticketId } });
-    await prisma.ticket.delete({ where: { id: ticketId } });
+    await cleanupTestUsers([requester.id]);
+    await prisma.$disconnect();
   });
 
   it("returns RECORD_CREATION_FAILED when disk write succeeds but DB insert fails", async () => {
@@ -95,9 +98,9 @@ describe("POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED
     spy.mockRejectedValueOnce(new Error("Simulated DB insert failure"));
 
     try {
-      const res = await request(app)
+      const res = await client.agent
         .post(`/api/tickets/${ticketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .attach("attachments", fakePng(), {
           filename: "dbfail.png",
           contentType: "image/png",
