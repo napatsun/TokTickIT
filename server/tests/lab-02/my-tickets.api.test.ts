@@ -29,8 +29,9 @@ const prisma = getPrisma();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3: requester identity is a real User (String id), not a DevRequester.
+let requesterA: { id: string; name: string };
+let requesterB: { id: string; name: string };
 let categoryHardware: { id: number; name: string };
 let categorySoftware: { id: number; name: string };
 let categoryNetwork: { id: number; name: string };
@@ -42,7 +43,7 @@ const ticketIdsA: number[] = [];
 /** ticketNumber of the "laptop" search target for requesterA */
 let laptopTicketNumber: string;
 
-function get(path: string, requesterId: number) {
+function get(path: string, requesterId: string) {
   return request(app)
     .get(path)
     .set("X-Dev-Requester-Id", String(requesterId));
@@ -54,10 +55,10 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
+  const requesters = await prisma.user.findMany({
+    where: { isActive: true, role: "REQUESTER" },
     orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
+    select: { id: true, name: true },
   });
   expect(requesters.length).toBeGreaterThanOrEqual(2);
   requesterA = requesters[0];
@@ -510,13 +511,16 @@ describe("GET /api/tickets", () => {
     // Use a requester that has no tickets. After our cleanup in beforeAll,
     // requesterB has 3 tickets, but we need a clean one.
     // We'll create a temporary requester with no tickets.
-    let emptyRequester: { id: number };
+    let emptyRequester: { id: string };
 
     beforeAll(async () => {
-      const r = await prisma.devRequester.create({
+      const r = await prisma.user.create({
         data: {
-          fullName: "Empty Requester",
+          name: "Empty Requester",
           email: `empty-${crypto.randomUUID()}@test.com`,
+          // Placeholder that can never match a bcrypt comparison.
+          passwordHash: "!test-placeholder",
+          role: "REQUESTER",
           isActive: true,
         },
       });
@@ -524,7 +528,7 @@ describe("GET /api/tickets", () => {
     });
 
     afterAll(async () => {
-      await prisma.devRequester.delete({ where: { id: emptyRequester.id } });
+      await prisma.user.delete({ where: { id: emptyRequester.id } });
     });
 
     it("returns empty filterOptions arrays when requester has zero tickets", async () => {
@@ -593,12 +597,15 @@ describe("GET /api/tickets", () => {
       expect(ticket).toHaveProperty("updatedAt");
     });
 
-    it("itPriority and ticketOwner are null in Lab 2", async () => {
+    it("carries a valid IT Priority and an unassigned ticketOwner", async () => {
       const res = await get("/api/tickets?page=1&pageSize=1", requesterA.id);
 
       expect(res.status).toBe(200);
       const ticket = res.body.tickets[0];
-      expect(ticket.itPriority).toBeNull();
+      // Fixtures created directly through Prisma take the schema default;
+      // tickets created through POST /api/tickets mirror Requested Priority
+      // (BR-14) — asserted in create-ticket.api.test.ts.
+      expect(["LOW", "MEDIUM", "HIGH", "URGENT"]).toContain(ticket.itPriority);
       expect(ticket.ticketOwner).toBeNull();
     });
 
@@ -673,7 +680,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("returns 401 with non-existent requester id", async () => {
-      const res = await get("/api/tickets", 99999);
+      const res = await get("/api/tickets", "99999");
 
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");

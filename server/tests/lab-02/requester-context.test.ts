@@ -40,9 +40,9 @@ const testApp = createTestApp();
 
 // ─── Dynamic ID lookup ──────────────────────────────────────────────────
 
-let activeRequester1: { id: number; fullName: string; email: string };
-let activeRequester2: { id: number; fullName: string; email: string };
-let activeRequester3: { id: number; fullName: string; email: string };
+let activeRequester1: { id: number; fullName: string; email: string; userId: string };
+let activeRequester2: { id: number; fullName: string; email: string; userId: string };
+let activeRequester3: { id: number; fullName: string; email: string; userId: string };
 let inactiveRequester: { id: number; fullName: string; email: string };
 
 // ─── Tests ──────────────────────────────────────────────────────────────
@@ -63,9 +63,20 @@ describe("requesterContext middleware", () => {
     expect(active.length).toBeGreaterThanOrEqual(3);
     expect(inactive).toBeDefined();
 
-    activeRequester1 = active[0];
-    activeRequester2 = active[1];
-    activeRequester3 = active[2];
+    // Lab 3: the dev header resolves to the migrated User, so the middleware
+    // reports the User's String id while keeping the Lab 2 name/email fields.
+    const userByEmail = new Map(
+      (
+        await prisma.user.findMany({
+          where: { role: "REQUESTER" },
+          select: { id: true, email: true },
+        })
+      ).map((u) => [u.email, u.id]),
+    );
+
+    activeRequester1 = { ...active[0], userId: userByEmail.get(active[0].email)! };
+    activeRequester2 = { ...active[1], userId: userByEmail.get(active[1].email)! };
+    activeRequester3 = { ...active[2], userId: userByEmail.get(active[2].email)! };
     inactiveRequester = inactive!;
   });
 
@@ -83,7 +94,7 @@ describe("requesterContext middleware", () => {
       expect(res.body).toEqual({
         error: {
           code: "INVALID_REQUESTER_CONTEXT",
-          message: "No active Development Requester selected.",
+          message: "No active Requester session or Development Requester selected.",
         },
       });
     });
@@ -162,7 +173,7 @@ describe("requesterContext middleware", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.currentRequester).toBeDefined();
-      expect(res.body.currentRequester.id).toBe(activeRequester1.id);
+      expect(res.body.currentRequester.id).toBe(activeRequester1.userId);
       expect(res.body.currentRequester.fullName).toBe(activeRequester1.fullName);
       expect(res.body.currentRequester.email).toBe(activeRequester1.email);
     });
@@ -173,7 +184,7 @@ describe("requesterContext middleware", () => {
         .set("X-Dev-Requester-Id", String(activeRequester2.id));
 
       expect(res.status).toBe(200);
-      expect(res.body.currentRequester.id).toBe(activeRequester2.id);
+      expect(res.body.currentRequester.id).toBe(activeRequester2.userId);
       expect(res.body.currentRequester.fullName).toBe(activeRequester2.fullName);
       expect(res.body.currentRequester.email).toBe(activeRequester2.email);
     });
@@ -184,7 +195,7 @@ describe("requesterContext middleware", () => {
         .set("X-Dev-Requester-Id", String(activeRequester3.id));
 
       expect(res.status).toBe(200);
-      expect(res.body.currentRequester.id).toBe(activeRequester3.id);
+      expect(res.body.currentRequester.id).toBe(activeRequester3.userId);
       expect(res.body.currentRequester.fullName).toBe(activeRequester3.fullName);
     });
   });

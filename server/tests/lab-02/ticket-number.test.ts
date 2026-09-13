@@ -86,8 +86,9 @@ describe("ticket-number generator", () => {
       const prefix = `TKT-${year}-`;
 
       // Create a ticket with a known number to force the generator to pick a higher sequence
-      const requester = await prisma.devRequester.findFirst({
-        where: { isActive: true },
+      // Lab 3: Ticket.requesterId is a User (String) id.
+      const requester = await prisma.user.findFirst({
+        where: { isActive: true, role: "REQUESTER" },
         select: { id: true },
       });
       const category = await prisma.category.findFirst({
@@ -197,8 +198,9 @@ describe("ticket-number generator", () => {
       const year = new Date().getFullYear();
       const prefix = `TKT-${year}-`;
 
-      const requester = await prisma.devRequester.findFirst({
-        where: { isActive: true },
+      // Lab 3: Ticket.requesterId is a User (String) id.
+      const requester = await prisma.user.findFirst({
+        where: { isActive: true, role: "REQUESTER" },
         select: { id: true },
       });
       const category = await prisma.category.findFirst({
@@ -254,8 +256,9 @@ describe("ticket-number generator", () => {
       const year = new Date().getFullYear();
       const prefix = `TKT-${year}-`;
 
-      const requester = await prisma.devRequester.findFirst({
-        where: { isActive: true },
+      // Lab 3: Ticket.requesterId is a User (String) id.
+      const requester = await prisma.user.findFirst({
+        where: { isActive: true, role: "REQUESTER" },
         select: { id: true },
       });
       const category = await prisma.category.findFirst({

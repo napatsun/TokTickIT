@@ -21,7 +21,7 @@ const prisma = getPrisma();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function get(path: string, requesterId?: number) {
+function get(path: string, requesterId?: string) {
   const req = request(app).get(path);
   if (requesterId !== undefined) {
     req.set("X-Dev-Requester-Id", String(requesterId));
@@ -31,8 +31,9 @@ function get(path: string, requesterId?: number) {
 
 // ─── Seed data ───────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3: requester identity is a real User (String id), not a DevRequester.
+let requesterA: { id: string; name: string };
+let requesterB: { id: string; name: string };
 let ticketA: { id: number; ticketNumber: string };
 let ticketB: { id: number; ticketNumber: string };
 let activeAttachmentId: number;
@@ -42,10 +43,10 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
+  const requesters = await prisma.user.findMany({
+    where: { isActive: true, role: "REQUESTER" },
     orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
+    select: { id: true, name: true },
   });
   expect(requesters.length).toBeGreaterThanOrEqual(2);
   requesterA = requesters[0];
@@ -153,9 +154,10 @@ describe("GET /api/tickets/:ticketNumber", () => {
       expect(ticket.id).toBe(ticketA.id);
       expect(ticket.ticketNumber).toBe(ticketA.ticketNumber);
       expect(ticket.ticketDate).toBeDefined(); // ISO string
+      // `fullName` is the Lab 2 response contract, backed by User.name in Lab 3.
       expect(ticket.requester).toEqual({
         id: requesterA.id,
-        fullName: requesterA.fullName,
+        fullName: requesterA.name,
       });
       expect(ticket.category).toBeDefined();
       expect(ticket.category.id).toBeDefined();
@@ -166,7 +168,8 @@ describe("GET /api/tickets/:ticketNumber", () => {
       expect(ticket.summary).toBe("Laptop battery drains quickly");
       expect(ticket.description).toContain("laptop battery");
       expect(ticket.requestedPriority).toBe("MEDIUM");
-      expect(ticket.itPriority).toBeNull();
+      // BR-14: IT Priority starts equal to Requested Priority at creation.
+      expect(ticket.itPriority).toBe("MEDIUM");
       expect(ticket.currentStatus).toBe("NEW");
       expect(ticket.ticketOwner).toBeNull();
       expect(ticket.resolutionSummary).toBeNull();
