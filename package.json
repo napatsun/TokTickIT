@@ -1,0 +1,14 @@
+{
+  "name": "toktickit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Repo-level tooling for the TokTickIT end-to-end suite (e2e/). Application code lives in client/ and server/.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:lab3": "playwright test e2e/lab-03"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

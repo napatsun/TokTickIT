@@ -1,0 +1,2 @@
+=== npx tsc --noEmit (server) ===
+no type errors

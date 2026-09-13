@@ -108,7 +108,7 @@ The stakeholder needs the system to move from a development convenience (the Req
 | BR-11 | The current-user endpoint never returns the password hash or any credential material. |
 | BR-12 | A Ticket has at most one primary Ticket Owner, who must be an active IT Staff or Administrator user; a Ticket may be unassigned (`ownerId = null`). |
 | BR-13 | Claiming a Ticket is only permitted when it is currently unassigned; reassigning is permitted at any time by IT Staff/Administrator. |
-| BR-14 | IT Priority defaults to the Requester's Requested Priority at Ticket creation and can thereafter be changed only by IT Staff or Administrator. |
+| BR-14 | IT Priority defaults to the Requester's Requested Priority at Ticket creation and can thereafter be changed only by IT Staff or Administrator. IT Priority uses its own scale (LOW/MEDIUM/HIGH/URGENT) that includes URGENT, a value not available on Requested Priority (LOW/MEDIUM/HIGH only) — see api-spec.md §3. |
 | BR-15 | Requested Priority is immutable after Ticket creation; only the Requester's original submission is stored there. |
 | BR-16 | Public Comments and Internal Notes are append-only in Lab 3; no edit or delete operation exists. |
 | BR-17 | Empty or whitespace-only Public Comments/Internal Notes are rejected with a validation error. |
@@ -150,6 +150,13 @@ enum Role {
   ADMINISTRATOR
 }
 
+enum ItPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT   // IT-only value; not available as a Requester-submitted Requested Priority
+}
+
 enum TicketStatus {
   NEW
   OPEN
@@ -185,7 +192,7 @@ model Ticket {
   requester                User          @relation("RequesterTickets", fields: [requesterId], references: [id])
   ownerId                  String?
   owner                    User?         @relation("OwnerTickets", fields: [ownerId], references: [id])
-  itPriority               Priority      // same enum as requestedPriority, defaults to requestedPriority on create
+  itPriority               ItPriority    // IT-only enum (LOW/MEDIUM/HIGH/URGENT); defaults from requestedPriority on create, editable by IT Staff/Administrator only
   status                   TicketStatus  @default(NEW)
   requesterMarkedResolved  Boolean       @default(false)
   requesterMarkedResolvedAt DateTime?

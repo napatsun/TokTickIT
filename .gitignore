@@ -19,3 +19,9 @@ server/uploads/
 # logs & OS
 *.log
 .DS_Store
+
+# end-to-end test artifacts (Playwright, repo root)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
