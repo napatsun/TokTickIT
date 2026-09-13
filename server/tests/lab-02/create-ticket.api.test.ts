@@ -156,11 +156,11 @@ describe("POST /api/tickets", () => {
       expect(res.body.ticket.currentStatus).toBe("NEW");
     });
 
-    it("sets itPriority and ticketOwnerId to null (BR-08)", async () => {
+    it("defaults IT Priority to Requested Priority and leaves the ticket unassigned (BR-14)", async () => {
       const res = await postTicket();
 
       expect(res.status).toBe(201);
-      expect(res.body.ticket.itPriority).toBeNull();
+      expect(res.body.ticket.itPriority).toBe(res.body.ticket.requestedPriority);
       expect(res.body.ticket.ticketOwner).toBeNull();
     });
 

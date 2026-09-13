@@ -55,13 +55,13 @@ function fakeFileForDownload(content: string): Buffer {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function get(path: string, requesterId: number) {
+function get(path: string, requesterId: string) {
   return request(app)
     .get(path)
     .set("X-Dev-Requester-Id", String(requesterId));
 }
 
-function del(path: string, requesterId: number, body?: Record<string, string>) {
+function del(path: string, requesterId: string, body?: Record<string, string>) {
   const req = request(app)
     .delete(path)
     .set("X-Dev-Requester-Id", String(requesterId));
@@ -71,8 +71,9 @@ function del(path: string, requesterId: number, body?: Record<string, string>) {
 
 // ─── Seed data ───────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3: requester identity is a real User (String id), not a DevRequester.
+let requesterA: { id: string; name: string };
+let requesterB: { id: string; name: string };
 let ticketA: { id: number; ticketNumber: string };
 let ticketB: { id: number; ticketNumber: string };
 let activeAttachmentId: number;
@@ -89,10 +90,10 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
+  const requesters = await prisma.user.findMany({
+    where: { isActive: true, role: "REQUESTER" },
     orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
+    select: { id: true, name: true },
   });
   expect(requesters.length).toBeGreaterThanOrEqual(2);
   requesterA = requesters[0];

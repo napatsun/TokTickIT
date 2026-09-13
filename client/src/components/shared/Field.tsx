@@ -15,6 +15,11 @@ interface FieldBaseProps {
   required?: boolean;
   /** Render <textarea> or <select> instead of <input>. */
   type?: FieldType;
+  /**
+   * Native <input type> when `type` is "input" (default "text").
+   * Added in Lab 3 for the password fields on Login / Change Password (§2/§3).
+   */
+  inputType?: "text" | "email" | "password";
   /** Child elements (used for <option> elements when type="select"). */
   children?: ReactNode;
   /** Validation error message — shown directly below the field (§3). */
@@ -58,6 +63,7 @@ export default function Field({
   label,
   required = false,
   type = "input",
+  inputType = "text",
   errorMessage,
   maxLength,
   value,
@@ -181,7 +187,7 @@ export default function Field({
       ) : (
         <input
           className={inputClasses}
-          type="text"
+          type={inputType}
           {...sharedProps}
           {...rest}
         />

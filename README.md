@@ -18,40 +18,51 @@ toktickit/
 ├── client/                          # React + Vite frontend
 │   ├── src/
 │   │   ├── components/              # Reusable UI components
-│   │   │   ├── layout/              #   AppShell (header, nav, requester badge)
+│   │   │   ├── layout/              #   AppShell (identity, role nav, logout), ShellSkeleton
 │   │   │   ├── my-tickets/          #   FilterControls, TicketTable
 │   │   │   ├── ticket-detail/       #   AttachmentSection, RemoveAttachmentConfirm
+│   │   │   ├── RouteGuard.tsx       #   RequireAuth (mustChangePassword) + RequireRole
 │   │   │   └── shared/              #   Badge, Button, Field, Pagination, SearchInput, AttachmentPicker
-│   │   ├── contexts/                # RequesterContext (localStorage-backed)
-│   │   ├── hooks/                   # useRequester hook
-│   │   ├── lib/                     # apiClient (global fetch wrapper)
-│   │   ├── pages/                   # SelectRequester, MyTickets, CreateTicket, TicketDetail
+│   │   ├── contexts/                # AuthContext (session-backed identity)
+│   │   ├── hooks/                   # useAuth hook
+│   │   ├── lib/                     # apiClient (cookies + CSRF, global fetch wrapper)
+│   │   ├── pages/                   # Login, ChangePassword, MyTickets, CreateTicket,
+│   │   │                            #   TicketDetail, StaffQueue*, AdminUsers* (*stubs)
 │   │   └── styles/                  # theme.scss (Zen Green)
 │   ├── tests/
-│   │   ├── lab-01/                  # 3 tests
-│   │   └── lab-02/                  # 247 tests
+│   │   ├── lab-01/                  # 4 tests
+│   │   ├── lab-02/                  # 205 tests
+│   │   └── lab-03/                  # 40 tests (Login, ChangePassword, apiClient, AppShell)
 │   └── package.json
 ├── server/                          # Express + TypeScript backend
 │   ├── prisma/
-│   │   ├── schema.prisma            # 6 models, 3 enums
-│   │   ├── seed.ts                  # seed categories, systems, requesters
-│   │   └── migrations/              # 3 migrations
+│   │   ├── schema.prisma            # 8 models, 5 enums (User/Role/TicketStatus added in Lab 3)
+│   │   ├── seed.ts                  # seed users (roles), tickets, categories, systems
+│   │   └── migrations/              # 4 migrations (incl. Lab 3 auth/authorization)
 │   ├── src/
-│   │   ├── lib/                     # ownership.ts (BR-41 access control)
-│   │   ├── middleware/              # requester-context.ts, upload.ts (Multer)
+│   │   ├── lib/                     # ownership.ts (BR-41 access control), password.ts
+│   │   ├── middleware/              # auth.ts (session/CSRF/role guard), requester-context.ts, upload.ts
+│   │   ├── routes/                  # auth.ts (login/logout/me/change-password)
 │   │   ├── services/               # ticket-number.ts, attachmentStorage.ts
 │   │   ├── app.ts                   # Express routes (10+ endpoints)
 │   │   ├── index.ts                 # Server entry point
 │   │   └── prisma.ts               # Prisma client singleton
 │   ├── tests/
 │   │   ├── lab-01/                  # 8 tests
-│   │   └── lab-02/                  # 165 tests
+│   │   ├── lab-02/                  # 165 tests (regression suite, still passing)
+│   │   └── lab-03/                  # 57 tests (auth API, authorization, seed/migration)
 │   └── package.json
 ├── docs/
 │   ├── lab-01/                      # ai_use.md, reviewer.md, tests.md
-│   └── lab-02/                      # specification.md, api-spec.md, ui-spec.md, ai-use.md, reviewer.md, tests.md
-├── e2e/                             # End-to-end test stubs
-├── evidence/                        # Screenshots for submission
+│   ├── lab-02/                      # specification.md, api-spec.md, ui-spec.md, ai-use.md, reviewer.md, tests.md
+│   └── lab-03/                      # specification.md, api-spec.md, ui-spec.md, tests.md, ai-use.md, reviewer.md
+├── e2e/
+│   ├── lab-02/requester-ticket-flow.spec.ts
+│   └── lab-03/authentication.spec.ts  # Playwright: login, forced password change, role nav
+├── evidence/                        # Test/audit output kept for submission
+├── playwright.config.ts             # Repo-root E2E config (starts API + Vite)
+├── playwright.global-setup.ts       # Re-seeds the DB before an E2E run
+├── package.json                     # Root tooling for the E2E suite only
 └── README.md
 ```
 
@@ -126,10 +137,41 @@ cd server
 npx prisma migrate dev
 ```
 
-migration จะสร้างตารางทั้งหมด (Category, DevRequester, RelatedSystem, Ticket, Attachment) และ seed ข้อมูล:
+migration จะสร้างตารางทั้งหมด (Category, RelatedSystem, User, Ticket, Attachment, DevRequester) และ seed ข้อมูล:
 - 4 categories: Account and Access, Hardware, Software, Network
 - 6 related systems: Email, Campus Wi-Fi, VPN, Corporate Laptop, Printer, Grade Submission App
-- 5 dev requesters: Jennifer Anderson, Sarah Johnson, Michael Brown, David Lee, Robert Wilson (inactive)
+- Requester accounts 4 active + 1 inactive, IT Staff 3 active + 1 inactive, Administrator 1 active (ดูหัวข้อ Seed Credentials)
+- Tickets กระจายตาม status / IT priority / owner (รวม ticket ที่ยังไม่ถูก assign)
+
+รัน seed ซ้ำได้ (idempotent) — จะไม่สร้างข้อมูลซ้ำ แต่จะ reset รหัสผ่านของบัญชี seed กลับเป็นค่า default:
+
+```bash
+cd server
+npm run prisma:seed
+```
+
+### Seed Credentials (local dev only)
+
+> **LOCAL DEVELOPMENT ONLY — ห้ามใช้กับ production และห้ามใช้เป็นรหัสผ่านจริง**
+> รหัสผ่านเหล่านี้ถูก hash ด้วย bcrypt (ไม่เก็บ plaintext) และถูก commit ได้เพราะเป็นค่า dev ที่ตั้งใจให้ทุกคนรู้
+
+บัญชีทั้งหมดถูก seed ด้วย `mustChangePassword` ตามตารางนี้:
+
+| Role | Name | Email | Password | mustChangePassword |
+|---|---|---|---|---|
+| Administrator | System Administrator | `admin@toktickit.example.com` | `Admin123!` | `false` (bัญชี operator ใช้ทดสอบได้ทันที) |
+| Requester | Jennifer Anderson | `jennifer.anderson@example.com` | `Password123!` | `true` |
+| Requester | Sarah Johnson | `sarah.johnson@example.com` | `Password123!` | `true` |
+| Requester | Michael Brown | `michael.brown@example.com` | `Password123!` | `true` |
+| Requester | David Lee | `david.lee@example.com` | `Password123!` | `true` |
+| Requester (inactive) | Robert Wilson | `robert.wilson@example.com` | `Password123!` | `true` |
+| IT Staff | Alice Chen | `alice.chen@toktickit.example.com` | `Password123!` | `true` |
+| IT Staff | Ben Carter | `ben.carter@toktickit.example.com` | `Password123!` | `true` |
+| IT Staff | Priya Nair | `priya.nair@toktickit.example.com` | `Password123!` | `true` |
+| IT Staff (inactive) | Ethan Brooks | `ethan.brooks@toktickit.example.com` | `Password123!` | `true` |
+
+- บัญชีที่มี `mustChangePassword = true` จะถูกบังคับให้เปลี่ยนรหัสผ่านก่อนเข้าหน้าอื่น ๆ (BR-02)
+- `Robert Wilson` และ `Ethan Brooks` เป็นบัญชี inactive — ใช้ทดสอบว่า login ถูกปฏิเสธแบบ generic (BR-09)
 
 ### 6. Start Backend Server
 
@@ -165,20 +207,34 @@ cd client
 npm run test
 ```
 
+**End-to-end tests (Playwright):**
+```bash
+# ครั้งแรก: ติดตั้ง dependency ของ root (ใช้เฉพาะ e2e)
+npm install
+
+npm run test:e2e
+```
+Playwright จะ seed database ใหม่แล้ว start API (3000) + Vite (5173) ให้อัตโนมัติ ต้องมี PostgreSQL รันอยู่ก่อน
+
 ### Test Coverage Summary
+
+ตัวเลขด้านล่างมาจากการรันจริงบนเครื่อง dev (`npm test` ทั้ง server/client และ `npm run test:e2e`):
 
 | Level | Files | Tests |
 |-------|-------|-------|
-| Backend Unit | 2 | 19 |
-| Backend API/Integration | 13 | 146 |
-| Frontend UI Component | 15 | 238 |
-| Frontend Integration | 2 | 6 |
-| **Grand Total** | **32** | **409** |
+| Backend (Vitest + Supertest) | 18 | 230 (220 passed, 10 skipped placeholders สำหรับ branch ถัดไป) |
+| Frontend (Vitest + Testing Library) | 13 | 210 |
+| End-to-end (Playwright) | 1 | 7 |
+| **Grand Total** | **32** | **447** |
 
 ## API Endpoints
 
 | Method | Endpoint | คำอธิบาย |
 |---|---|---|
+| POST | `/api/auth/login` | Login ด้วย email + password, set session cookie (`sid`) + CSRF cookie |
+| POST | `/api/auth/logout` | ออกจากระบบ, ทำลาย session (ต้องมี CSRF token) |
+| GET | `/api/auth/me` | คืนข้อมูลผู้ใช้ปัจจุบัน (ไม่รวม `passwordHash`) |
+| POST | `/api/auth/change-password` | ตั้งรหัสผ่านใหม่ + ล้าง `mustChangePassword` |
 | GET | `/api/health` | คืนสถานะของ backend |
 | GET | `/api/categories` | คืนรายการ categories |
 | GET | `/api/related-systems` | คืนรายการ related systems |
@@ -194,6 +250,9 @@ npm run test
 ## หมายเหตุเพิ่มเติม
 
 - ห้าม commit ไฟล์ `.env` เด็ดขาด — ใช้ `.env.example` เป็น template แทน
-- Lab 2 ใช้ `X-Dev-Requester-Id` header สำหรับ auth (stand-in สำหรับ real auth ใน Lab 3)
+- Lab 3 ใช้ **session cookie** (HTTP-only, `SameSite=Lax`, `Secure` ใน production) ร่วมกับ CSRF double-submit token — client ไม่เก็บ token ใด ๆ เอง
+- ค่า `SESSION_SECRET` ตั้งได้ใน `server/.env` ถ้าไม่ตั้งจะใช้ค่า dev default (ห้ามใช้ default นี้ใน production)
+- `X-Dev-Requester-Id` header ยังใช้ได้ชั่วคราวกับ endpoint ของ Lab 2 (`/api/tickets*`) เพื่อไม่ให้ regression suite ของ Lab 2 พัง จนกว่า branch ถัดไปจะย้ายทั้งหมดไปใช้ session ตาม BR-03
 - การพัฒนางานทุกครั้งต้องทำบน feature branch แล้ว merge เข้า staging branch ก่อน
 - ดูรายละเอียดเพิ่มเติมของ spec, test plan, AI usage reflection, และ peer review ได้ที่โฟลเดอร์ `docs/`
+- **Follow-up (นอกขอบเขต Lab 3):** ควรเพิ่ม rate limiting ให้ `/api/auth/login` เพื่อกัน brute-force (api-spec.md §6) และเปลี่ยน in-memory session store เป็น persistent store ก่อนขึ้น production

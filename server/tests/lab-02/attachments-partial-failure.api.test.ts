@@ -37,15 +37,16 @@ function fakePng(): Buffer {
 }
 
 describe("POST /api/tickets/:ticketNumber/attachments — RECORD_CREATION_FAILED", () => {
-  let requesterId: number;
+  let requesterId: string;
   let ticketId: number;
   let ticketNumber: string;
 
   beforeAll(async () => {
     await seed();
 
-    const requester = await prisma.devRequester.findFirst({
-      where: { isActive: true },
+    // Lab 3: Ticket.requesterId is a User (String) id.
+    const requester = await prisma.user.findFirst({
+      where: { isActive: true, role: "REQUESTER" },
       select: { id: true },
     });
     const category = await prisma.category.findFirst({

@@ -1,29 +1,30 @@
 /**
- * apiClient — BR-03 / BR-05 global fetch wrapper
+ * apiClient — single fetch wrapper for the whole app (Lab 3: session auth).
  *
- * Every API call in the app should go through this client so that:
- *   1. The X-Dev-Requester-Id header is attached automatically from localStorage
- *      (BR-05: every ticket/attachment endpoint must include the identity).
- *   2. A 401 INVALID_REQUESTER_CONTEXT response (inactive/deleted requester)
- *      triggers BR-03 enforcement: localStorage is cleared and a
- *      "requester:cleared" custom event is dispatched so RequesterProvider
- *      can reset React state and redirect to /select-requester.
+ * Every API call goes through this client so that:
+ *   1. Relative paths are resolved against VITE_API_URL.
+ *   2. The HTTP-only `sid` session cookie is sent (`credentials: "include"`),
+ *      replacing Lab 2's `X-Dev-Requester-Id` header (BR-03).
+ *   3. State-changing requests echo the CSRF token from the readable `csrf`
+ *      cookie in the `X-CSRF-Token` header (api-spec.md §0 double-submit).
+ *   4. A 401 dispatches AUTH_REQUIRED_EVENT so AuthProvider can clear the
+ *      user and send the browser back to /login; a 403 with
+ *      PASSWORD_CHANGE_REQUIRED dispatches PASSWORD_CHANGE_REQUIRED_EVENT so
+ *      the app routes to the mandatory Change Password screen (BR-02).
  *
- * This module lives OUTSIDE the React component tree (no hooks allowed).
- * It reads localStorage directly for the requester ID and dispatches a
- * DOM CustomEvent that RequesterProvider listens to.
- *
- * Redirect mechanism chosen: CustomEvent "requester:cleared" →
- *   RequesterProvider.addEventListener → clearRequester() + navigate().
- * Why not window.location.replace()? That causes a full page reload,
- * losing all React state and causing a flash. The custom event lets
- * React Router handle navigation smoothly within the SPA.
+ * This module lives outside the React tree (no hooks). It communicates with
+ * AuthProvider through DOM CustomEvents rather than window.location, so the
+ * SPA never does a full page reload / flash.
  */
 
 // ─── Constants ──────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "tkt_current_requester";
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const CSRF_COOKIE = "csrf";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+export const AUTH_REQUIRED_EVENT = "auth:required";
+export const PASSWORD_CHANGE_REQUIRED_EVENT = "auth:password-change-required";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -31,84 +32,60 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
+    /** api-spec.md §1 change-password and §4 admin validation use `fields`. */
+    fields?: Record<string, string>;
+    /** Lab 2 responses used `fieldErrors`; kept for backwards compatibility. */
     fieldErrors?: Record<string, string>;
   };
 }
 
-// ─── Custom event name ──────────────────────────────────────────────────
-
-export const REQUESTER_CLEARED_EVENT = "requester:cleared";
-
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-/**
- * Read the current requester ID from localStorage.
- * Returns undefined if no requester is stored or if the data is invalid.
- */
-function getStoredRequesterId(): number | undefined {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "object" && parsed !== null && typeof parsed.id === "number") {
-      return parsed.id;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
+function readCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : undefined;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────
 
-/**
- * Wrapper around fetch that:
- *   - Prepends BASE_URL to relative paths
- *   - Attaches X-Dev-Requester-Id header if a requester is in localStorage
- *   - On 401 INVALID_REQUESTER_CONTEXT: clears localStorage, dispatches
- *     "requester:cleared" event, then throws
- *   - On non-ok responses: parses error body and throws
- */
 export async function apiClient(
   input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> {
-  // Resolve relative URLs against the API base
   const url =
     typeof input === "string" && !input.startsWith("http")
       ? `${BASE_URL}${input}`
       : input;
 
-  // Build headers — merge with caller-provided headers
+  const method = (init?.method ?? (typeof input === "object" && "method" in input ? input.method : "GET")).toUpperCase();
   const headers = new Headers(init?.headers);
 
-  // Attach X-Dev-Requester-Id from localStorage (BR-05)
-  const requesterId = getStoredRequesterId();
-  if (requesterId !== undefined) {
-    headers.set("X-Dev-Requester-Id", String(requesterId));
+  if (!SAFE_METHODS.has(method)) {
+    const csrfToken = readCookie(CSRF_COOKIE);
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
   }
 
-  const response = await fetch(url, { ...init, headers });
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    // Required for the HTTP-only session cookie to travel cross-origin
+    // (Vite dev server → API) in both dev and production.
+    credentials: "include",
+  });
 
-  // BR-03: Handle 401 INVALID_REQUESTER_CONTEXT
   if (response.status === 401) {
-    // Clone so we can read the body (the original response body is consumed)
+    window.dispatchEvent(new CustomEvent(AUTH_REQUIRED_EVENT));
+  } else if (response.status === 403) {
+    // Clone so the caller can still read the body.
     const cloned = response.clone();
     try {
       const body: ApiErrorResponse = await cloned.json();
-      if (body.error?.code === "INVALID_REQUESTER_CONTEXT") {
-        // BR-03: clear stored selection immediately
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {
-          // Storage blocked — proceed with event dispatch anyway
-        }
-
-        // Dispatch custom event for RequesterProvider to handle React state + navigation
-        window.dispatchEvent(new CustomEvent(REQUESTER_CLEARED_EVENT));
+      if (body.error?.code === "PASSWORD_CHANGE_REQUIRED") {
+        window.dispatchEvent(new CustomEvent(PASSWORD_CHANGE_REQUIRED_EVENT));
       }
     } catch {
-      // Could not parse body — not our expected shape, fall through
+      // Not our envelope — ignore.
     }
   }
 
@@ -116,8 +93,8 @@ export async function apiClient(
 }
 
 /**
- * Check if a response is ok. If not, parse and throw the error body.
- * Usage: const data = await apiClient.parseJson<T>(response);
+ * Check if a response is ok; if not, parse and throw the error body.
+ * Usage: const data = await parseJson<MyType>(response);
  */
 export async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
