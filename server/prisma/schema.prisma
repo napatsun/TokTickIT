@@ -18,15 +18,31 @@ enum RequestedPriority {
   HIGH
 }
 
+// Lab 3 (api-spec.md §3): IT Priority accepts URGENT in addition to the
+// Requester-facing scale, so IT Staff can escalate beyond "High".
 enum ItPriority {
   LOW
   MEDIUM
   HIGH
+  URGENT
 }
 
-enum CurrentStatus {
+// Lab 3 (specification.md §7.1)
+enum Role {
+  REQUESTER
+  IT_STAFF
+  ADMINISTRATOR
+}
+
+enum TicketStatus {
   NEW
-  // Extensible — additional statuses added in future labs
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
 }
 
 // ─── Lab 1 ───────────────────────────────────────────────
@@ -40,7 +56,34 @@ model Category {
   tickets Ticket[]
 }
 
-// ─── Lab 2 ───────────────────────────────────────────────
+// ─── Lab 3: real identity ────────────────────────────────
+// Relation fields for PublicComment / InternalNote are intentionally absent:
+// those models belong to later Lab 3 branches (staff ticketing), not this one.
+
+model User {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  passwordHash       String
+  role               Role
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  ticketsCreated      Ticket[]     @relation("RequesterTickets")
+  ticketsOwned        Ticket[]     @relation("OwnerTickets")
+  uploadedAttachments Attachment[] @relation("UploadedBy")
+  removedAttachments  Attachment[] @relation("RemovedBy")
+}
+
+// ─── Lab 2 (transitional) ────────────────────────────────
+// The Development Requester selector was removed in Lab 3 (FR-11), but the
+// Lab 2 ticket endpoints are still served through the X-Dev-Requester-Id
+// header until a later branch re-scopes them onto the authenticated session.
+// This table is therefore retained as a legacy dev-identity lookup only and
+// no longer owns any Ticket/Attachment rows. Remove it once every endpoint
+// derives identity from the session (BR-03).
 
 model DevRequester {
   id        Int      @id @default(autoincrement())
@@ -48,10 +91,6 @@ model DevRequester {
   email     String   @unique
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-
-  tickets             Ticket[]
-  uploadedAttachments Attachment[] @relation("UploadedBy")
-  removedAttachments  Attachment[] @relation("RemovedBy")
 }
 
 model RelatedSystem {
@@ -65,26 +104,35 @@ model RelatedSystem {
 model Ticket {
   id                Int               @id @default(autoincrement())
   ticketNumber      String            @unique
-  requesterId       Int
+  // Lab 3 §7.1: requester identity is a real User, not a DevRequester.
+  requesterId       String
+  // Lab 3 §7.1: at most one primary Ticket Owner (active IT Staff/Administrator).
+  ownerId           String?
   categoryId        Int
   relatedSystemId   Int
   summary           String
   description       String            @db.Text
   requestedPriority RequestedPriority
-  itPriority        ItPriority?
-  currentStatus     CurrentStatus     @default(NEW)
-  ticketOwnerId     Int?
+  // BR-14: defaults to requestedPriority at creation; only IT Staff/Administrator may change it.
+  itPriority        ItPriority        @default(MEDIUM)
+  status            TicketStatus      @default(NEW)
+  // BR-05 / BR-20: "Problem Appears Resolved" signal — never overwrites status.
+  requesterMarkedResolved   Boolean   @default(false)
+  requesterMarkedResolvedAt DateTime?
   resolutionSummary String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  requester     DevRequester  @relation(fields: [requesterId], references: [id], onDelete: Restrict)
+  requester     User          @relation("RequesterTickets", fields: [requesterId], references: [id], onDelete: Restrict)
+  owner         User?         @relation("OwnerTickets", fields: [ownerId], references: [id], onDelete: Restrict)
   category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
   attachments   Attachment[]
 
   @@index([requesterId])
   @@index([requesterId, createdAt])
+  @@index([ownerId])
+  @@index([status])
   @@index([summary])
 }
 
@@ -95,16 +143,18 @@ model Attachment {
   storedFileName        String       @unique
   mimeType              String
   fileSizeBytes         Int
-  uploadedByRequesterId Int
+  // Field names kept from Lab 2 to avoid churn in the Lab 2 attachment
+  // contract; the FK now points at User (Lab 3 §7.1 data change).
+  uploadedByRequesterId String
   uploadedAt            DateTime     @default(now())
   isRemoved             Boolean      @default(false)
   removedAt             DateTime?
   removedReason         String?
-  removedByRequesterId  Int?
+  removedByRequesterId  String?
 
-  ticket              Ticket        @relation(fields: [ticketId], references: [id], onDelete: Restrict)
-  uploadedByRequester DevRequester  @relation("UploadedBy", fields: [uploadedByRequesterId], references: [id], onDelete: Restrict)
-  removedByRequester  DevRequester? @relation("RemovedBy", fields: [removedByRequesterId], references: [id], onDelete: Restrict)
+  ticket              Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  uploadedByRequester User   @relation("UploadedBy", fields: [uploadedByRequesterId], references: [id], onDelete: Restrict)
+  removedByRequester  User?  @relation("RemovedBy", fields: [removedByRequesterId], references: [id], onDelete: Restrict)
 
   @@index([ticketId])
 }
