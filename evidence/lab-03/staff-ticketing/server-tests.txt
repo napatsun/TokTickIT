@@ -1,0 +1,70 @@
+Lab 3 — feature/lab3-04-staff-ticketing
+Server suite: IT Staff Queue (search/filter/sort/pagination), Ticket Detail
+(claim/reassign/IT Priority/status matrix), staff Public Comments, Internal Notes,
+and the remaining authorization rows (SEC-03, SEC-04, SEC-06b, SEC-10, API-36)
+
+Command:
+  cd server && npx tsc --noEmit && npx vitest run
+
+Typecheck:
+  $ npx tsc --noEmit
+  (no output — 0 errors)
+
+Test run (per file):
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (106 tests) 1748ms
+ ✓ tests/lab-02/attachments.api.test.ts (23 tests) 1002ms
+ ✓ tests/lab-02/my-tickets.api.test.ts (37 tests) 1170ms
+ ✓ tests/lab-03/authorization.api.test.ts (43 tests | 3 skipped) 1366ms
+ ✓ tests/lab-03/comments-notes.api.test.ts (38 tests) 1237ms
+ ✓ tests/lab-02/create-ticket.api.test.ts (33 tests) 978ms
+ ✓ tests/lab-03/staff-queue.api.test.ts (29 tests) 1161ms
+ ✓ tests/lab-02/ticket-detail.api.test.ts (15 tests) 982ms
+ ✓ tests/lab-03/auth.api.test.ts (20 tests) 1647ms
+ ✓ tests/lab-02/create-ticket-attachments.api.test.ts (10 tests) 778ms
+ ✓ tests/lab-02/ticket-number.test.ts (18 tests) 653ms
+ ✓ tests/lab-03/migration.api.test.ts (15 tests) 1333ms
+ ✓ tests/lab-02/attachments-partial-failure.api.test.ts (1 test) 738ms
+ ✓ tests/lab-02/requester-context.test.ts (5 tests) 737ms
+ ✓ tests/lab-02/related-systems.api.test.ts (7 tests) 864ms
+ ✓ tests/lab-01/categories.test.ts (7 tests) 856ms
+ ✓ tests/lab-02/create-ticket-attachments-db-failure.api.test.ts (1 test) 743ms
+ ✓ tests/lab-02/seed.idempotency.test.ts (1 test) 1184ms
+ ✓ tests/lab-01/health.test.ts (1 test) 1ms
+ Test Files  19 passed (19)
+      Tests  407 passed | 3 skipped (410)
+   Duration  19.59s
+
+The 3 skips are SEC-01, SEC-02, SEC-09 in tests/lab-03/authorization.api.test.ts.
+They target /api/admin/*, which does not exist in this branch, so they are left
+as an explicit `describe.skip` pointing at feature/lab3-05-admin-users rather
+than asserted (and passed) against a route that is not mounted.
+
+New suites this branch:
+  tests/lab-03/staff-queue.api.test.ts              API-14 … API-19 (29 tests)
+  tests/lab-03/staff-ticket-detail.api.test.ts      + API-20 … API-26
+  tests/lab-03/comments-notes.api.test.ts           + API-27
+  tests/lab-03/authorization.api.test.ts            SEC-03, SEC-04, SEC-06b, SEC-10, API-36
+
+API-26 parameterization (the required per-cell matrix coverage):
+  64 from/to cells = 8 statuses x 8 statuses
+    18 permitted cells -> 200, stored status equals the target
+    46 blocked cells   -> 409 INVALID_TRANSITION carrying { from, to, allowed }
+  plus a guard test asserting the 64 / 18 / 46 split so a typo in the matrix
+  cannot silently shrink the coverage.
+
+SEC-06b (the reviewer's required deliverable):
+  The fixture posts a REAL Internal Note through
+  POST /api/staff/tickets/:id/notes as IT Staff, then a Requester walks
+  /api/auth/me, /api/categories, /api/related-systems, /api/tickets,
+  /api/tickets/:ticketNumber, /api/tickets/:ticketNumber/comments and a
+  cross-owner 404, asserting the note's unique marker never appears and that a
+  recursive /internal/i key scan finds no internal-note key at any depth.
+  A positive control asserts the same note IS returned to IT Staff/Administrator,
+  so the assertions cannot pass vacuously.
+
+SEC-10 approach:
+  No mocking of internals. An out-of-int4-range ticket id (3000000000) makes
+  Prisma throw inside the handler's try/catch on four staff endpoints, and the
+  suite asserts each 500 body is exactly
+  { error: { code: "SERVER_ERROR", message: "Something went wrong. Please try again." } }
+  with no stack frame, error name, ORM code, or repo path.

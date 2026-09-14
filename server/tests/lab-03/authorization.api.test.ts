@@ -22,29 +22,54 @@ import {
 const prisma = getPrisma();
 
 /**
- * Authorization — tests.md §2 (Authorization / Role Navigation)
+ * Authorization — tests.md §2 (Authorization / Role Navigation) and §8
  *
- * Implemented so far:
+ * Implemented here:
+ *   SEC-03  Requester → /api/staff/tickets/:id/notes is 403 with no note content
+ *   SEC-04  Requester → /api/staff/tickets (Queue) is 403
  *   SEC-05  a body-supplied requesterId is ignored (session identity wins)
+ *   SEC-06b IT-Staff-authored Internal Note never appears in ANY
+ *           Requester-facing response (the full cross-role leak check — the
+ *           schema-level guard SEC-06a lives in lab-02/ticket-detail.api.test.ts)
  *   SEC-07  cross-owner ticket access → 404, not 403
  *   SEC-08  no session cookie on any protected endpoint → 401
+ *   SEC-10  a 500 response carries only the generic envelope (no stack trace)
+ *   API-36  cross-owner vs non-existent ticket fetch shapes are identical
  *   + unit coverage for the reusable role guard and the mustChangePassword gate
  *
- * The remaining rows belong to later branches and are intentionally left as
- * skipped placeholders so tests.md traceability stays intact.
+ * SEC-01 / SEC-02 / SEC-09 (non-Administrator calling /api/admin/*) stay
+ * SKIPPED on purpose: this branch (feature/lab3-04-staff-ticketing) does NOT
+ * mount /api/admin/*, so asserting 403 or 404 there would be meaningless. They
+ * belong to the Administrator User Management branch
+ * (feature/lab3-05-admin-users), which is the branch that creates those routes.
  */
 
 let requesterA: TestUser;
 let requesterB: TestUser;
+let staff: TestUser;
+let admin: TestUser;
 let clientA: SessionClient;
+let staffClient: SessionClient;
+let adminClient: SessionClient;
 let ticketA: { id: number; ticketNumber: string };
+
+/**
+ * SEC-06b marker: distinctive enough that a substring search over any response
+ * body is a meaningful leak assertion, and never seeded anywhere.
+ */
+const INTERNAL_NOTE_MARKER = `SEC06B-INTERNAL-${Date.now()}`;
+let internalNoteId: string;
 
 beforeAll(async () => {
   await seed();
 
   requesterA = await createTestUser({ name: "Authz Requester A" });
   requesterB = await createTestUser({ name: "Authz Requester B" });
+  staff = await createTestUser({ name: "Authz Staff", role: "IT_STAFF" });
+  admin = await createTestUser({ name: "Authz Admin", role: "ADMINISTRATOR" });
   clientA = await loginAs(app, requesterA.email);
+  staffClient = await loginAs(app, staff.email);
+  adminClient = await loginAs(app, admin.email);
 
   const category = await prisma.category.findFirst({
     where: { isActive: true },
@@ -67,12 +92,47 @@ beforeAll(async () => {
     },
     select: { id: true, ticketNumber: true },
   });
+
+  // SEC-06b: create a REAL Internal Note as IT Staff, through the API, on the
+  // ticket Requester A can see. Every Requester-facing assertion below is
+  // measured against this row.
+  const noteRes = await csrf(
+    staffClient,
+    staffClient.agent.post(`/api/staff/tickets/${ticketA.id}/notes`),
+  ).send({
+    content: `${INTERNAL_NOTE_MARKER} internal-only diagnostics for ticket A.`,
+  });
+
+  if (noteRes.status !== 201) {
+    throw new Error(
+      `SEC-06b fixture failed: expected 201 creating the internal note, got ${noteRes.status} ${JSON.stringify(noteRes.body)}`,
+    );
+  }
+  internalNoteId = noteRes.body.id as string;
 });
 
 afterAll(async () => {
-  await cleanupTestUsers([requesterA.id, requesterB.id]);
+  await cleanupTestUsers([requesterA.id, requesterB.id, staff.id, admin.id]);
   await prisma.$disconnect();
 });
+
+/**
+ * Recursively collect the dotted paths of every key whose name matches
+ * `pattern`. Used to prove no internal-note relation/key is present anywhere
+ * in a Requester-facing payload, at any depth.
+ */
+function matchingKeyPaths(value: unknown, pattern: RegExp, path = "$"): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => matchingKeyPaths(entry, pattern, `${path}[${index}]`));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => [
+      ...(pattern.test(key) ? [`${path}.${key}`] : []),
+      ...matchingKeyPaths(child, pattern, `${path}.${key}`),
+    ]);
+  }
+  return [];
+}
 
 // ─── SEC-08 ─────────────────────────────────────────────────────────────
 
@@ -199,19 +259,83 @@ describe("enforcePasswordChange — gate middleware (BR-02)", () => {
 // ─── Placeholders for later branches ────────────────────────────────────
 
 describe.skip("SEC-01/02 — non-Administrator calling /api/admin/* (AC-15)", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
+  // INTENTIONALLY SKIPPED in feature/lab3-04-staff-ticketing.
+  // /api/admin/* is not mounted yet — Administrator User Management is the NEXT
+  // branch (feature/lab3-05-admin-users). Asserting 403 (or 404) here today
+  // would pass for the wrong reason (no route at all), so these rows stay
+  // Pending until that branch adds the routes and un-skips them.
   it("Requester calling any /api/admin/* endpoint → 403", () => {});
   it("IT Staff calling any /api/admin/* endpoint → 403", () => {});
 });
 
-describe.skip("SEC-03 — Requester calling internal-note endpoints (AC-04, BR-04)", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
-  it("GET/POST /api/staff/tickets/:id/notes → 403 with no note content", () => {});
+// ─── SEC-03 ─────────────────────────────────────────────────────────────
+
+describe("SEC-03 — Requester calling internal-note endpoints (AC-04, BR-04)", () => {
+  it("returns 403 FORBIDDEN for both GET and POST, with no note content in the body", async () => {
+    const get = await clientA.agent.get(`/api/staff/tickets/${ticketA.id}/notes`);
+    const post = await csrf(
+      clientA,
+      clientA.agent.post(`/api/staff/tickets/${ticketA.id}/notes`),
+    ).send({ content: "a Requester must never be able to write this" });
+
+    for (const [label, res] of [
+      ["GET", get],
+      ["POST", post],
+    ] as const) {
+      expect(res.status, label).toBe(403);
+      expect(res.body.error.code, label).toBe("FORBIDDEN");
+      // No note payload of any kind: not the marker, not an items array, not a
+      // relation key — and nothing about the internal model.
+      expect(JSON.stringify(res.body), label).not.toContain(INTERNAL_NOTE_MARKER);
+      expect(res.body.items, label).toBeUndefined();
+      expect(JSON.stringify(res.body), label).not.toMatch(/internalNote/i);
+      expect(JSON.stringify(res.body), label).not.toMatch(/at .*\.ts:\d+/);
+    }
+  });
+
+  it("rejects the Requester before any handler runs, on every note-ish path", async () => {
+    const paths = [
+      `/api/staff/tickets/${ticketA.id}/notes`,
+      `/api/staff/tickets/${ticketA.id}/notes/12345`,
+      `/api/staff/tickets/9999999/notes`,
+    ];
+
+    for (const path of paths) {
+      const res = await clientA.agent.get(path);
+      expect(res.status, path).toBe(403);
+      expect(res.body.error.code, path).toBe("FORBIDDEN");
+    }
+  });
 });
 
-describe.skip("SEC-04 — Requester calling the staff queue (FR-09)", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
-  it("GET /api/staff/tickets → 403", () => {});
+// ─── SEC-04 ─────────────────────────────────────────────────────────────
+
+describe("SEC-04 — Requester calling the staff queue (FR-09)", () => {
+  it("returns 403 for GET /api/staff/tickets", async () => {
+    const res = await clientA.agent.get("/api/staff/tickets");
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+    expect(res.body.items).toBeUndefined();
+  });
+
+  it("returns 403 for every other staff endpoint too (no partial exposure)", async () => {
+    const staffPaths: Array<[string, string]> = [
+      ["get", "/api/staff/tickets"],
+      ["get", `/api/staff/tickets/${ticketA.id}`],
+      ["get", "/api/staff/owners"],
+      ["post", `/api/staff/tickets/${ticketA.id}/claim`],
+      ["post", `/api/staff/tickets/${ticketA.id}/comments`],
+    ];
+
+    for (const [method, path] of staffPaths) {
+      const req = (clientA.agent as any)[method](path);
+      const res = await (method === "get" ? req : csrf(clientA, req));
+
+      expect(res.status, `${method.toUpperCase()} ${path}`).toBe(403);
+      expect(res.body.error.code, `${method.toUpperCase()} ${path}`).toBe("FORBIDDEN");
+    }
+  });
 });
 
 describe("SEC-05 — client-supplied requesterId is ignored (AC-03, BR-03)", () => {
@@ -255,9 +379,89 @@ describe("SEC-05 — client-supplied requesterId is ignored (AC-03, BR-03)", () 
   });
 });
 
-describe.skip("SEC-06 — internal notes never reach a Requester (AC-17)", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
-  it("note content is absent from every Requester-facing response", () => {});
+// ─── SEC-06b (required deliverable — answers the PR review comment) ──────
+//
+// SEC-06a (schema-level guard) lives in
+// server/tests/lab-02/ticket-detail.api.test.ts L359-394 and asserts no
+// internal-notes key can appear in the Requester detail payload. SEC-06b is the
+// full cross-role check the reviewer asked for: create a REAL note as IT Staff,
+// then walk every endpoint a Requester can reach and prove the note is absent.
+
+describe("SEC-06b — an IT-Staff-authored Internal Note never reaches a Requester (AC-17, BR-04)", () => {
+  it("positive control — the note exists in the DB and IS returned to staff/admin", async () => {
+    const stored = await prisma.internalNote.findUnique({ where: { id: internalNoteId } });
+    expect(stored).not.toBeNull();
+    expect(stored?.content).toContain(INTERNAL_NOTE_MARKER);
+    expect(stored?.ticketId).toBe(ticketA.id);
+
+    for (const client of [staffClient, adminClient]) {
+      const res = await client.agent.get(`/api/staff/tickets/${ticketA.id}/notes`);
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).toContain(INTERNAL_NOTE_MARKER);
+    }
+  });
+
+  it("is absent from the Requester ticket detail, as a key AND as content", async () => {
+    const res = await clientA.agent.get(`/api/tickets/${ticketA.ticketNumber}`);
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain(INTERNAL_NOTE_MARKER);
+    // Recursive, any depth: no `internalNotes` / `internalNote` / `internal...`
+    // key may exist anywhere in the payload.
+    expect(matchingKeyPaths(res.body, /internal/i)).toEqual([]);
+    expect(res.body.ticket.id).toBe(ticketA.id);
+  });
+
+  it("is absent from the Requester Public Comments list", async () => {
+    const res = await clientA.agent.get(`/api/tickets/${ticketA.ticketNumber}/comments`);
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain(INTERNAL_NOTE_MARKER);
+    expect(matchingKeyPaths(res.body, /internal/i)).toEqual([]);
+    expect(res.body.items.every((c: { authorRole: string }) => c.authorRole !== "IT_STAFF")).toBe(
+      true,
+    );
+  });
+
+  it("is absent from the Requester ticket list", async () => {
+    const res = await clientA.agent.get("/api/tickets");
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain(INTERNAL_NOTE_MARKER);
+    expect(matchingKeyPaths(res.body, /internal/i)).toEqual([]);
+
+    const mine = res.body.tickets.find(
+      (t: { ticketNumber: string }) => t.ticketNumber === ticketA.ticketNumber,
+    );
+    expect(mine).toBeDefined();
+    expect(matchingKeyPaths(mine, /internal/i)).toEqual([]);
+  });
+
+  it("is absent from every other Requester-reachable endpoint", async () => {
+    const paths = [
+      "/api/auth/me",
+      "/api/categories",
+      "/api/related-systems",
+      "/api/tickets",
+      `/api/tickets/${ticketA.ticketNumber}`,
+      `/api/tickets/${ticketA.ticketNumber}/comments`,
+    ];
+
+    for (const path of paths) {
+      const res = await clientA.agent.get(path);
+      expect(res.status, path).toBe(200);
+      expect(JSON.stringify(res.body), path).not.toContain(INTERNAL_NOTE_MARKER);
+      expect(matchingKeyPaths(res.body, /internal/i), path).toEqual([]);
+    }
+  });
+
+  it("is absent from Requester-facing error bodies as well", async () => {
+    const crossOwner = await loginAs(app, requesterB.email);
+    const res = await crossOwner.agent.get(`/api/tickets/${ticketA.ticketNumber}`);
+
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain(INTERNAL_NOTE_MARKER);
+  });
 });
 
 describe("SEC-07 — cross-owner ticket fetch (ownership)", () => {
@@ -301,16 +505,89 @@ describe("SEC-07 — cross-owner ticket fetch (ownership)", () => {
 });
 
 describe.skip("SEC-09 — every /api/admin/* endpoint rejects non-Administrators (AC-15)", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
+  // INTENTIONALLY SKIPPED — same reason as SEC-01/02: /api/admin/* does not
+  // exist in feature/lab3-04-staff-ticketing. The Administrator User Management
+  // branch (feature/lab3-05-admin-users) mounts those routes and owns this row.
   it("returns 403 for each admin route", () => {});
 });
 
-describe.skip("SEC-10 — 500 responses contain only a generic message", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
-  it("never returns a stack trace or internal detail", () => {});
+// ─── SEC-10 ─────────────────────────────────────────────────────────────
+
+/**
+ * A value that cannot be bound as a PostgreSQL int4, so Prisma throws inside
+ * the handler's try/catch. That is a genuine unexpected-server-error path — no
+ * mocking of internals, which keeps this test honest about what the real app
+ * returns when a query explodes.
+ */
+const OUT_OF_RANGE_TICKET_ID = 3_000_000_000;
+
+describe("SEC-10 — 500 responses contain only a generic message (§6 safe errors)", () => {
+  const failingCalls: Array<[string, string, unknown]> = [
+    ["get", `/api/staff/tickets/${OUT_OF_RANGE_TICKET_ID}`, undefined],
+    ["post", `/api/staff/tickets/${OUT_OF_RANGE_TICKET_ID}/claim`, undefined],
+    ["post", `/api/staff/tickets/${OUT_OF_RANGE_TICKET_ID}/notes`, { content: "boom" }],
+    ["patch", `/api/staff/tickets/${OUT_OF_RANGE_TICKET_ID}/status`, { status: "OPEN" }],
+  ];
+
+  for (const [method, path, body] of failingCalls) {
+    it(`${method.toUpperCase()} ${path} → generic 500 with no internal detail`, async () => {
+      const req = (staffClient.agent as any)[method](path);
+      if (body !== undefined) req.send(body as object);
+      const res = method === "get" ? await req : await csrf(staffClient, req);
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        error: {
+          code: "SERVER_ERROR",
+          message: "Something went wrong. Please try again.",
+        },
+      });
+
+      const serialised = JSON.stringify(res.body);
+      expect(serialised).not.toMatch(/at .*\.ts:\d+/); // stack frame
+      expect(serialised).not.toMatch(/\bError\b/);
+      expect(serialised).not.toMatch(/prisma|PrismaClient|P2033|P2002/i);
+      expect(serialised).not.toMatch(/server\/src|node_modules/);
+      // Exactly one top-level key: the standard envelope. Nothing else leaks.
+      expect(Object.keys(res.body)).toEqual(["error"]);
+    });
+  }
 });
 
-describe.skip("API-36 — cross-owner vs non-existent ticket fetch shapes", () => {
-  // implemented in feature/lab3-staff-ticketing or feature/lab3-admin-users
-  it("both cases return an identical 404 shape", () => {});
+// ─── API-36 ─────────────────────────────────────────────────────────────
+
+describe("API-36 — cross-owner vs non-existent ticket fetch shapes (§6 safe errors)", () => {
+  it("Requester: the cross-owner 404 is byte-identical to the non-existent 404", async () => {
+    const clientB = await loginAs(app, requesterB.email);
+
+    const crossOwner = await clientB.agent.get(`/api/tickets/${ticketA.ticketNumber}`);
+    const missing = await clientB.agent.get("/api/tickets/TKT-2026-999999-NONEXISTENT");
+
+    expect(crossOwner.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(crossOwner.body).toEqual(missing.body);
+  });
+
+  it("Staff: a non-existent ticket id returns the same generic 404 as a malformed id", async () => {
+    const missing = await staffClient.agent.get("/api/staff/tickets/9999999");
+    const malformed = await staffClient.agent.get("/api/staff/tickets/not-a-number");
+
+    expect(missing.status).toBe(404);
+    expect(malformed.status).toBe(404);
+    expect(missing.body).toEqual(malformed.body);
+    expect(missing.body).toEqual({
+      error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+    });
+    expect(JSON.stringify(missing.body)).not.toMatch(/at .*\.ts:\d+/);
+  });
+
+  it("Staff: a ticket owned by another Requester is readable, not hidden behind a 404", async () => {
+    // The shared queue has no ownership restriction, so this must be a real 200
+    // — proving the 404 above is about existence only, not about hiding tickets
+    // from staff (which would make the queue unusable).
+    const res = await staffClient.agent.get(`/api/staff/tickets/${ticketA.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticket.requester.id).toBe(requesterA.id);
+  });
 });
