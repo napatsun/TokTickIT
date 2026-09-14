@@ -12,6 +12,8 @@ import {
   sessionMiddleware,
 } from "./middleware/auth.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
+import { staffRouter } from "./routes/staff-tickets.js";
+import { toContentDto, validateContent } from "./lib/content.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
 import { findOwnedTicket, findOwnedAttachment } from "./lib/ownership.js";
@@ -32,6 +34,20 @@ app.use(csrfProtection);
 
 // ─── Authentication (api-spec.md §1) ──────────────────────
 app.use("/api/auth", authRouter);
+
+// ─── IT Staff Queue & Ticket Detail (api-spec.md §3) ──────────────────
+// Every route in this group is a shared-queue route: authenticated, past the
+// mustChangePassword gate, and restricted to IT Staff/Administrator. The role
+// guard runs BEFORE the router so an unauthorized role gets 403 without ever
+// reaching a handler (and therefore without any ticket/note content in the
+// body — SEC-03, SEC-04, SEC-06b).
+app.use(
+  "/api/staff",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["IT_STAFF", "ADMINISTRATOR"]),
+  staffRouter,
+);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -740,31 +756,10 @@ app.get(
 // BR-18 rendering note: content is stored verbatim as text and rendered by
 // React, which escapes it on output, so script injection is not possible.
 
-const MAX_COMMENT_LENGTH = 2000;
-
-interface CommentBody {
-  content?: unknown;
-}
-
-/** Map a PublicComment row (+author) to the api-spec.md §2 response shape. */
-function toCommentDto(comment: {
-  id: string;
-  ticketId: number;
-  authorId: string;
-  content: string;
-  createdAt: Date;
-  author: { name: string; role: string };
-}) {
-  return {
-    id: comment.id,
-    ticketId: comment.ticketId,
-    authorId: comment.authorId,
-    authorName: comment.author.name,
-    authorRole: comment.author.role,
-    content: comment.content,
-    createdAt: comment.createdAt.toISOString(),
-  };
-}
+// Validation (CONTENT_REQUIRED / CONTENT_TOO_LONG), the 2,000-character limit,
+// and the response DTO all live in lib/content.ts so this Requester endpoint and
+// the staff-authored `/api/staff/tickets/:id/comments` route share one code path
+// (the staff branch was explicitly required not to duplicate them).
 
 app.post(
   "/api/tickets/:ticketNumber/comments",
@@ -786,41 +781,19 @@ app.post(
         return;
       }
 
-      const body = (req.body ?? {}) as CommentBody;
-      const content = typeof body.content === "string" ? body.content.trim() : "";
-
-      // BR-17: empty or whitespace-only comments are rejected.
-      if (content.length === 0) {
-        res.status(422).json({
-          error: {
-            code: "CONTENT_REQUIRED",
-            message: "Comment cannot be empty.",
-            fieldErrors: { content: "Comment cannot be empty." },
-          },
-        });
-        return;
-      }
-
-      // BR-18: hard 2,000 character limit.
-      if (content.length > MAX_COMMENT_LENGTH) {
-        res.status(422).json({
-          error: {
-            code: "CONTENT_TOO_LONG",
-            message: `Comment cannot exceed ${MAX_COMMENT_LENGTH} characters.`,
-            fieldErrors: {
-              content: `Comment cannot exceed ${MAX_COMMENT_LENGTH} characters.`,
-            },
-          },
-        });
+      // BR-17 / BR-18: shared validation (lib/content.ts).
+      const result = validateContent(req.body, "Comment");
+      if (!result.ok) {
+        res.status(result.status).json(result.body);
         return;
       }
 
       const comment = await getPrisma().publicComment.create({
-        data: { ticketId: ticket.id, authorId: requester.id, content },
+        data: { ticketId: ticket.id, authorId: requester.id, content: result.content },
         include: { author: { select: { name: true, role: true } } },
       });
 
-      res.status(201).json(toCommentDto(comment));
+      res.status(201).json(toContentDto(comment));
     } catch (err) {
       // BR-26: safe error, no internal details leaked
       res.status(500).json({
@@ -858,7 +831,7 @@ app.get(
         include: { author: { select: { name: true, role: true } } },
       });
 
-      res.status(200).json({ items: comments.map(toCommentDto) });
+      res.status(200).json({ items: comments.map(toContentDto) });
     } catch (err) {
       res.status(500).json({
         error: {
