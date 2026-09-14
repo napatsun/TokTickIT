@@ -350,5 +350,47 @@ describe("GET /api/tickets/:ticketNumber", () => {
       expect(res.body.attachments.active).toEqual([]);
       expect(res.body.attachments.removed).toEqual([]);
     });
+
+    // SEC-06 regression: the Requester detail endpoint must never return
+    // internal-only data. The InternalNote model does not exist yet on this
+    // branch (it is added in feature/lab3-04-staff-ticketing), so this guards
+    // the JSON shape itself — it keeps failing even after the model/relation
+    // exists if the query ever starts including it.
+    it("SEC-06 — response contains no internalNotes key (top-level, ticket, or nested)", async () => {
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
+
+      expect(res.status).toBe(200);
+
+      // 1. Explicit key assertions at the known levels.
+      expect(res.body).not.toHaveProperty("internalNotes");
+      expect(res.body).not.toHaveProperty("internalNote");
+      expect(res.body.ticket).not.toHaveProperty("internalNotes");
+      expect(res.body.ticket).not.toHaveProperty("internalNote");
+      expect(res.body.ticket).not.toHaveProperty("notes");
+
+      // 2. Recursive key scan — catches the key even if it moves nesting
+      // after InternalNote is added (e.g. ticket.internalNotes, or a sibling).
+      const collectKeys = (value: unknown, acc: string[] = []): string[] => {
+        if (Array.isArray(value)) {
+          for (const item of value) collectKeys(item, acc);
+        } else if (value !== null && typeof value === "object") {
+          for (const key of Object.keys(value as Record<string, unknown>)) {
+            acc.push(key);
+            collectKeys((value as Record<string, unknown>)[key], acc);
+          }
+        }
+        return acc;
+      };
+      const keys = collectKeys(res.body).map((k) => k.toLowerCase());
+      expect(keys).not.toContain("internalnotes");
+      expect(keys).not.toContain("internalnote");
+      expect(keys).not.toContain("internal_notes");
+
+      // 3. Serialized-payload belt-and-braces: no "internalnote" substring
+      // anywhere in the wire JSON (key or string value smuggling the field).
+      expect(JSON.stringify(res.body).toLowerCase()).not.toContain(
+        "internalnote",
+      );
+    });
   });
 });
