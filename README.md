@@ -21,38 +21,47 @@ toktickit/
 │   │   │   ├── layout/              #   AppShell (identity, role nav, logout), ShellSkeleton
 │   │   │   ├── my-tickets/          #   FilterControls, TicketTable
 │   │   │   ├── ticket-detail/       #   AttachmentSection, RemoveAttachmentConfirm,
-│   │   │   │                        #   PublicCommentsPanel, ResolveMarkConfirm
+│   │   │   │                        #   ContentThread (shared panel body),
+│   │   │   │                        #   PublicCommentsPanel, InternalNotesPanel,
+│   │   │   │                        #   StatusChangeConfirm, ResolveMarkConfirm
 │   │   │   ├── RouteGuard.tsx       #   RequireAuth (mustChangePassword) + RequireRole
 │   │   │   └── shared/              #   Badge, Button, Field, Pagination, SearchInput, AttachmentPicker
 │   │   ├── contexts/                # AuthContext (session-backed identity)
 │   │   ├── hooks/                   # useAuth hook
-│   │   ├── lib/                     # apiClient (cookies + CSRF, global fetch wrapper)
-│   │   ├── pages/                   # Login, ChangePassword, MyTickets, CreateTicket,
-│   │   │                            #   TicketDetail, StaffQueue*, AdminUsers* (*stubs)
+│   │   ├── lib/                     # apiClient (cookies + CSRF, global fetch wrapper)│   │   ├── pages/                   #   Login, ChangePassword, MyTickets, CreateTicket,
+│   │   │                            #   TicketDetail, StaffQueue, StaffTicketDetail,
+│   │   │                            #   AdminUsers* (*stub until the admin branch)
 │   │   └── styles/                  # theme.scss (Zen Green)
 │   ├── tests/
 │   │   ├── lab-01/                  # 4 tests
 │   │   ├── lab-02/                  # 184 tests (incl. Ticket Detail comments/resolve UI)
-│   │   └── lab-03/                  # 36 tests (Login, ChangePassword, apiClient, AppShell)
+│   │   └── lab-03/                  # 78 tests (Login, ChangePassword, apiClient, AppShell,
+│   │                                #   StaffTicketQueue, StaffTicketDetail)
 │   └── package.json
 ├── server/                          # Express + TypeScript backend
 │   ├── prisma/
-│   │   ├── schema.prisma            # 6 models, 4 enums (DevRequester dropped in Lab 3)
-│   │   ├── seed.ts                  # seed users (roles), tickets, comments, categories, systems
-│   │   └── migrations/              # 5 migrations (incl. Lab 3 auth + requester regression)
+│   │   ├── schema.prisma            # 7 models, 4 enums (DevRequester dropped in Lab 3)
+│   │   ├── seed.ts                  # seed users (roles), tickets, comments, notes, categories, systems
+│   │   └── migrations/              # 6 migrations (incl. Lab 3 auth, requester regression,
+│   │                                #   IT staff ticketing / InternalNote)
 │   ├── src/
-│   │   ├── lib/                     # ownership.ts (BR-41 access control), password.ts
+│   │   ├── lib/                     # ownership.ts (BR-41 access control), password.ts,
+│   │   │                            #   content.ts (shared comment/note validation),
+│   │   │                            #   statusTransitions.ts (ui-spec §6.1 matrix)
 │   │   ├── middleware/              # auth.ts (session/CSRF/role guard), requester-context.ts, upload.ts
-│   │   ├── routes/                  # auth.ts (login/logout/me/change-password)
+│   │   ├── routes/                  # auth.ts (login/logout/me/change-password),
+│   │   │                            #   staff-tickets.ts (queue, detail, claim/assign,
+│   │   │                            #   priority, status, comments, notes)
 │   │   ├── services/               # ticket-number.ts, attachmentStorage.ts
-│   │   ├── app.ts                   # Express routes (10+ endpoints)
+│   │   ├── app.ts                   # Express routes (Requester + IT Staff endpoints)
 │   │   ├── index.ts                 # Server entry point
 │   │   └── prisma.ts               # Prisma client singleton
 │   ├── tests/
 │   │   ├── helpers/                 # session.ts (cookie-jar login + CSRF for tests)
 │   │   ├── lab-01/                  # 8 tests
-│   │   ├── lab-02/                  # 150 tests (regression suite, now session-authenticated)
-│   │   └── lab-03/                  # 98 tests (auth, authorization, comments, resolve-mark, migration)
+│   │   ├── lab-02/                  # 151 tests (regression suite, now session-authenticated)
+│   │   └── lab-03/                  # 251 tests (auth, authorization, staff queue, ticket
+│   │                                #   detail + status matrix, comments/notes, migration)
 │   └── package.json
 ├── docs/
 │   ├── lab-01/                      # ai_use.md, reviewer.md, tests.md
@@ -62,7 +71,9 @@ toktickit/
 │   ├── lab-02/requester-ticket-flow.spec.ts
 │   └── lab-03/
 │       ├── authentication.spec.ts     # Playwright: login, forced password change, role nav
-│       └── staff-ticket-flow.spec.ts  # Playwright: Requester comment + appears-resolved flow
+│       ├── staff-ticket-flow.spec.ts  # Playwright: Requester flow + IT Staff flow
+│       └── responsive.spec.ts         # Playwright: staff screens at 375/768/1280
+│                                      #   (+ screenshots into artifacts/lab-03/)
 ├── evidence/                        # Test/audit output kept for submission
 ├── playwright.config.ts             # Repo-root E2E config (starts API + Vite)
 ├── playwright.global-setup.ts       # Re-seeds the DB before an E2E run

@@ -1,0 +1,59 @@
+Lab 3 — feature/lab3-04-staff-ticketing
+End-to-end + responsive suite (Chromium, real API + Vite dev server, DB re-seeded
+by globalSetup)
+
+Command (repo root):
+  npx playwright test
+
+Output:
+Running 15 tests using 1 worker
+  ✓   1 [chromium] › e2e/lab-03/authentication.spec.ts:54:3 › E2E-01 — full login flow › shows the busy state, then lands the Administrator in the app (1.3s)
+  ✓   2 [chromium] › e2e/lab-03/authentication.spec.ts:68:3 › E2E-01 — full login flow › shows one generic banner for invalid credentials (338ms)
+  ✓   3 [chromium] › e2e/lab-03/authentication.spec.ts:81:3 › E2E-02 — mandatory first-login password change › forces the Change Password screen before the app is reachable (599ms)
+  ✓   4 [chromium] › e2e/lab-03/authentication.spec.ts:114:3 › E2E-03 — role-based navigation › Administrator only sees User Management (292ms)
+  ✓   5 [chromium] › e2e/lab-03/authentication.spec.ts:125:3 › E2E-03 — role-based navigation › IT Staff only sees Ticket Queue and cannot open Requester routes (520ms)
+  ✓   6 [chromium] › e2e/lab-03/authentication.spec.ts:139:3 › E2E-03 — role-based navigation › Requester only sees Requester navigation and cannot open the Admin route (491ms)
+  ✓   7 [chromium] › e2e/lab-03/authentication.spec.ts:154:3 › E2E-03 — role-based navigation › no Development Requester selector remains in the shell (MIG-02) (309ms)
+  ✓   8 [chromium] › e2e/lab-03/responsive.spec.ts:104:5 › RESP-01 — IT Staff Ticket Queue responsiveness › renders the Queue without overflow at 375px (889ms)
+  ✓   9 [chromium] › e2e/lab-03/responsive.spec.ts:104:5 › RESP-01 — IT Staff Ticket Queue responsiveness › renders the Queue without overflow at 768px (968ms)
+  ✓  10 [chromium] › e2e/lab-03/responsive.spec.ts:104:5 › RESP-01 — IT Staff Ticket Queue responsiveness › renders the Queue without overflow at 1280px (969ms)
+  ✓  11 [chromium] › e2e/lab-03/responsive.spec.ts:145:5 › RESP-02 — IT Staff Ticket Detail responsiveness › renders Ticket Detail without overflow at 375px (981ms)
+  ✓  12 [chromium] › e2e/lab-03/responsive.spec.ts:145:5 › RESP-02 — IT Staff Ticket Detail responsiveness › renders Ticket Detail without overflow at 768px (986ms)
+  ✓  13 [chromium] › e2e/lab-03/responsive.spec.ts:145:5 › RESP-02 — IT Staff Ticket Detail responsiveness › renders Ticket Detail without overflow at 1280px (1.0s)
+  ✓  14 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:80:3 › E2E-04 — Requester regression + new features › login → view ticket → post public comment → mark appears-resolved → logout (2.2s)
+  ✓  15 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:187:3 › E2E-05 — IT Staff queue, claim, priority, status, comments, notes › login → queue → claim → IT priority → status → comment → internal note (1.9s)
+  15 passed (16.5s)
+
+E2E-05 assertions (IT Staff portion, new this branch):
+  - login as a seeded IT Staff member (alice.chen) and settle on /staff/queue
+  - search the Queue for the unassigned seeded ticket TKT-2026-000009 and open it
+    via the row's "Open" action (route: /staff/tickets/:id — internal id, not the
+    ticket number)
+  - Claim the ticket: owner becomes "Alice Chen" with a success micro-state
+  - change IT Priority to HIGH and confirm the inline success message
+  - change Status NEW -> OPEN (permitted, applies with no dialog) and confirm the
+    Status badge updates
+  - post a Public Comment: counter reaches 2000-limit-aware length, success
+    banner shows, the comment is appended, and the draft clears
+  - add an Internal Note in the visually distinct panel (lock icon + IT-only
+    heading), with its own counter and success state
+  - prove the note does NOT appear as a Public Comment
+  - selecting CANCELLED opens the confirmation dialog; Cancel closes it and
+    changes nothing
+  - log out; a Requester-less deep link to /staff/queue bounces to /login
+
+RESP-01 / RESP-02 assertions:
+  - no horizontal overflow at 375 / 768 / 1280 (scrollWidth <= clientWidth + 1)
+  - < 992px: the table is out of layout and the stacked cards are visible
+  - >= 992px: the table is visible and the card list is out of layout
+  - on Ticket Detail: the Internal Notes panel's computed background colour
+    differs from the Public Comments panel's at every width, and the lock icon
+    plus the "Internal Notes (IT Staff & Administrator only)" heading stay visible
+
+Screenshots written by the run (RESP-01, RESP-02):
+  artifacts/lab-03/screenshots/staff-queue/queue-375.png
+  artifacts/lab-03/screenshots/staff-queue/queue-768.png
+  artifacts/lab-03/screenshots/staff-queue/queue-1280.png
+  artifacts/lab-03/screenshots/staff-ticket-detail/staff-ticket-detail-375.png
+  artifacts/lab-03/screenshots/staff-ticket-detail/staff-ticket-detail-768.png
+  artifacts/lab-03/screenshots/staff-ticket-detail/staff-ticket-detail-1280.png

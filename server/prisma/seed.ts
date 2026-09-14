@@ -20,10 +20,7 @@ import {
  * §7.3 required volume: 4 active + 1 inactive Requester, 3 active + 1
  * inactive IT Staff, 1 active Administrator, Tickets distributed across
  * statuses/priorities/owners (including unassigned ones), and sample Public
- * Comments with no sensitive data.
- *
- * Internal Notes are NOT seeded here: that model belongs to the later
- * feature/lab3-staff-ticketing branch.
+ * Comments and Internal Notes with no sensitive data.
  */
 
 // ─── Seeded accounts ─────────────────────────────────────────────────────
@@ -260,6 +257,43 @@ const SEED_PUBLIC_COMMENTS: SeedComment[] = [
   },
 ];
 
+// ─── Seed internal notes ─────────────────────────────────────────────────
+// IT-Staff/Administrator-only content (BR-04). Same deterministic-id pattern as
+// the public comments so re-running the seed is idempotent. Authors are always
+// IT Staff or Administrator: a note authored by a Requester is not a state the
+// API can produce.
+
+const SEED_INTERNAL_NOTES: SeedComment[] = [
+  {
+    id: "seed-in-000006-1",
+    ticketNumber: "TKT-2026-000006",
+    authorEmail: "alice.chen@toktickit.example.com",
+    content: "Battery wear confirmed at 61%. Replacement part ordered under PO-4471 — internal only.",
+    createdAt: new Date("2026-09-01T09:30:00.000Z"),
+  },
+  {
+    id: "seed-in-000007-1",
+    ticketNumber: "TKT-2026-000007",
+    authorEmail: "alice.chen@toktickit.example.com",
+    content: "Third-floor AP-12 is dropping associations; escalate to Network if it recurs after the firmware push.",
+    createdAt: new Date("2026-09-02T08:40:00.000Z"),
+  },
+  {
+    id: "seed-in-000008-1",
+    ticketNumber: "TKT-2026-000008",
+    authorEmail: "ben.carter@toktickit.example.com",
+    content: "Waiting on the requester to try the cached-CSV workaround before we patch the export job.",
+    createdAt: new Date("2026-09-03T14:00:00.000Z"),
+  },
+  {
+    id: "seed-in-000015-1",
+    ticketNumber: "TKT-2026-000015",
+    authorEmail: "priya.nair@toktickit.example.com",
+    content: "Suspect a firmware/C-state incompatibility on the DVT batch — RMA approval pending.",
+    createdAt: new Date("2026-09-04T10:15:00.000Z"),
+  },
+];
+
 // ─── Seed ────────────────────────────────────────────────────────────────
 
 export async function seed(): Promise<void> {
@@ -390,6 +424,28 @@ export async function seed(): Promise<void> {
         authorId,
         content: comment.content,
         createdAt: comment.createdAt,
+      },
+    });
+  }
+
+  // ─── Internal Notes ───────────────────────────────────────
+  for (const note of SEED_INTERNAL_NOTES) {
+    const ticketId = ticketIdByNumber.get(note.ticketNumber);
+    const authorId = userIdByEmail.get(note.authorEmail);
+
+    if (ticketId === undefined || !authorId) {
+      throw new Error(`Seed misconfiguration for ${note.id}: missing ticket or author.`);
+    }
+
+    await prisma.internalNote.upsert({
+      where: { id: note.id },
+      update: { ticketId, authorId, content: note.content, createdAt: note.createdAt },
+      create: {
+        id: note.id,
+        ticketId,
+        authorId,
+        content: note.content,
+        createdAt: note.createdAt,
       },
     });
   }

@@ -75,19 +75,29 @@ export async function createTestUser(
  */
 export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return;
+
+  // A fixture user can be the requester of a ticket, the owner of one (staff
+  // fixtures claim/assign), or both — collect both directions so no fixture
+  // ticket is left behind holding a FK to a user we are about to delete.
   const tickets = await prisma.ticket.findMany({
-    where: { requesterId: { in: userIds } },
+    where: { OR: [{ requesterId: { in: userIds } }, { ownerId: { in: userIds } }] },
     select: { id: true },
   });
   const ticketIds = tickets.map((t) => t.id);
 
   if (ticketIds.length > 0) {
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: ticketIds } } });
+    await prisma.internalNote.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.ticket.deleteMany({ where: { id: { in: ticketIds } } });
   }
-  // Comments authored by the user on someone else's ticket (staff fixtures).
+
+  // Content authored by the user on someone else's ticket (staff fixtures on a
+  // seeded ticket, for example). Internal Notes are IT-Staff-authored, so they
+  // must be cleared by author as well as by ticket.
   await prisma.publicComment.deleteMany({ where: { authorId: { in: userIds } } });
+  await prisma.internalNote.deleteMany({ where: { authorId: { in: userIds } } });
+  await prisma.attachment.deleteMany({ where: { uploadedByRequesterId: { in: userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 }
 

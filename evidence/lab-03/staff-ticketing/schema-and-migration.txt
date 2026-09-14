@@ -1,0 +1,66 @@
+Lab 3 — feature/lab3-04-staff-ticketing
+Schema change: InternalNote model + migration
+(FR-22, BR-04, BR-16/17/18, specification.md §7.1)
+
+Prisma model added (server/prisma/schema.prisma):
+
+  model InternalNote {
+    id        String   @id @default(cuid())
+    ticketId  Int
+    ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+    authorId  String
+    author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+    content   String   @db.Text
+    createdAt DateTime @default(now())
+
+    @@index([ticketId, createdAt])
+  }
+
+  User.internalNotes  InternalNote[]
+  Ticket.internalNotes InternalNote[]
+
+Why a separate table rather than a discriminator column on PublicComment:
+  BR-04 requires Internal Notes to be invisible to Requesters. With a separate
+  table, no Requester-facing query can include one by accident (they would have
+  to join InternalNote explicitly), which makes SEC-06a/SEC-06b provable at the
+  schema level as well as at the response level.
+
+Migration: server/prisma/migrations/20260914010000_lab3_staff_ticketing/migration.sql
+
+  CREATE TABLE "InternalNote" (...);
+  CREATE INDEX "InternalNote_ticketId_createdAt_idx" ON "InternalNote"("ticketId","createdAt");
+  ALTER TABLE "InternalNote" ADD CONSTRAINT "InternalNote_ticketId_fkey"
+      FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  ALTER TABLE "InternalNote" ADD CONSTRAINT "InternalNote_authorId_fkey"
+      FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+Data-risk review (no destructive statement in the file):
+  * Only CREATE TABLE / CREATE INDEX are emitted for a table that no prior branch
+    created — nothing to migrate or backfill.
+  * The two ADD CONSTRAINT statements add foreign keys FROM the new (empty)
+    table TO Ticket/User. They do not alter, rewrite, or re-validate any existing
+    Ticket / Attachment / User / PublicComment row, and an empty table cannot
+    violate them.
+  * No ALTER ... DROP, no column type change, no NOT NULL added to an existing
+    column. Existing rows keep every value they had before this migration.
+
+Applied:
+
+  $ cd server && npx prisma migrate dev
+  Applying migration `20260914010000_lab3_staff_ticketing`
+  Your database is now in sync with your schema.
+
+  $ npx prisma migrate status
+  6 migrations found in prisma/migrations
+  Database schema is up to date!
+
+Harness updates required by the new RESTRICT foreign key (not product behaviour):
+  * server/tests/helpers/session.ts — cleanupTestUsers now clears InternalNote by
+    ticket and by author, and collects fixture tickets by requesterId OR ownerId,
+    so fixture teardown cannot fail on the new constraint.
+  * server/tests/lab-02/seed.idempotency.test.ts — its raw DELETE teardown now
+    clears InternalNote before Ticket and compares internalNote counts between
+    the two seed runs.
+  * server/prisma/seed.ts — seeds four documented Internal Notes with
+    deterministic ids (idempotent upserts), satisfying specification.md §7.3
+    ("Sample Public Comments and Internal Notes with no sensitive data").

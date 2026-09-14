@@ -10,6 +10,7 @@ import MyTicketsPage from "./pages/MyTicketsPage.js";
 import CreateTicketPage from "./pages/CreateTicketPage.js";
 import TicketDetailPage from "./pages/TicketDetailPage.js";
 import StaffQueuePage from "./pages/StaffQueuePage.js";
+import StaffTicketDetailPage from "./pages/StaffTicketDetailPage.js";
 import AdminUsersPage from "./pages/AdminUsersPage.js";
 
 /**
@@ -23,8 +24,9 @@ import AdminUsersPage from "./pages/AdminUsersPage.js";
  *   /login                  public
  *   /change-password        authenticated (forced while mustChangePassword)
  *   /tickets, /tickets/new, /tickets/:ticketNumber   Requester
- *   /staff/queue            IT Staff, Administrator   (stub page in this branch)
- *   /admin/users            Administrator             (stub page in this branch)
+ *   /staff/queue            IT Staff, Administrator   Ticket Queue (§5)
+ *   /staff/tickets/:id      IT Staff, Administrator   Ticket Detail (§6)
+ *   /admin/users            Administrator             (stub until the admin branch)
  *   /*                      role-aware home redirect
  *
  * The Lab 2 Development Requester selector (/select-requester) is gone (FR-11).
@@ -88,12 +90,21 @@ export default function App() {
               }
             />
 
-            {/* Stubbed in this branch; implemented in later Lab 3 branches */}
+            {/* IT Staff ticketing (feature/lab3-04-staff-ticketing) */}
             <Route
               path="/staff/queue"
               element={
                 <RequireRole roles={["IT_STAFF", "ADMINISTRATOR"]}>
                   <StaffQueuePage />
+                </RequireRole>
+              }
+            />
+            {/* Queue rows navigate by the internal numeric Ticket id (§3). */}
+            <Route
+              path="/staff/tickets/:id"
+              element={
+                <RequireRole roles={["IT_STAFF", "ADMINISTRATOR"]}>
+                  <StaffTicketDetailPage />
                 </RequireRole>
               }
             />

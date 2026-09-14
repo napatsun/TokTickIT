@@ -1,6 +1,7 @@
 /* ============================================================
-   PublicCommentsPanel — ui-spec.md §4
-   Reuses existing Zen Green tokens only (no new colors/spacing).
+   ContentThread — shared by Public Comments (§4/§6.5) and
+   Internal Notes (§6.6).
+   Reuses existing Zen Green tokens only (no new palette values).
    ============================================================ */
 
 .section {
@@ -13,11 +14,31 @@
   gap: var(--space-3);
 }
 
+/* ─── Internal Notes variant (§6.6) ─────────────────────────────────────
+   Different background tint + amber border so private IT-only content can
+   never be mistaken for a Public Comment (FR-23, BR-04). The lock icon and the
+   explicit "(IT Staff & Administrator only)" header carry the same meaning as
+   the colour, so colour is never the sole indicator (§9 accessibility). */
+.internalSection {
+  background-color: var(--color-warning-bg);
+  border: 2px solid var(--color-warning);
+}
+
 .heading {
   font-size: var(--font-size-h2);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lockIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-warning);
 }
 
 .hint {
@@ -46,6 +67,10 @@
   border-radius: var(--field-border-radius);
   padding: var(--space-3);
   background-color: var(--color-bg-page);
+}
+
+.internalSection .comment {
+  background-color: var(--color-surface);
 }
 
 .commentMeta {
@@ -95,6 +120,10 @@
   gap: var(--space-2);
   border-top: 1px solid var(--color-field-editable-border);
   padding-top: var(--space-4);
+}
+
+.internalSection .form {
+  border-top-color: var(--color-warning);
 }
 
 .label {

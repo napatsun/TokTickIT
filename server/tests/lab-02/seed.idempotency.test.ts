@@ -11,11 +11,17 @@ const prisma = getPrisma();
  *
  * Lab 3: the retired `DevRequester` table is gone (BR-03); Public Comments are
  * seeded with deterministic ids so they count the same on every run.
+ *
+ * feature/lab3-04-staff-ticketing: "InternalNote" was added with an
+ * ON DELETE RESTRICT foreign key to "Ticket", so this teardown must clear it
+ * before "Ticket" (same as "PublicComment") — otherwise the raw DELETE is
+ * rejected and the suite fails for a harness reason, not a product one.
  */
 describe("Seed idempotency", () => {
   beforeAll(async () => {
     // Clear reference tables so the first seed() creates from scratch
     await prisma.$executeRawUnsafe('DELETE FROM "PublicComment"');
+    await prisma.$executeRawUnsafe('DELETE FROM "InternalNote"');
     await prisma.$executeRawUnsafe('DELETE FROM "Attachment"');
     await prisma.$executeRawUnsafe('DELETE FROM "Ticket"');
     await prisma.$executeRawUnsafe('DELETE FROM "RelatedSystem"');
@@ -36,6 +42,7 @@ describe("Seed idempotency", () => {
       users: await prisma.user.count(),
       tickets: await prisma.ticket.count(),
       publicComments: await prisma.publicComment.count(),
+      internalNotes: await prisma.internalNote.count(),
     };
 
     // --- Second seed run ---
@@ -47,6 +54,7 @@ describe("Seed idempotency", () => {
       users: await prisma.user.count(),
       tickets: await prisma.ticket.count(),
       publicComments: await prisma.publicComment.count(),
+      internalNotes: await prisma.internalNote.count(),
     };
 
     // Every table must have the same count after both runs

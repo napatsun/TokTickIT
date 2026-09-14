@@ -15,27 +15,35 @@ import {
 const prisma = getPrisma();
 
 /**
- * Public Comments — tests.md §3, api-spec.md §2
+ * Public Comments & Internal Notes — tests.md §3 and §5, api-spec.md §2/§3
  *
- *   API-11  valid / empty / whitespace-only / > 2000 characters
- *
- * Public Comments are the Requester-facing half of this file. The staff-authored
- * Public Comment + Internal Note tests (API-27) belong to
- * feature/lab3-staff-ticketing and are intentionally absent here.
+ *   API-11  Requester Public Comment: valid / empty / whitespace-only / too long
+ *   API-27  IT Staff Public Comment + Internal Note: valid / empty / too long
+ *           (added in feature/lab3-04-staff-ticketing — section appended below,
+ *           the API-11 blocks above are untouched)
  *
  * Business rules:
- *   BR-03  identity is the session Requester (body `authorId` is ignored)
- *   BR-04  Public Comments are visible to the Requester who owns the ticket
- *   BR-13  cross-owner ticket → 404 (no existence leak)
+ *   BR-03  identity is the session user (body `authorId` is ignored)
+ *   BR-04  Public Comments visible to Requester/IT Staff/Administrator;
+ *          Internal Notes visible ONLY to IT Staff/Administrator
+ *   BR-13  cross-owner ticket → 404 for the Requester-facing routes
  *   BR-16  append-only — no edit/delete endpoint exists
  *   BR-17  empty / whitespace-only content → 422
  *   BR-18  content limit is 2,000 characters
+ *
+ * API-27 also proves the staff endpoints REUSE the Requester validation path:
+ * the staff comment/note error codes and messages for the same invalid input
+ * must match the Requester comment endpoint exactly (lib/content.ts).
  */
 
 let requesterA: TestUser;
 let requesterB: TestUser;
+let staffUser: TestUser;
+let adminUser: TestUser;
 let clientA: SessionClient;
 let clientB: SessionClient;
+let staffClient: SessionClient;
+let adminClient: SessionClient;
 let ticketA: { id: number; ticketNumber: string };
 let ticketB: { id: number; ticketNumber: string };
 
@@ -83,10 +91,21 @@ beforeAll(async () => {
     },
     select: { id: true, ticketNumber: true },
   });
+
+  // IT Staff/Administrator fixtures for API-27.
+  staffUser = await createTestUser({ name: "Comments Staff", role: "IT_STAFF" });
+  adminUser = await createTestUser({ name: "Comments Admin", role: "ADMINISTRATOR" });
+  staffClient = await loginAs(app, staffUser.email);
+  adminClient = await loginAs(app, adminUser.email);
 });
 
 afterAll(async () => {
-  await cleanupTestUsers([requesterA.id, requesterB.id]);
+  await cleanupTestUsers([
+    requesterA.id,
+    requesterB.id,
+    staffUser.id,
+    adminUser.id,
+  ]);
   await prisma.$disconnect();
 });
 
@@ -299,5 +318,288 @@ describe("GET /api/tickets/:ticketNumber/comments", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.items).toEqual([]);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// API-27 — IT Staff Public Comments + Internal Notes
+//           (feature/lab3-04-staff-ticketing)
+// ══════════════════════════════════════════════════════════════════════════
+
+// Route convention: staff endpoints take the internal Ticket `id`, the
+// Requester endpoints take `:ticketNumber` (api-spec.md §3).
+
+function postStaffComment(client: SessionClient, ticketId: number, body: unknown) {
+  return csrf(client, client.agent.post(`/api/staff/tickets/${ticketId}/comments`)).send(
+    body as object,
+  );
+}
+
+function getStaffComments(client: SessionClient, ticketId: number) {
+  return client.agent.get(`/api/staff/tickets/${ticketId}/comments`);
+}
+
+function postNote(client: SessionClient, ticketId: number, body: unknown) {
+  return csrf(client, client.agent.post(`/api/staff/tickets/${ticketId}/notes`)).send(
+    body as object,
+  );
+}
+
+function getNotes(client: SessionClient, ticketId: number) {
+  return client.agent.get(`/api/staff/tickets/${ticketId}/notes`);
+}
+
+const INTERNAL_ONLY_MARKER = `INTERNAL-ONLY-${Date.now()}`;
+
+describe("API-27 — IT Staff Public Comments on any ticket (FR-22, BR-04)", () => {
+  it("posts a Public Comment on a ticket the staff member does not own", async () => {
+    const res = await postStaffComment(staffClient, ticketA.id, {
+      content: "We have reproduced this on a spare laptop.",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      ticketId: ticketA.id,
+      authorId: staffUser.id,
+      authorName: staffUser.name,
+      authorRole: "IT_STAFF",
+      content: "We have reproduced this on a spare laptop.",
+    });
+    expect(typeof res.body.id).toBe("string");
+    expect(new Date(res.body.createdAt).toISOString()).toBe(res.body.createdAt);
+  });
+
+  it("makes the staff comment visible to the Requester on the same ticket (BR-04)", async () => {
+    const requesterView = await clientA.agent.get(
+      `/api/tickets/${ticketA.ticketNumber}/comments`,
+    );
+
+    expect(requesterView.status).toBe(200);
+    expect(
+      requesterView.body.items.some(
+        (c: { content: string; authorRole: string }) =>
+          c.content === "We have reproduced this on a spare laptop." &&
+          c.authorRole === "IT_STAFF",
+      ),
+    ).toBe(true);
+  });
+
+  it("reads Public Comments on any ticket via the staff endpoint", async () => {
+    const res = await getStaffComments(staffClient, ticketB.id);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.items)).toBe(true);
+  });
+
+  it("lets a staff member comment on a ticket owned by a different Requester", async () => {
+    const res = await postStaffComment(adminClient, ticketB.id, {
+      content: "Administrator note on another Requester's ticket.",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.ticketId).toBe(ticketB.id);
+    expect(res.body.authorRole).toBe("ADMINISTRATOR");
+  });
+
+  it("ignores a client-supplied authorId (BR-03)", async () => {
+    const res = await postStaffComment(staffClient, ticketA.id, {
+      content: "Author spoof attempt from staff",
+      authorId: requesterA.id,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.authorId).toBe(staffUser.id);
+  });
+});
+
+describe("API-27 — staff Public Comment validation uses the shared rules (BR-17/18)", () => {
+  it("returns 422 CONTENT_REQUIRED for empty and whitespace-only content", async () => {
+    for (const content of ["", "   \n\t  "]) {
+      const res = await postStaffComment(staffClient, ticketA.id, { content });
+
+      expect(res.status, JSON.stringify(content)).toBe(422);
+      expect(res.body.error.code).toBe("CONTENT_REQUIRED");
+      expect(res.body.error.fieldErrors).toHaveProperty("content");
+    }
+  });
+
+  it("returns 422 CONTENT_REQUIRED for a missing content field", async () => {
+    const res = await postStaffComment(staffClient, ticketA.id, {});
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("CONTENT_REQUIRED");
+  });
+
+  it("accepts exactly 2,000 characters and rejects 2,001", async () => {
+    const ok = await postStaffComment(staffClient, ticketA.id, {
+      content: "S".repeat(2000),
+    });
+    expect(ok.status).toBe(201);
+    expect(ok.body.content).toHaveLength(2000);
+
+    const tooLong = await postStaffComment(staffClient, ticketA.id, {
+      content: "S".repeat(2001),
+    });
+    expect(tooLong.status).toBe(422);
+    expect(tooLong.body.error.code).toBe("CONTENT_TOO_LONG");
+  });
+
+  it("returns the SAME error code/message as the Requester endpoint for the same input", async () => {
+    // Proves the staff route reuses lib/content.ts rather than a copy.
+    const requesterSide = await csrf(
+      clientA,
+      clientA.agent.post(`/api/tickets/${ticketA.ticketNumber}/comments`),
+    ).send({ content: "   " });
+    const staffSide = await postStaffComment(staffClient, ticketA.id, { content: "   " });
+
+    expect(staffSide.status).toBe(requesterSide.status);
+    expect(staffSide.body.error.code).toBe(requesterSide.body.error.code);
+    expect(staffSide.body.error.message).toBe(requesterSide.body.error.message);
+
+    const requesterTooLong = await csrf(
+      clientA,
+      clientA.agent.post(`/api/tickets/${ticketA.ticketNumber}/comments`),
+    ).send({ content: "X".repeat(2001) });
+    const staffTooLong = await postStaffComment(staffClient, ticketA.id, {
+      content: "X".repeat(2001),
+    });
+
+    expect(staffTooLong.body.error.code).toBe(requesterTooLong.body.error.code);
+    expect(staffTooLong.body.error.message).toBe(requesterTooLong.body.error.message);
+  });
+
+  it("trims surrounding whitespace before storing", async () => {
+    const res = await postStaffComment(staffClient, ticketA.id, {
+      content: "   trimmed staff comment   ",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content).toBe("trimmed staff comment");
+  });
+
+  it("returns 404 for a non-existent ticket id", async () => {
+    const post = await postStaffComment(staffClient, 9_999_999, { content: "hi" });
+    const get = await getStaffComments(staffClient, 9_999_999);
+
+    expect(post.status).toBe(404);
+    expect(post.body.error.code).toBe("TICKET_NOT_FOUND");
+    expect(get.status).toBe(404);
+  });
+});
+
+describe("API-27 — Internal Notes (FR-22, BR-16/17/18, BR-04)", () => {
+  it("creates a note with the documented shape", async () => {
+    const res = await postNote(staffClient, ticketA.id, {
+      content: `${INTERNAL_ONLY_MARKER}: escalation contact is the vendor TAM.`,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      ticketId: ticketA.id,
+      authorId: staffUser.id,
+      authorName: staffUser.name,
+      authorRole: "IT_STAFF",
+    });
+    expect(typeof res.body.id).toBe("string");
+    expect(typeof res.body.createdAt).toBe("string");
+  });
+
+  it("lists notes oldest-first and appends new ones", async () => {
+    const second = await postNote(adminClient, ticketA.id, {
+      content: "Administrator follow-up on the same ticket.",
+    });
+    expect(second.status).toBe(201);
+
+    const res = await getNotes(staffClient, ticketA.id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items.length).toBeGreaterThanOrEqual(2);
+
+    const timestamps = res.body.items.map((n: { createdAt: string }) =>
+      new Date(n.createdAt).getTime(),
+    );
+    for (let i = 1; i < timestamps.length; i++) {
+      expect(timestamps[i - 1]).toBeLessThanOrEqual(timestamps[i]);
+    }
+    expect(res.body.items.at(-1).content).toBe(
+      "Administrator follow-up on the same ticket.",
+    );
+  });
+
+  it("ignores a client-supplied authorId on notes too (BR-03)", async () => {
+    const res = await postNote(staffClient, ticketA.id, {
+      content: "Note author spoof attempt",
+      authorId: requesterA.id,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.authorId).toBe(staffUser.id);
+  });
+
+  it("applies the shared empty/too-long validation to notes", async () => {
+    const empty = await postNote(staffClient, ticketA.id, { content: "   " });
+    expect(empty.status).toBe(422);
+    expect(empty.body.error.code).toBe("CONTENT_REQUIRED");
+    expect(empty.body.error.message).toBe("Note cannot be empty.");
+
+    const tooLong = await postNote(staffClient, ticketA.id, { content: "N".repeat(2001) });
+    expect(tooLong.status).toBe(422);
+    expect(tooLong.body.error.code).toBe("CONTENT_TOO_LONG");
+
+    const boundary = await postNote(staffClient, ticketA.id, { content: "N".repeat(2000) });
+    expect(boundary.status).toBe(201);
+  });
+
+  it("returns 404 for a non-existent ticket id", async () => {
+    const post = await postNote(staffClient, 9_999_999, { content: "hi" });
+    const get = await getNotes(staffClient, 9_999_999);
+
+    expect(post.status).toBe(404);
+    expect(get.status).toBe(404);
+  });
+
+  it("returns 401 without a session", async () => {
+    const res = await request(app).get(`/api/staff/tickets/${ticketA.id}/notes`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("NEVER exposes note content through the Requester comments list (BR-04)", async () => {
+    const res = await clientA.agent.get(`/api/tickets/${ticketA.ticketNumber}/comments`);
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain(INTERNAL_ONLY_MARKER);
+    // Neither the marker content nor an internal-notes key may appear.
+    expect(JSON.stringify(res.body)).not.toMatch(/internalNote/i);
+  });
+
+  it("returns an empty list (not an error) for a ticket with no notes", async () => {
+    const res = await getNotes(staffClient, ticketB.id);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.items)).toBe(true);
+  });
+});
+
+describe("API-27 — note endpoints are append-only (BR-16)", () => {
+  it("exposes no edit or delete endpoint for notes", async () => {
+    const list = await getNotes(staffClient, ticketA.id);
+    const noteId = list.body.items[0].id;
+
+    const patch = await csrf(
+      staffClient,
+      staffClient.agent.patch(`/api/staff/tickets/${ticketA.id}/notes/${noteId}`),
+    ).send({ content: "edited" });
+    const del = await csrf(
+      staffClient,
+      staffClient.agent.delete(`/api/staff/tickets/${ticketA.id}/notes/${noteId}`),
+    );
+
+    expect(patch.status).toBe(404);
+    expect(del.status).toBe(404);
+
+    const stillThere = await prisma.internalNote.findUnique({ where: { id: noteId } });
+    expect(stillThere).not.toBeNull();
   });
 });
