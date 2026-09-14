@@ -57,8 +57,6 @@ model Category {
 }
 
 // ─── Lab 3: real identity ────────────────────────────────
-// `internalNotes` is intentionally absent: InternalNote belongs to the later
-// feature/lab3-staff-ticketing branch, not to Requester regression.
 
 model User {
   id                 String   @id @default(cuid())
@@ -74,6 +72,7 @@ model User {
   ticketsCreated      Ticket[]        @relation("RequesterTickets")
   ticketsOwned        Ticket[]        @relation("OwnerTickets")
   publicComments      PublicComment[]
+  internalNotes       InternalNote[]
   uploadedAttachments Attachment[]    @relation("UploadedBy")
   removedAttachments  Attachment[]    @relation("RemovedBy")
 }
@@ -114,6 +113,7 @@ model Ticket {
   relatedSystem  RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
   attachments    Attachment[]
   publicComments PublicComment[]
+  internalNotes  InternalNote[]
 
   @@index([requesterId])
   @@index([requesterId, createdAt])
@@ -125,6 +125,23 @@ model Ticket {
 // Lab 3 (FR-14, BR-16/17/18): a Public Comment on a Ticket, append-only.
 // Visible to the Requester, IT Staff, and Administrator (BR-04).
 model PublicComment {
+  id        String   @id @default(cuid())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+// Lab 3 (FR-22, BR-04, BR-16/17/18): an Internal Note on a Ticket, append-only
+// and visible ONLY to IT Staff and Administrator. Mirrors PublicComment's
+// shape deliberately so the two share one validation/rendering code path while
+// remaining separate models (BR-04 keeps private content out of every
+// Requester-facing query, which is only provable if the tables are distinct).
+model InternalNote {
   id        String   @id @default(cuid())
   ticketId  Int
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
