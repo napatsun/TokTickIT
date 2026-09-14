@@ -91,7 +91,12 @@ Unchanged Lab 2 contract, re-scoped to session identity in the same way as above
 
 Auth for all endpoints in this section: session required, `role ∈ {IT_STAFF, ADMINISTRATOR}`.
 
-**Route param convention:** Endpoints in this section use `:id` (the internal Ticket `id`, a cuid), not `:ticketNumber`. This is a deliberate difference from §2's Requester-facing routes, which use `:ticketNumber` to match the shipped Lab 2 convention. Do not mix the two — the Queue/Ticket Detail screens navigate using internal `id` values returned by `GET /api/staff/tickets`.
+**Route param convention:** Endpoints in this section use `:id` — the internal Ticket `id`. Ground-truth note: `Ticket.id` is an `Int` (autoincrement, inherited from Lab 2), **not** a cuid — unlike `User.id`, which is a cuid. Any non-positive-integer `:id` returns a generic 404. This is a deliberate difference from §2's Requester-facing routes, which use `:ticketNumber` to match the shipped Lab 2 convention. Do not mix the two — the Queue/Ticket Detail screens navigate using internal `id` values returned by `GET /api/staff/tickets`.
+
+### `GET /api/staff/owners`
+**Auth:** `role ∈ {IT_STAFF, ADMINISTRATOR}`.
+Read-only picker endpoint supplying the Reassign dropdown's candidate list, per ui-spec.md §6.2 ("a dropdown of active IT Staff/Administrator"). Added in feature/lab3-04-staff-ticketing since no other endpoint supplied this list at the time (`GET /api/admin/users` did not exist yet).
+**200:** `{ "items": [ { "id", "name", "email" } ] }` — only active `IT_STAFF`/`ADMINISTRATOR` users.
 
 ### `GET /api/staff/tickets` (Queue)
 **Query params:**
