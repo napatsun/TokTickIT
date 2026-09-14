@@ -8,15 +8,18 @@ const prisma = getPrisma();
  * SEED-01 — Seed idempotency
  * specification.md Section 5.3 (seed idempotency requirement):
  * Running the seed script twice in a row must not create duplicate rows.
+ *
+ * Lab 3: the retired `DevRequester` table is gone (BR-03); Public Comments are
+ * seeded with deterministic ids so they count the same on every run.
  */
 describe("Seed idempotency", () => {
   beforeAll(async () => {
     // Clear reference tables so the first seed() creates from scratch
-    await prisma.$executeRawUnsafe("DELETE FROM \"Attachment\"");
-    await prisma.$executeRawUnsafe("DELETE FROM \"Ticket\"");
-    await prisma.$executeRawUnsafe("DELETE FROM \"DevRequester\"");
-    await prisma.$executeRawUnsafe("DELETE FROM \"RelatedSystem\"");
-    await prisma.$executeRawUnsafe("DELETE FROM \"Category\"");
+    await prisma.$executeRawUnsafe('DELETE FROM "PublicComment"');
+    await prisma.$executeRawUnsafe('DELETE FROM "Attachment"');
+    await prisma.$executeRawUnsafe('DELETE FROM "Ticket"');
+    await prisma.$executeRawUnsafe('DELETE FROM "RelatedSystem"');
+    await prisma.$executeRawUnsafe('DELETE FROM "Category"');
   });
 
   afterAll(async () => {
@@ -30,7 +33,9 @@ describe("Seed idempotency", () => {
     const afterFirst = {
       categories: await prisma.category.count(),
       relatedSystems: await prisma.relatedSystem.count(),
-      devRequesters: await prisma.devRequester.count(),
+      users: await prisma.user.count(),
+      tickets: await prisma.ticket.count(),
+      publicComments: await prisma.publicComment.count(),
     };
 
     // --- Second seed run ---
@@ -39,12 +44,12 @@ describe("Seed idempotency", () => {
     const afterSecond = {
       categories: await prisma.category.count(),
       relatedSystems: await prisma.relatedSystem.count(),
-      devRequesters: await prisma.devRequester.count(),
+      users: await prisma.user.count(),
+      tickets: await prisma.ticket.count(),
+      publicComments: await prisma.publicComment.count(),
     };
 
     // Every table must have the same count after both runs
-    expect(afterSecond.categories).toBe(afterFirst.categories);
-    expect(afterSecond.relatedSystems).toBe(afterFirst.relatedSystems);
-    expect(afterSecond.devRequesters).toBe(afterFirst.devRequesters);
+    expect(afterSecond).toEqual(afterFirst);
   });
 });

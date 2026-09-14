@@ -57,30 +57,30 @@ All endpoints below require an authenticated session with `role = REQUESTER` and
 
 ### `GET /api/tickets`
 Returns only Tickets owned by the session Requester. Supports Lab 2's existing query params (unchanged contract) for list filtering the Requester already had.
-**200:** `{ "items": [ Ticket... ], "total": number }`
+**200:** `{ "tickets": [ Ticket... ], "pagination": { ... }, "filterOptions": { ... } }` *(Lab 2 response shape, retained as-is in Lab 3 — not the generic `{ items, total }` shape used by newer endpoints. A shape unification is a documented backlog item, not required for Lab 3.)*
 
 ### `POST /api/tickets`
 **Body:** Lab 2 fields (summary, description, categoryId, relatedSystemId, requestedPriority, attachments...). `requesterId` from body is ignored.
 **201:** created Ticket; `itPriority` is server-set equal to `requestedPriority`; `status = NEW`; `ownerId = null`.
 **422:** validation errors per Lab 2 rules.
 
-### `GET /api/tickets/:id`
-**200:** Ticket detail, only if `ticket.requesterId === session.userId`.
-**403/404:** if the ticket belongs to another Requester, respond `404 NOT_FOUND` (do not reveal existence — avoids leaking another user's data, per §6.2 handout requirement).
+### `GET /api/tickets/:ticketNumber`
+**200:** Ticket detail, only if `ticket.requesterId === session.userId`. Response is additive over Lab 2: also includes `requesterMarkedResolved` and `requesterMarkedResolvedAt` so the UI can render the marker without a second call.
+**403/404:** if the ticket belongs to another Requester, respond `404 NOT_FOUND` (do not reveal existence — avoids leaking another user's data, per §6.2 handout requirement). Cross-owner 404 body is byte-identical to a non-existent-ticket 404 body.
 
 ### Attachment endpoints
 Unchanged Lab 2 contract, re-scoped to session identity in the same way as above.
 
-### `POST /api/tickets/:id/comments` (Public Comment, Requester)
+### `POST /api/tickets/:ticketNumber/comments` (Public Comment, Requester)
 **Body:** `{ "content": "string" }`
 **201:** `{ "id", "ticketId", "authorId", "authorName", "authorRole", "content", "createdAt" }`
-**422:** `CONTENT_REQUIRED` if empty/whitespace-only, or `CONTENT_TOO_LONG` if > 2000 chars.
+**422:** `{ "error": { "code": "CONTENT_REQUIRED" } }` if empty/whitespace-only, or `{ "error": { "code": "CONTENT_TOO_LONG", "fieldErrors": { "content": "..." } } }` if > 2000 chars.
 **403/404:** if ticket not owned by session Requester → `404`.
 
-### `GET /api/tickets/:id/comments`
-**200:** `{ "items": [ PublicComment... ] }` — ordered newest-first (or oldest-first per UI decision; document choice: **oldest-first**, i.e., chronological reading order, with newest at the bottom, matching typical chat/thread UX).
+### `GET /api/tickets/:ticketNumber/comments`
+**200:** `{ "items": [ PublicComment... ] }` — ordered **oldest-first** (chronological reading order, newest at the bottom). This is the authoritative ordering; treat any other mention of ordering in this project as superseded by this line.
 
-### `POST /api/tickets/:id/resolve-mark` (Requester "Problem Appears Resolved")
+### `POST /api/tickets/:ticketNumber/resolve-mark` (Requester "Problem Appears Resolved")
 **Auth:** Requester, own ticket only, and only when `status ∈ {OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER}`.
 **200:** `{ "requesterMarkedResolved": true, "requesterMarkedResolvedAt": "ISO-8601" }`. Does **not** alter `status` (BR-05, BR-20).
 **409:** `INVALID_STATE` if ticket status is not eligible (e.g., already Closed) or already marked.
@@ -90,6 +90,8 @@ Unchanged Lab 2 contract, re-scoped to session identity in the same way as above
 ## 3. IT Staff Ticket Queue & Detail
 
 Auth for all endpoints in this section: session required, `role ∈ {IT_STAFF, ADMINISTRATOR}`.
+
+**Route param convention:** Endpoints in this section use `:id` (the internal Ticket `id`, a cuid), not `:ticketNumber`. This is a deliberate difference from §2's Requester-facing routes, which use `:ticketNumber` to match the shipped Lab 2 convention. Do not mix the two — the Queue/Ticket Detail screens navigate using internal `id` values returned by `GET /api/staff/tickets`.
 
 ### `GET /api/staff/tickets` (Queue)
 **Query params:**

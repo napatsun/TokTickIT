@@ -1,0 +1,33 @@
+Lab 3 — feature/lab3-03-requester-regression
+End-to-end suite (Chromium, real API + Vite dev server, DB re-seeded by globalSetup)
+
+Command (repo root):
+  npx playwright test
+
+Output:
+Running 8 tests using 1 worker
+  ✓ 1 [chromium] › e2e/lab-03/authentication.spec.ts:54:3 › E2E-01 — full login flow › shows the busy state, then lands the Administrator in the app (1.2s)
+  ✓ 2 [chromium] › e2e/lab-03/authentication.spec.ts:68:3 › E2E-01 — full login flow › shows one generic banner for invalid credentials (337ms)
+  ✓ 3 [chromium] › e2e/lab-03/authentication.spec.ts:81:3 › E2E-02 — mandatory first-login password change › forces the Change Password screen before the app is reachable (583ms)
+  ✓ 4 [chromium] › e2e/lab-03/authentication.spec.ts:114:3 › E2E-03 — role-based navigation › Administrator only sees User Management (292ms)
+  ✓ 5 [chromium] › e2e/lab-03/authentication.spec.ts:125:3 › E2E-03 — role-based navigation › IT Staff only sees Ticket Queue and cannot open Requester routes (463ms)
+  ✓ 6 [chromium] › e2e/lab-03/authentication.spec.ts:139:3 › E2E-03 — role-based navigation › Requester only sees Requester navigation and cannot open the Admin route (501ms)
+  ✓ 7 [chromium] › e2e/lab-03/authentication.spec.ts:154:3 › E2E-03 — role-based navigation › no Development Requester selector remains in the shell (MIG-02) (288ms)
+  ✓ 8 [chromium] › e2e/lab-03/staff-ticket-flow.spec.ts:79:3 › E2E-04 — Requester regression + new features › login → view ticket → post public comment → mark appears-resolved → logout (2.2s)
+  8 passed (8.6s)
+
+E2E-04 assertions (Requester portion, new this branch):
+  - login as a seeded migrated Requester (sarah.johnson) and settle on /tickets
+    (completes the mandatory first-login password change when the guard asks for it)
+  - open pre-Lab-3 ticket TKT-2026-000008 and confirm it still renders
+  - live counter 0/2000 → n/2000 while typing a Public Comment
+  - post the comment: success notice appears, the comment renders in the thread,
+    and the composer is cleared
+  - "Problem Appears Resolved": action visible → exact ui-spec §4 confirmation copy
+    → Continue → marker badge "You marked this as resolved on …" appears, action
+    disappears, and the formal Status badge still reads "Waiting for Requester" (BR-20)
+  - logout returns to /login and a protected deep link bounces back to /login
+
+Coexistence note: e2e/lab-03/staff-ticket-flow.spec.ts contains only the Requester
+test.describe block. The IT Staff portion is added in feature/lab3-staff-ticketing in
+its own test.describe block, so neither branch overwrites the other's tests.

@@ -10,7 +10,7 @@ import {
  * Idempotent seed — safe to run multiple times (MIG-03).
  *
  * Every write is an upsert on a natural unique key (Category.name,
- * RelatedSystem.name, User.email, DevRequester.email, Ticket.ticketNumber),
+ * RelatedSystem.name, User.email, Ticket.ticketNumber, PublicComment.id),
  * so re-running never duplicates rows.
  *
  * Re-running deliberately restores the documented local-dev credentials for
@@ -18,11 +18,12 @@ import {
  * back into a known state. Real deployments must never run this script.
  *
  * §7.3 required volume: 4 active + 1 inactive Requester, 3 active + 1
- * inactive IT Staff, 1 active Administrator, and Tickets distributed across
- * statuses/priorities/owners (including unassigned ones).
+ * inactive IT Staff, 1 active Administrator, Tickets distributed across
+ * statuses/priorities/owners (including unassigned ones), and sample Public
+ * Comments with no sensitive data.
  *
- * Public Comments / Internal Notes are NOT seeded here: those models belong to
- * later Lab 3 branches (staff ticketing), not this one.
+ * Internal Notes are NOT seeded here: that model belongs to the later
+ * feature/lab3-staff-ticketing branch.
  */
 
 // ─── Seeded accounts ─────────────────────────────────────────────────────
@@ -216,6 +217,49 @@ const SEED_TICKETS: SeedTicket[] = [
   },
 ];
 
+// ─── Seed public comments ────────────────────────────────────────────────
+// Deterministic ids keep the seed idempotent without deleting comments a
+// developer (or a test) added to the same ticket in the meantime.
+
+interface SeedComment {
+  id: string;
+  ticketNumber: string;
+  authorEmail: string;
+  content: string;
+  createdAt: Date;
+}
+
+const SEED_PUBLIC_COMMENTS: SeedComment[] = [
+  {
+    id: "seed-pc-000006-1",
+    ticketNumber: "TKT-2026-000006",
+    authorEmail: "jennifer.anderson@example.com",
+    content: "The battery diagnostic finished and shows 61% wear. Happy to bring the laptop in for a replacement.",
+    createdAt: new Date("2026-09-01T09:05:00.000Z"),
+  },
+  {
+    id: "seed-pc-000006-2",
+    ticketNumber: "TKT-2026-000006",
+    authorEmail: "alice.chen@toktickit.example.com",
+    content: "Thanks — a replacement battery is on order and should arrive this week.",
+    createdAt: new Date("2026-09-01T09:20:00.000Z"),
+  },
+  {
+    id: "seed-pc-000007-1",
+    ticketNumber: "TKT-2026-000007",
+    authorEmail: "jennifer.anderson@example.com",
+    content: "Wi-Fi is still failing on the third floor this morning.",
+    createdAt: new Date("2026-09-02T08:10:00.000Z"),
+  },
+  {
+    id: "seed-pc-000008-1",
+    ticketNumber: "TKT-2026-000008",
+    authorEmail: "sarah.johnson@example.com",
+    content: "The workaround works, but exports are still slow for large gradebooks.",
+    createdAt: new Date("2026-09-03T13:45:00.000Z"),
+  },
+];
+
 // ─── Seed ────────────────────────────────────────────────────────────────
 
 export async function seed(): Promise<void> {
@@ -250,19 +294,6 @@ export async function seed(): Promise<void> {
       where: { name },
       update: { isActive: true },
       create: { name, isActive: true },
-    });
-  }
-
-  // ─── Development Requesters (transitional Lab 2 lookup) ──
-  // Retained so the Lab 2 endpoints keep working through X-Dev-Requester-Id
-  // until a later branch re-scopes them onto the session. Names/emails match
-  // the seeded Requester User rows so the transitional middleware can resolve
-  // one to the other.
-  for (const requester of SEED_REQUESTERS) {
-    await prisma.devRequester.upsert({
-      where: { email: requester.email },
-      update: { fullName: requester.name, isActive: requester.isActive },
-      create: { fullName: requester.name, email: requester.email, isActive: requester.isActive },
     });
   }
 
@@ -331,6 +362,35 @@ export async function seed(): Promise<void> {
       where: { ticketNumber: ticket.ticketNumber },
       update: data,
       create: { ticketNumber: ticket.ticketNumber, ...data },
+    });
+  }
+
+  // ─── Public Comments ─────────────────────────────────────
+  const tickets = await prisma.ticket.findMany({
+    select: { id: true, ticketNumber: true },
+  });
+  const ticketIdByNumber = new Map(tickets.map((t) => [t.ticketNumber, t.id]));
+
+  for (const comment of SEED_PUBLIC_COMMENTS) {
+    const ticketId = ticketIdByNumber.get(comment.ticketNumber);
+    const authorId = userIdByEmail.get(comment.authorEmail);
+
+    if (ticketId === undefined || !authorId) {
+      throw new Error(
+        `Seed misconfiguration for ${comment.id}: missing ticket or author.`,
+      );
+    }
+
+    await prisma.publicComment.upsert({
+      where: { id: comment.id },
+      update: { ticketId, authorId, content: comment.content, createdAt: comment.createdAt },
+      create: {
+        id: comment.id,
+        ticketId,
+        authorId,
+        content: comment.content,
+        createdAt: comment.createdAt,
+      },
     });
   }
 

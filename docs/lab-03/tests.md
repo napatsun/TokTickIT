@@ -4,29 +4,27 @@ This plan is authored before/alongside implementation per course policy. "Final"
 
 Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI component test · `SEC` security/authorization test · `MIG` migration/regression test · `E2E` end-to-end test · `RESP` responsive/visual test.
 
-> **Scope of the current "Pass" values.** `Pass` means the test exists and was executed green on branch `feature/lab3-02-auth-and-authorization` (authentication, authorization middleware, application shell). Rows still marked `Pending` belong to the later Lab 3 branches (`feature/lab3-staff-ticketing`, `feature/lab3-admin-users`, requester public comments/internal notes) and are intentionally not implemented here; where a test file already exists for them, the cases are present as `describe.skip` placeholders so traceability is preserved.
-
 ---
 
 ## 1. Authentication
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-01 | API | AC-01 | Valid login (active user, correct credentials) | 200, session cookie set, safe user payload (no password hash) returned | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-02 | API | AC-05, BR-06 | Login with wrong password | 401, generic `INVALID_CREDENTIALS`, no field-level hint | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-03 | API | AC-05, BR-06 | Login with non-existent email | 401, same generic message as API-02 | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-04 | API | AC-06, BR-09 | Login attempt on inactive account with correct password | 401, generic "account unavailable" message, no distinction from wrong-password case at the response-shape level | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-05 | API | BR-01 | Login with missing email/password fields | 422 field-level validation errors | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-06 | API | FR-05, BR-08 | Logout invalidates session | 200 on logout; subsequent authenticated call with old cookie returns 401 | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-07 | API | FR-04, BR-11 | `GET /api/auth/me` for authenticated user | 200, returns id/name/email/role/mustChangePassword, never passwordHash | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-08 | API | AC-02, BR-02 | Any protected endpoint called while `mustChangePassword=true` | 403 `PASSWORD_CHANGE_REQUIRED` for all routes except `/auth/logout`, `/auth/me`, `/auth/change-password` | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-09 | API | FR-07 | Change password with weak new password / mismatched confirmation | 422 field-level errors, `mustChangePassword` remains true | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-10 | API | AC-14 | Change password with valid new password | 200, `mustChangePassword` becomes false, subsequent protected calls succeed | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| UNIT-01 | UNIT | BR-07 | Password hashing function | Produces salted hash, never equals plaintext, verify() matches correct password only | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| E2E-02 | E2E | AC-02 | Initial-password login then mandatory change, full browser flow | Login → redirected to Change Password → normal app inaccessible until saved → app opens after valid change | `e2e/lab-03/authentication.spec.ts` | Pass |
-| E2E-01 | E2E | AC-01, AC-05 | Full login flow: valid login, invalid login, busy state | Correct redirect, correct error banners, spinner shown during request | `e2e/lab-03/authentication.spec.ts` | Pass |
-| UI-01 | UI | Login screen §2 | Login form renders validation, busy, and failure states correctly | Component snapshot/interaction matches spec states | `client/tests/lab-03/Login.test.tsx` | Pass |
-| UI-02 | UI | Change Password screen §3 | Form validates length/match rules, shows inline hints | Correct inline validation messages | `client/tests/lab-03/ChangePassword.test.tsx` | Pass |
+| API-01 | API | AC-01 | Valid login (active user, correct credentials) | 200, session cookie set, safe user payload (no password hash) returned | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-02 | API | AC-05, BR-06 | Login with wrong password | 401, generic `INVALID_CREDENTIALS`, no field-level hint | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-03 | API | AC-05, BR-06 | Login with non-existent email | 401, same generic message as API-02 | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-04 | API | AC-06, BR-09 | Login attempt on inactive account with correct password | 401, generic "account unavailable" message, no distinction from wrong-password case at the response-shape level | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-05 | API | BR-01 | Login with missing email/password fields | 422 field-level validation errors | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-06 | API | FR-05, BR-08 | Logout invalidates session | 200 on logout; subsequent authenticated call with old cookie returns 401 | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-07 | API | FR-04, BR-11 | `GET /api/auth/me` for authenticated user | 200, returns id/name/email/role/mustChangePassword, never passwordHash | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-08 | API | AC-02, BR-02 | Any protected endpoint called while `mustChangePassword=true` | 403 `PASSWORD_CHANGE_REQUIRED` for all routes except `/auth/logout`, `/auth/me`, `/auth/change-password` | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-09 | API | FR-07 | Change password with weak new password / mismatched confirmation | 422 field-level errors, `mustChangePassword` remains true | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-10 | API | AC-14 | Change password with valid new password | 200, `mustChangePassword` becomes false, subsequent protected calls succeed | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| UNIT-01 | UNIT | BR-07 | Password hashing function | Produces salted hash, never equals plaintext, verify() matches correct password only | `server/tests/lab-03/password-hash.unit.test.ts` | Pending |
+| E2E-02 | E2E | AC-02 | Initial-password login then mandatory change, full browser flow | Login → redirected to Change Password → normal app inaccessible until saved → app opens after valid change | `e2e/lab-03/first-login.spec.ts` | Pending |
+| E2E-01 | E2E | AC-01, AC-05 | Full login flow: valid login, invalid login, busy state | Correct redirect, correct error banners, spinner shown during request | `e2e/lab-03/authentication.spec.ts` | Pending |
+| UI-01 | UI | Login screen §2 | Login form renders validation, busy, and failure states correctly | Component snapshot/interaction matches spec states | `client/.lab-03 tests/Login.test.tsx` | Pending |
+| UI-02 | UI | Change Password screen §3 | Form validates length/match rules, shows inline hints | Correct inline validation messages | `client/.lab-03 tests/ChangePassword.test.tsx` | Pending |
 
 ## 2. Authorization / Role Navigation
 
@@ -37,17 +35,18 @@ Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI c
 | SEC-03 | SEC | AC-04, BR-04 | Requester calls `GET/POST /api/staff/tickets/:id/notes` | 403, no note content in response body | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 | SEC-04 | SEC | FR-09 | Requester calls `/api/staff/tickets` (Queue) directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 | SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pending |
-| SEC-06 | SEC | AC-17, BR-04 | IT Staff-authored Internal Note; Requester fetches same ticket's comment/notes payload | Internal Note absent entirely from Requester-facing response | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-06a | SEC | AC-17, BR-04 | Schema-level guard (added in feature/lab3-03-requester-regression): `GET /api/tickets/:ticketNumber` response contains no `internalNotes`/`internalNote` key, checked recursively + as a raw-JSON substring, so the assertion still fails loudly if a future query ever starts including the relation | No internal-data key present in the Requester detail response, today and after the model is added | `server/tests/lab-02/ticket-detail.api.test.ts` (L359-394) | Pass |
+| SEC-06b | SEC | AC-17, BR-04 | Full cross-role assertion (feature/lab3-04-staff-ticketing, once `InternalNote` model exists): IT Staff-authored Internal Note; Requester fetches same ticket's comment/notes payload via every Requester-reachable endpoint | Internal Note absent entirely from every Requester-facing response | `server/tests/lab-03/authorization.api.test.ts` | Pending — un-skip once InternalNote model lands |
 | SEC-07 | SEC | Ownership | Requester A requests Requester B's ticket by ID | 404 (not 403) to avoid existence leak | `server/tests/lab-03/authorization.api.test.ts` | Pending |
-| SEC-08 | SEC | Unauthenticated | Any protected endpoint called with no session cookie | 401 for every protected route | `server/tests/lab-03/authorization.api.test.ts` | Pass |
-| E2E-03 | E2E | FR-08 | Role-based navigation rendering for each of the 3 roles | Only permitted nav destinations visible per role; direct URL nav to a forbidden route redirects/blocks | `e2e/lab-03/authentication.spec.ts` | Pass |
+| SEC-08 | SEC | Unauthenticated | Any protected endpoint called with no session cookie | 401 for every protected route | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| E2E-03 | E2E | FR-08 | Role-based navigation rendering for each of the 3 roles | Only permitted nav destinations visible per role; direct URL nav to a forbidden route redirects/blocks | `e2e/lab-03/authentication.spec.ts` | Pending |
 
 ## 3. Requester Regression & New Features
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
 | MIG-01 | MIG | AC-16, BR-27 | Migrated Lab 2 Requester logs in and lists their pre-existing Tickets | All pre-Lab-3 Tickets visible, correctly owned, Attachments intact | `server/tests/lab-03/migration.api.test.ts` | Pending |
-| MIG-02 | MIG | §7.2 spec | Development-Requester selector code path is fully removed | No selector component renders; no client state referencing old selector remains (static check + E2E) | `e2e/lab-03/authentication.spec.ts` | Pass |
+| MIG-02 | MIG | §7.2 spec | Development-Requester selector code path is fully removed | No selector component renders; no client state referencing old selector remains (static check + E2E) | `e2e/lab-03/authentication.spec.ts` | Pending |
 | API-11 | API | FR-14, BR-16, BR-17 | Requester posts a Public Comment (valid, empty, whitespace-only, > 2000 chars) | Valid: 201; empty/whitespace: 422; too long: 422 | `server/tests/lab-03/comments-notes.api.test.ts` | Pending |
 | API-12 | API | FR-15, AC-11, BR-05, BR-20 | Requester marks Ticket "appears resolved" | 200, `requesterMarkedResolved=true`, `status` field unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
 | API-13 | API | BR-05 | Requester attempts to directly PATCH ticket `status` | Endpoint not reachable by Requester role / 403 if attempted via staff endpoint | `server/tests/lab-03/authorization.api.test.ts` | Pending |
@@ -108,9 +107,9 @@ Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI c
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| MIG-03 | MIG | §7.2, §7.3 spec | Seed script run twice in a row | Idempotent — second run does not duplicate users/tickets | `server/tests/lab-03/migration.api.test.ts` | Pass |
-| MIG-04 | MIG | §7.3 spec | Seed data volume check | ≥4 active + 1 inactive Requester; ≥3 active + 1 inactive IT Staff; ≥1 active Administrator present | `server/tests/lab-03/migration.api.test.ts` | Pass |
-| MIG-05 | MIG | §7.2 spec | Pre-existing Ticket/Attachment referential integrity post-migration | No orphaned Tickets; all `requesterId` FKs resolve to a valid User | `server/tests/lab-03/migration.api.test.ts` | Pass |
+| MIG-03 | MIG | §7.2, §7.3 spec | Seed script run twice in a row | Idempotent — second run does not duplicate users/tickets | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-04 | MIG | §7.3 spec | Seed data volume check | ≥4 active + 1 inactive Requester; ≥3 active + 1 inactive IT Staff; ≥1 active Administrator present | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-05 | MIG | §7.2 spec | Pre-existing Ticket/Attachment referential integrity post-migration | No orphaned Tickets; all `requesterId` FKs resolve to a valid User | `server/tests/lab-03/migration.api.test.ts` | Pending |
 
 ## 8. Accessibility & Cross-Cutting Safe-Failure
 
@@ -142,6 +141,6 @@ Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI c
 | AC-14 | API-10, API-34 |
 | AC-15 | SEC-01, SEC-02, SEC-09 |
 | AC-16 | MIG-01 |
-| AC-17 | SEC-06 |
+| AC-17 | SEC-06a, SEC-06b |
 
 Every AC has at least one mapped, executable automated test. "Final" status in every table above must be updated to **Pass/Fail** with a link/reference to the actual CI or local test run output before submission (Part 3 of the grading rubric requires complete passing output from `main`).

@@ -1,219 +1,132 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
+import { app } from "../../src/app.js";
 import { requesterContext } from "../../src/middleware/requester-context.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
 /**
- * Requester Context Middleware — BR-41 single access point
+ * Requester Context Middleware — BR-03 / BR-41 single access point
  *
- * Verifies that the middleware:
- * - Rejects requests with missing/invalid X-Dev-Requester-Id header
- * - Rejects inactive requesters
- * - Accepts valid active requesters and attaches req.currentRequester
+ * Lab 3 removes the `X-Dev-Requester-Id` bridge: `requesterContext` no longer
+ * resolves any request header. It only re-projects the session identity that
+ * `requireAuth` already resolved (`req.currentUser`) into the Lab 2
+ * `currentRequester` shape used by the ticket handlers.
  *
- * We create a minimal Express app with the middleware + a test route
- * that echoes back `req.currentRequester` to verify attachment.
- *
- * NOTE: IDs are looked up dynamically from the DB because the seed
- * idempotency test deletes all records and re-seeds, advancing
- * autoincrement sequences.
+ * Covered here:
+ *   - 401 when no authenticated user is on the request
+ *   - `req.currentRequester` is populated with id / fullName / email
+ *   - the real app rejects a dev header without a session (header removed)
  */
 
-// ─── Test app setup ─────────────────────────────────────────────────────
+// ─── Minimal app: optional injected session user + middleware ────────────
 
 function createTestApp() {
   const testApp = express();
-
-  // Test endpoint protected by the middleware
+  testApp.use((req: Request, _res: Response, next: NextFunction) => {
+    const header = req.header("X-Test-User");
+    if (header) {
+      const [id, name, email] = header.split("|");
+      req.currentUser = {
+        id,
+        name,
+        email,
+        role: "REQUESTER",
+        isActive: true,
+        mustChangePassword: false,
+      };
+    }
+    next();
+  });
   testApp.get("/protected", requesterContext, (req: Request, res: Response) => {
     res.status(200).json({ currentRequester: req.currentRequester });
   });
-
   return testApp;
 }
 
 const testApp = createTestApp();
 
-// ─── Dynamic ID lookup ──────────────────────────────────────────────────
-
-let activeRequester1: { id: number; fullName: string; email: string; userId: string };
-let activeRequester2: { id: number; fullName: string; email: string; userId: string };
-let activeRequester3: { id: number; fullName: string; email: string; userId: string };
-let inactiveRequester: { id: number; fullName: string; email: string };
-
 // ─── Tests ──────────────────────────────────────────────────────────────
 
-describe("requesterContext middleware", () => {
+describe("requesterContext middleware (session-based)", () => {
+  let requester: TestUser;
+  let client: SessionClient;
+
   beforeAll(async () => {
     await seed();
-
-    // Look up actual IDs from DB (may vary due to seed.idempotency test)
-    const requesters = await prisma.devRequester.findMany({
-      orderBy: { id: "asc" },
-      select: { id: true, fullName: true, email: true, isActive: true },
-    });
-
-    const active = requesters.filter((r) => r.isActive);
-    const inactive = requesters.find((r) => !r.isActive);
-
-    expect(active.length).toBeGreaterThanOrEqual(3);
-    expect(inactive).toBeDefined();
-
-    // Lab 3: the dev header resolves to the migrated User, so the middleware
-    // reports the User's String id while keeping the Lab 2 name/email fields.
-    const userByEmail = new Map(
-      (
-        await prisma.user.findMany({
-          where: { role: "REQUESTER" },
-          select: { id: true, email: true },
-        })
-      ).map((u) => [u.email, u.id]),
-    );
-
-    activeRequester1 = { ...active[0], userId: userByEmail.get(active[0].email)! };
-    activeRequester2 = { ...active[1], userId: userByEmail.get(active[1].email)! };
-    activeRequester3 = { ...active[2], userId: userByEmail.get(active[2].email)! };
-    inactiveRequester = inactive!;
+    requester = await createTestUser({ name: "Context Requester", role: "REQUESTER" });
+    client = await loginAs(app, requester.email);
   });
 
   afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
     await prisma.$disconnect();
   });
 
-  // ─── Reject cases ───────────────────────────────────────────────────
-
-  describe("rejects invalid requests", () => {
-    it("returns 401 when X-Dev-Requester-Id header is missing", async () => {
+  describe("rejects unauthenticated requests", () => {
+    it("returns 401 when there is no authenticated user", async () => {
       const res = await request(testApp).get("/protected");
 
       expect(res.status).toBe(401);
       expect(res.body).toEqual({
         error: {
-          code: "INVALID_REQUESTER_CONTEXT",
-          message: "No active Requester session or Development Requester selected.",
+          code: "UNAUTHENTICATED",
+          message: "Authentication required.",
         },
       });
     });
 
-    it("returns 401 when header is an empty string", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when header is non-numeric text", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "hello");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when header is a decimal number", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "1.5");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when header is zero", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "0");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when header is negative", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "-1");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when requester does not exist", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", "99999");
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-
-    it("returns 401 when requester is inactive", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", String(inactiveRequester.id));
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
-    });
-  });
-
-  // ─── Accept cases ──────────────────────────────────────────────────
-
-  describe("accepts valid requests", () => {
-    it("returns 200 and attaches currentRequester for a valid active requester", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", String(activeRequester1.id));
-
-      expect(res.status).toBe(200);
-      expect(res.body.currentRequester).toBeDefined();
-      expect(res.body.currentRequester.id).toBe(activeRequester1.userId);
-      expect(res.body.currentRequester.fullName).toBe(activeRequester1.fullName);
-      expect(res.body.currentRequester.email).toBe(activeRequester1.email);
-    });
-
-    it("attaches correct requester data for a different active requester", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", String(activeRequester2.id));
-
-      expect(res.status).toBe(200);
-      expect(res.body.currentRequester.id).toBe(activeRequester2.userId);
-      expect(res.body.currentRequester.fullName).toBe(activeRequester2.fullName);
-      expect(res.body.currentRequester.email).toBe(activeRequester2.email);
-    });
-
-    it("works with string numeric header (common client behavior)", async () => {
-      const res = await request(testApp)
-        .get("/protected")
-        .set("X-Dev-Requester-Id", String(activeRequester3.id));
-
-      expect(res.status).toBe(200);
-      expect(res.body.currentRequester.id).toBe(activeRequester3.userId);
-      expect(res.body.currentRequester.fullName).toBe(activeRequester3.fullName);
-    });
-  });
-
-  // ─── Error response shape ──────────────────────────────────────────
-
-  describe("error response shape", () => {
-    it("follows Common Error Shape from api-spec.md", async () => {
+    it("follows the Common Error Shape from api-spec.md", async () => {
       const res = await request(testApp).get("/protected");
 
       expect(res.status).toBe(401);
-      expect(res.body).toHaveProperty("error");
       expect(res.body.error).toHaveProperty("code");
       expect(res.body.error).toHaveProperty("message");
       expect(typeof res.body.error.code).toBe("string");
       expect(typeof res.body.error.message).toBe("string");
-      // No fieldErrors on 401 (fieldErrors only for 400 validation)
       expect(res.body.error.fieldErrors).toBeUndefined();
+    });
+
+    it("no longer accepts the retired X-Dev-Requester-Id header on the real app", async () => {
+      const res = await request(app)
+        .get("/api/tickets")
+        .set("X-Dev-Requester-Id", String(requester.id));
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
+    });
+  });
+
+  describe("accepts an authenticated session", () => {
+    it("attaches currentRequester derived from the session user", async () => {
+      const res = await client.agent.get("/api/categories");
+
+      // The real handlers only run when currentRequester resolved; a 200 proves
+      // the middleware attached it without throwing.
+      expect(res.status).toBe(200);
+    });
+
+    it("maps the session user onto the Lab 2 currentRequester shape", async () => {
+      const res = await request(testApp)
+        .get("/protected")
+        .set("X-Test-User", `${requester.id}|${requester.name}|${requester.email}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.currentRequester).toEqual({
+        id: requester.id,
+        fullName: requester.name,
+        email: requester.email,
+      });
     });
   });
 });

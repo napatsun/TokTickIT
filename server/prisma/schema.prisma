@@ -57,8 +57,8 @@ model Category {
 }
 
 // ─── Lab 3: real identity ────────────────────────────────
-// Relation fields for PublicComment / InternalNote are intentionally absent:
-// those models belong to later Lab 3 branches (staff ticketing), not this one.
+// `internalNotes` is intentionally absent: InternalNote belongs to the later
+// feature/lab3-staff-ticketing branch, not to Requester regression.
 
 model User {
   id                 String   @id @default(cuid())
@@ -71,26 +71,11 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  ticketsCreated      Ticket[]     @relation("RequesterTickets")
-  ticketsOwned        Ticket[]     @relation("OwnerTickets")
-  uploadedAttachments Attachment[] @relation("UploadedBy")
-  removedAttachments  Attachment[] @relation("RemovedBy")
-}
-
-// ─── Lab 2 (transitional) ────────────────────────────────
-// The Development Requester selector was removed in Lab 3 (FR-11), but the
-// Lab 2 ticket endpoints are still served through the X-Dev-Requester-Id
-// header until a later branch re-scopes them onto the authenticated session.
-// This table is therefore retained as a legacy dev-identity lookup only and
-// no longer owns any Ticket/Attachment rows. Remove it once every endpoint
-// derives identity from the session (BR-03).
-
-model DevRequester {
-  id        Int      @id @default(autoincrement())
-  fullName  String
-  email     String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  ticketsCreated      Ticket[]        @relation("RequesterTickets")
+  ticketsOwned        Ticket[]        @relation("OwnerTickets")
+  publicComments      PublicComment[]
+  uploadedAttachments Attachment[]    @relation("UploadedBy")
+  removedAttachments  Attachment[]    @relation("RemovedBy")
 }
 
 model RelatedSystem {
@@ -123,17 +108,32 @@ model Ticket {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  requester     User          @relation("RequesterTickets", fields: [requesterId], references: [id], onDelete: Restrict)
-  owner         User?         @relation("OwnerTickets", fields: [ownerId], references: [id], onDelete: Restrict)
-  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
-  attachments   Attachment[]
+  requester      User            @relation("RequesterTickets", fields: [requesterId], references: [id], onDelete: Restrict)
+  owner          User?           @relation("OwnerTickets", fields: [ownerId], references: [id], onDelete: Restrict)
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  relatedSystem  RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
+  attachments    Attachment[]
+  publicComments PublicComment[]
 
   @@index([requesterId])
   @@index([requesterId, createdAt])
   @@index([ownerId])
   @@index([status])
   @@index([summary])
+}
+
+// Lab 3 (FR-14, BR-16/17/18): a Public Comment on a Ticket, append-only.
+// Visible to the Requester, IT Staff, and Administrator (BR-04).
+model PublicComment {
+  id        String   @id @default(cuid())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model Attachment {

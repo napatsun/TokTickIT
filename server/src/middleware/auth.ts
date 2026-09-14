@@ -111,9 +111,8 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * CSRF is only meaningful for cookie-authenticated requests, because only
- * cookies are attached automatically by the browser. Requests authenticated
- * through the transitional X-Dev-Requester-Id header (Lab 2 endpoints) carry
- * no ambient credentials and are therefore not subject to this check.
+ * cookies are attached automatically by the browser. Unauthenticated requests
+ * carry no ambient credentials and are therefore not subject to this check.
  */
 export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) {

@@ -40,14 +40,44 @@
   color: var(--color-priority-high-text);
 }
 
+/* Urgent (IT Priority only, BR-14) — same red-tinted treatment as High;
+   the visible text is what distinguishes them (§1 non-color rule). */
+.priorityUrgent {
+  background-color: var(--color-priority-high-bg);
+  color: var(--color-priority-high-text);
+}
+
 /* -----------------------------------------------------------
    Status badges (§8)
    "New (pale-green bg, secondary-green text)"
-   Future values (IN_PROGRESS, RESOLVED, etc.) added here —
-   no component refactor needed, just a new CSS class + mapping.
+   Lab 3 added the remaining TicketStatus values, reusing only the
+   existing Section 1 tokens — no new colors.
    ----------------------------------------------------------- */
 
-.statusNew {
+.statusNew,
+.statusOpen {
   background-color: var(--color-pale-green);   /* #EAF6EF (§1) */
   color: var(--color-secondary-green);          /* #0B7A46 (§1) */
 }
+
+/* In progress / waiting — amber, "needs attention" */
+.statusInProgress,
+.statusWaiting,
+.statusReopened {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* Resolved / closed — success green */
+.statusResolved,
+.statusClosed {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+/* Cancelled — neutral, not an error */
+.statusCancelled {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+}
+

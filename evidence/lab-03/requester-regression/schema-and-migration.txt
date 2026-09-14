@@ -1,0 +1,48 @@
+Lab 3 — feature/lab3-03-requester-regression
+Schema + migration (BR-03, FR-14)
+
+1. Prisma schema changes (server/prisma/schema.prisma)
+
+   + model PublicComment           // id (cuid), ticketId Int, authorId, content, createdAt
+     - Ticket  : + publicComments PublicComment[]
+     - User    : + publicComments PublicComment[]
+     - @@index([ticketId, createdAt])  → oldest-first reads and per-ticket lookups
+   - model DevRequester            // DELETED — the X-Dev-Requester-Id identity bridge is gone
+
+   InternalNote is intentionally NOT added: it belongs to feature/lab3-staff-ticketing.
+
+2. Migration: server/prisma/migrations/20260914000000_lab3_requester_regression/
+   - CREATE TABLE "PublicComment" (+ index, + RESTRICT FKs to Ticket/User)
+   - DROP TABLE "DevRequester"
+
+   Safe / non-destructive for ticket data: the previous migration
+   (20260913000000_lab3_auth_and_authorization) had already re-pointed every
+   Ticket.requesterId / Attachment.uploadedByRequesterId / removedByRequesterId
+   from DevRequester.id to User.id (recorded in
+   evidence/lab-03/auth-and-authorization/migration-data-preservation.txt), so
+   "DevRequester" no longer owned any rows when it was dropped.
+
+   Verification AFTER the migration (psql against the local dev DB):
+     SELECT count(*) FROM "Ticket";                                            -- 10
+     SELECT count(*) FROM "Ticket" t LEFT JOIN "User" u
+       ON u.id = t."requesterId" WHERE u.id IS NULL;                           -- 0 orphans
+     SELECT count(*) FROM "Attachment" a LEFT JOIN "User" u
+       ON u.id = a."uploadedByRequesterId" WHERE u.id IS NULL;                 -- 0 orphans
+     SELECT count(*) FROM "PublicComment";                                     -- 4 (seeded)
+     SELECT to_regclass('public."DevRequester"');                              -- NULL (dropped)
+
+3. Applied with:
+     cd server && npx prisma migrate dev
+   Output:
+     Applying migration `20260914000000_lab3_requester_regression`
+     Your database is now in sync with your schema.
+     ✔ Generated Prisma Client (v5.22.0)
+
+4. Seed (server/prisma/seed.ts)
+   - removed the DevRequester upserts (table no longer exists)
+   - added 4 sample Public Comments with deterministic ids ("seed-pc-…"), upserted on
+     their id so re-running never duplicates them (MIG-03) and never deletes comments a
+     developer added to the same ticket
+   - MIG-04 volume unchanged: 4 active + 1 inactive Requester, 3 active + 1 inactive
+     IT Staff, 1 active Administrator, tickets across 8 statuses / 4 IT priorities /
+     assigned + unassigned

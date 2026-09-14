@@ -7,6 +7,8 @@ import { authRouter } from "./routes/auth.js";
 import {
   csrfProtection,
   enforcePasswordChange,
+  requireAuth,
+  requireRole,
   sessionMiddleware,
 } from "./middleware/auth.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
@@ -44,7 +46,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
 // Auth header required: Yes.
 // Response shape: { categories: [{ id, name }] }
 // Only isActive=true rows (BR-21: references must be active).
-app.get('/api/categories', requesterContext, enforcePasswordChange, async (_req: Request, res: Response) => {
+app.get('/api/categories', requireAuth, enforcePasswordChange, requesterContext, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const categories = await prisma.category.findMany({
@@ -65,7 +67,7 @@ app.get('/api/categories', requesterContext, enforcePasswordChange, async (_req:
 // Auth header required: Yes.
 // Response shape: { relatedSystems: [{ id, name }] }
 // Only isActive=true rows (BR-21).
-app.get('/api/related-systems', requesterContext, enforcePasswordChange, async (_req: Request, res: Response) => {
+app.get('/api/related-systems', requireAuth, enforcePasswordChange, requesterContext, async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const relatedSystems = await prisma.relatedSystem.findMany({
@@ -74,27 +76,6 @@ app.get('/api/related-systems', requesterContext, enforcePasswordChange, async (
       select: { id: true, name: true },
     });
     res.status(200).json({ relatedSystems });
-  } catch (err) {
-    res.status(500).json({
-      error: { code: 'SERVER_ERROR', message: 'Something went wrong. Please try again.' },
-    });
-  }
-});
-
-// ─── GET /api/dev-requesters ─────────────────────────────
-// §1 API Contract: active Requesters for the Selection screen.
-// No auth header required — this is the one endpoint reachable
-// before a Requester is selected (api-spec §1).
-// Returns only isActive=true rows (BR-02).
-app.get('/api/dev-requesters', async (_req, res) => {
-  try {
-    const prisma = getPrisma();
-    const requesters = await prisma.devRequester.findMany({
-      where: { isActive: true },
-      orderBy: { id: 'asc' },
-      select: { id: true, fullName: true, email: true },
-    });
-    res.status(200).json({ requesters });
   } catch (err) {
     res.status(500).json({
       error: { code: 'SERVER_ERROR', message: 'Something went wrong. Please try again.' },
@@ -142,12 +123,16 @@ interface CreateTicketBody {
 app.post(
   "/api/tickets",
   upload.array("attachments", 5),
-  requesterContext,
+  requireAuth,
   enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
   async (req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const body = req.body as CreateTicketBody;
+    // BR-03 / SEC-05: ownership comes from the session only. Any `requesterId`
+    // supplied in the body is ignored — it is never read below.
     const requester = req.currentRequester!;
 
     // ─── Field-level validation ────────────────────────────────────
@@ -414,7 +399,13 @@ const VALID_SORT_BY = ["createdAt", "updatedAt"] as const;
 const VALID_SORT_DIR = ["asc", "desc"] as const;
 const VALID_PAGE_SIZES = [10, 20, 50] as const;
 
-app.get("/api/tickets", requesterContext, enforcePasswordChange, async (req: Request, res: Response) => {
+app.get(
+  "/api/tickets",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const requester = req.currentRequester!;
@@ -641,7 +632,13 @@ app.get("/api/tickets", requesterContext, enforcePasswordChange, async (req: Req
 //   BR-40  Re-fetches from backend on every page load (no cache trust)
 //   BR-41  Ownership check via findOwnedTicket() single access point
 
-app.get("/api/tickets/:ticketNumber", requesterContext, enforcePasswordChange, async (req: Request, res: Response) => {
+app.get(
+  "/api/tickets/:ticketNumber",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
   try {
     const requester = req.currentRequester!;
     const { ticketNumber } = req.params;
@@ -709,6 +706,9 @@ app.get("/api/tickets/:ticketNumber", requesterContext, enforcePasswordChange, a
         currentStatus: ticket.status,
         ticketOwner: null, // BR-08: not yet assigned in Lab 2
         resolutionSummary: ticket.resolutionSummary,
+        // FR-15 / BR-05: separate from `currentStatus` on purpose.
+        requesterMarkedResolved: ticket.requesterMarkedResolved,
+        requesterMarkedResolvedAt: ticket.requesterMarkedResolvedAt?.toISOString() ?? null,
       },
       attachments: { active, removed },
     });
@@ -722,6 +722,222 @@ app.get("/api/tickets/:ticketNumber", requesterContext, enforcePasswordChange, a
     });
   }
 });
+
+// ─── Public Comments (api-spec.md §2, FR-14) ──────────────────────────
+//
+// POST /api/tickets/:ticketNumber/comments — append a Public Comment
+// GET  /api/tickets/:ticketNumber/comments — list them, oldest-first
+//
+// Business rules enforced:
+//   BR-03  identity is the session Requester, never a body `requesterId`
+//   BR-04  Public Comments are visible to the Requester (own ticket only)
+//   BR-13  cross-owner ticket → identical 404 (no existence leak)
+//   BR-16  append-only: no edit or delete endpoint exists
+//   BR-17  empty / whitespace-only content → 422
+//   BR-18  content is limited to 2,000 characters
+//   BR-20  never touches Ticket.status
+//
+// BR-18 rendering note: content is stored verbatim as text and rendered by
+// React, which escapes it on output, so script injection is not possible.
+
+const MAX_COMMENT_LENGTH = 2000;
+
+interface CommentBody {
+  content?: unknown;
+}
+
+/** Map a PublicComment row (+author) to the api-spec.md §2 response shape. */
+function toCommentDto(comment: {
+  id: string;
+  ticketId: number;
+  authorId: string;
+  content: string;
+  createdAt: Date;
+  author: { name: string; role: string };
+}) {
+  return {
+    id: comment.id,
+    ticketId: comment.ticketId,
+    authorId: comment.authorId,
+    authorName: comment.author.name,
+    authorRole: comment.author.role,
+    content: comment.content,
+    createdAt: comment.createdAt.toISOString(),
+  };
+}
+
+app.post(
+  "/api/tickets/:ticketNumber/comments",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
+    try {
+      const requester = req.currentRequester!;
+
+      // BR-13: ownership is part of the lookup, so a cross-owner ticket is a
+      // 404 identical to a non-existent one (SEC-07).
+      const ticket = await findOwnedTicket(req.params.ticketNumber, requester.id);
+      if (!ticket) {
+        res.status(404).json({
+          error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+        });
+        return;
+      }
+
+      const body = (req.body ?? {}) as CommentBody;
+      const content = typeof body.content === "string" ? body.content.trim() : "";
+
+      // BR-17: empty or whitespace-only comments are rejected.
+      if (content.length === 0) {
+        res.status(422).json({
+          error: {
+            code: "CONTENT_REQUIRED",
+            message: "Comment cannot be empty.",
+            fieldErrors: { content: "Comment cannot be empty." },
+          },
+        });
+        return;
+      }
+
+      // BR-18: hard 2,000 character limit.
+      if (content.length > MAX_COMMENT_LENGTH) {
+        res.status(422).json({
+          error: {
+            code: "CONTENT_TOO_LONG",
+            message: `Comment cannot exceed ${MAX_COMMENT_LENGTH} characters.`,
+            fieldErrors: {
+              content: `Comment cannot exceed ${MAX_COMMENT_LENGTH} characters.`,
+            },
+          },
+        });
+        return;
+      }
+
+      const comment = await getPrisma().publicComment.create({
+        data: { ticketId: ticket.id, authorId: requester.id, content },
+        include: { author: { select: { name: true, role: true } } },
+      });
+
+      res.status(201).json(toCommentDto(comment));
+    } catch (err) {
+      // BR-26: safe error, no internal details leaked
+      res.status(500).json({
+        error: {
+          code: "SERVER_ERROR",
+          message: "Something went wrong. Please try again.",
+        },
+      });
+    }
+  },
+);
+
+app.get(
+  "/api/tickets/:ticketNumber/comments",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
+    try {
+      const requester = req.currentRequester!;
+
+      const ticket = await findOwnedTicket(req.params.ticketNumber, requester.id);
+      if (!ticket) {
+        res.status(404).json({
+          error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+        });
+        return;
+      }
+
+      // api-spec.md §2: chronological (oldest-first) reading order, newest last.
+      const comments = await getPrisma().publicComment.findMany({
+        where: { ticketId: ticket.id },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        include: { author: { select: { name: true, role: true } } },
+      });
+
+      res.status(200).json({ items: comments.map(toCommentDto) });
+    } catch (err) {
+      res.status(500).json({
+        error: {
+          code: "SERVER_ERROR",
+          message: "Something went wrong. Please try again.",
+        },
+      });
+    }
+  },
+);
+
+// ─── POST /api/tickets/:ticketNumber/resolve-mark (FR-15, BR-05, BR-20) ─
+//
+// The Requester's "Problem Appears Resolved" signal. It records a separate
+// flag and NEVER writes Ticket.status — only IT Staff/Administrator may
+// change status (BR-20). Ineligible status or an already-marked ticket is a
+// 409 INVALID_STATE (api-spec.md §2).
+
+const RESOLVE_MARK_ELIGIBLE_STATUSES = new Set([
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING_FOR_REQUESTER",
+]);
+
+app.post(
+  "/api/tickets/:ticketNumber/resolve-mark",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
+    try {
+      const requester = req.currentRequester!;
+
+      const ticket = await findOwnedTicket(req.params.ticketNumber, requester.id);
+      if (!ticket) {
+        res.status(404).json({
+          error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+        });
+        return;
+      }
+
+      if (
+        !RESOLVE_MARK_ELIGIBLE_STATUSES.has(ticket.status) ||
+        ticket.requesterMarkedResolved
+      ) {
+        res.status(409).json({
+          error: {
+            code: "INVALID_STATE",
+            message: "This ticket can no longer be marked as resolved.",
+          },
+        });
+        return;
+      }
+
+      const updated = await getPrisma().ticket.update({
+        where: { id: ticket.id },
+        // BR-20: no `status` here on purpose.
+        data: { requesterMarkedResolved: true, requesterMarkedResolvedAt: new Date() },
+        select: {
+          requesterMarkedResolved: true,
+          requesterMarkedResolvedAt: true,
+        },
+      });
+
+      res.status(200).json({
+        requesterMarkedResolved: updated.requesterMarkedResolved,
+        requesterMarkedResolvedAt: updated.requesterMarkedResolvedAt?.toISOString() ?? null,
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: {
+          code: "SERVER_ERROR",
+          message: "Something went wrong. Please try again.",
+        },
+      });
+    }
+  },
+);
 
 // ─── POST /api/tickets/:ticketNumber/attachments ──────────────────────
 // §7 API Contract: Add one or more Attachments to an existing, owned Ticket.
@@ -737,8 +953,10 @@ app.get("/api/tickets/:ticketNumber", requesterContext, enforcePasswordChange, a
 app.post(
   "/api/tickets/:ticketNumber/attachments",
   upload.array("attachments", 5),
-  requesterContext,
+  requireAuth,
   enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
   async (req: Request, res: Response) => {
   try {
     const requester = req.currentRequester!;
@@ -864,7 +1082,13 @@ app.post(
 // Auth header required: Yes.
 // Ownership checked via parent Ticket (BR-33, BR-41).
 
-app.get("/api/attachments/:id", requesterContext, enforcePasswordChange, async (req: Request, res: Response) => {
+app.get(
+  "/api/attachments/:id",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
   try {
     const requester = req.currentRequester!;
     const attachmentId = Number(req.params.id);
@@ -915,7 +1139,13 @@ app.get("/api/attachments/:id", requesterContext, enforcePasswordChange, async (
 // Auth header required: Yes.
 // BR-35: removed attachments return 404 (indistinguishable from nonexistent).
 
-app.get("/api/attachments/:id/download", requesterContext, enforcePasswordChange, async (req: Request, res: Response) => {
+app.get(
+  "/api/attachments/:id/download",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
   try {
     const requester = req.currentRequester!;
     const attachmentId = Number(req.params.id);
@@ -963,7 +1193,13 @@ app.get("/api/attachments/:id/download", requesterContext, enforcePasswordChange
 // Auth header required: Yes.
 // Request body: { removalReason: string } — required, 3-200 chars (BR-34).
 
-app.delete("/api/attachments/:id", requesterContext, enforcePasswordChange, async (req: Request, res: Response) => {
+app.delete(
+  "/api/attachments/:id",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["REQUESTER"]),
+  requesterContext,
+  async (req: Request, res: Response) => {
   try {
     const requester = req.currentRequester!;
     const attachmentId = Number(req.params.id);

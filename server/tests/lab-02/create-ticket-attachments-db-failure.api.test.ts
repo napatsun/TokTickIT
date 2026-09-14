@@ -3,6 +3,13 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -28,17 +35,17 @@ function fakeJpeg(): Buffer {
 }
 
 describe("POST /api/tickets — RECORD_CREATION_FAILED reason", () => {
-  let activeRequesterId: number;
+  let requester: TestUser;
+  let client: SessionClient;
   let activeCategoryId: number;
   let activeRelatedSystemId: number;
 
   beforeAll(async () => {
     await seed();
 
-    const requester = await prisma.devRequester.findFirst({
-      where: { isActive: true },
-      select: { id: true },
-    });
+    requester = await createTestUser({ name: "DB Failure Requester" });
+    client = await loginAs(app, requester.email);
+
     const category = await prisma.category.findFirst({
       where: { isActive: true },
       select: { id: true },
@@ -48,16 +55,15 @@ describe("POST /api/tickets — RECORD_CREATION_FAILED reason", () => {
       select: { id: true },
     });
 
-    expect(requester).toBeDefined();
     expect(category).toBeDefined();
     expect(relatedSystem).toBeDefined();
 
-    activeRequesterId = requester!.id;
     activeCategoryId = category!.id;
     activeRelatedSystemId = relatedSystem!.id;
   });
 
   afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
     await prisma.$disconnect();
   });
 
@@ -69,9 +75,9 @@ describe("POST /api/tickets — RECORD_CREATION_FAILED reason", () => {
     spy.mockRejectedValueOnce(new Error("Simulated DB insert failure"));
 
     try {
-      const res = await request(app)
+      const res = await client.agent
         .post("/api/tickets")
-        .set("X-Dev-Requester-Id", String(activeRequesterId))
+        .set("X-CSRF-Token", client.csrfToken)
         .field("categoryId", String(activeCategoryId))
         .field("relatedSystemId", String(activeRelatedSystemId))
         .field("summary", "DB insert failure test")

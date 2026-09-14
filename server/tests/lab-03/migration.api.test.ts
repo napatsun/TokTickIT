@@ -1,27 +1,41 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import request from "supertest";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import { UPLOADS_DIR } from "../../src/services/attachmentStorage.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
 /**
- * Data migration & seed — tests.md §7
+ * Data migration & seed — tests.md §7 and §3
  *
  *   MIG-03  seed script run twice is idempotent
  *   MIG-04  seeded account volume matches specification.md §7.3
  *   MIG-05  pre-existing Ticket/Attachment referential integrity post-migration
+ *   MIG-01  a migrated Requester logs in and lists their pre-existing Tickets
+ *           (with Attachments intact) — AC-16, BR-27
  */
 
 async function tableCounts() {
-  const [users, tickets, attachments, devRequesters, categories, relatedSystems] = await Promise.all([
+  const [users, tickets, attachments, publicComments, categories, relatedSystems] = await Promise.all([
     prisma.user.count(),
     prisma.ticket.count(),
     prisma.attachment.count(),
-    prisma.devRequester.count(),
+    prisma.publicComment.count(),
     prisma.category.count(),
     prisma.relatedSystem.count(),
   ]);
-  return { users, tickets, attachments, devRequesters, categories, relatedSystems };
+  return { users, tickets, attachments, publicComments, categories, relatedSystems };
 }
 
 beforeAll(async () => {
@@ -104,6 +118,105 @@ describe("MIG-04 — seed volume (specification.md §7.3)", () => {
       expect(user.passwordHash).not.toContain("Password123!");
       expect(user.passwordHash).not.toContain("Admin123!");
     }
+  });
+});
+
+// ─── MIG-01 ─────────────────────────────────────────────────────────────
+
+describe("MIG-01 — migrated Requester regression (AC-16, BR-27)", () => {
+  let requester: TestUser;
+  let client: SessionClient;
+  let ticketId: number;
+  let ticketNumber: string;
+  let attachmentId: number;
+  const storedFileName = `mig01-${Date.now()}.txt`;
+  const FILE_CONTENT = "pre-Lab-3 attachment content";
+
+  beforeAll(async () => {
+    requester = await createTestUser({ name: "Migrated Requester" });
+    client = await loginAs(app, requester.email);
+
+    const category = await prisma.category.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    const relatedSystem = await prisma.relatedSystem.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    expect(category).toBeDefined();
+    expect(relatedSystem).toBeDefined();
+
+    // Simulates a Ticket/Attachment that already existed before the Lab 3
+    // identity migration: owned by the Requester, no dev header involved.
+    const ticket = await prisma.ticket.create({
+      data: {
+        ticketNumber: `TKT-2026-MIG01-${Date.now()}`,
+        requesterId: requester.id,
+        categoryId: category!.id,
+        relatedSystemId: relatedSystem!.id,
+        summary: "Pre-existing Lab 2 ticket",
+        description: "This ticket and its attachment existed before the Lab 3 identity migration.",
+        requestedPriority: "MEDIUM",
+      },
+      select: { id: true, ticketNumber: true },
+    });
+    ticketId = ticket.id;
+    ticketNumber = ticket.ticketNumber;
+
+    await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    await fs.writeFile(path.join(UPLOADS_DIR, storedFileName), FILE_CONTENT);
+
+    const attachment = await prisma.attachment.create({
+      data: {
+        ticketId: ticket.id,
+        originalFileName: "pre-lab3-note.txt",
+        storedFileName,
+        mimeType: "text/plain",
+        fileSizeBytes: Buffer.byteLength(FILE_CONTENT),
+        uploadedByRequesterId: requester.id,
+      },
+      select: { id: true },
+    });
+    attachmentId = attachment.id;
+  });
+
+  afterAll(async () => {
+    await cleanupTestUsers([requester.id]);
+    try {
+      await fs.unlink(path.join(UPLOADS_DIR, storedFileName));
+    } catch {
+      // already gone
+    }
+  });
+
+  it("lists the pre-existing ticket for the session Requester", async () => {
+    const res = await client.agent.get("/api/tickets?pageSize=50");
+
+    expect(res.status).toBe(200);
+    const ids = res.body.tickets.map((t: { id: number }) => t.id);
+    expect(ids).toContain(ticketId);
+  });
+
+  it("keeps the ticket viewable with its Attachment intact", async () => {
+    const res = await client.agent.get(`/api/tickets/${ticketNumber}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticket.id).toBe(ticketId);
+    expect(res.body.ticket.requester).toEqual({
+      id: requester.id,
+      fullName: requester.name,
+    });
+    expect(res.body.attachments.active.map((a: { id: number }) => a.id)).toContain(
+      attachmentId,
+    );
+  });
+
+  it("still downloads the pre-existing Attachment", async () => {
+    const res = await client.agent.get(`/api/attachments/${attachmentId}/download`);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toBe(FILE_CONTENT);
   });
 });
 
