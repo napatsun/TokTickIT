@@ -346,8 +346,8 @@ export default function TicketDetailPage() {
         onAttachmentRemoved={handleAttachmentRemoved}
       />
 
-      {/* §4: Public Comments panel */}
-      <PublicCommentsPanel ticketNumber={ticket.ticketNumber} />
+      {/* §4: Public Comments panel (Requester route — own ticket only) */}
+      <PublicCommentsPanel commentsPath={`/api/tickets/${ticket.ticketNumber}/comments`} />
 
       {/* §4: confirmation dialog for the appears-resolved action */}
       {showResolveConfirm && (
