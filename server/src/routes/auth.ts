@@ -18,6 +18,7 @@
 import { Router, Request, Response } from "express";
 import { getPrisma } from "../prisma.js";
 import { hashPassword, passwordPolicyError, verifyPassword } from "../lib/password.js";
+import { isValidEmail, normalizeEmail } from "../lib/email.js";
 import {
   clearAuthCookies,
   issueCsrfToken,
@@ -31,8 +32,6 @@ import {
 export const authRouter = Router();
 
 // ─── Helpers ────────────────────────────────────────────────────────────
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The only public projection of a User. Never includes passwordHash (BR-11). */
 function toSafeUser(user: {
@@ -74,10 +73,12 @@ function loginValidationErrors(body: unknown): Record<string, string> {
   const fields: Record<string, string> = {};
   const b = (body ?? {}) as { email?: unknown; password?: unknown };
 
-  const email = typeof b.email === "string" ? b.email.trim() : "";
+  // Shared normalisation (lib/email.ts) — the same canonical form the
+  // Administrator user endpoints use, so lookup and storage cannot disagree.
+  const email = normalizeEmail(b.email);
   if (email.length === 0) {
     fields.email = "Email is required.";
-  } else if (!EMAIL_PATTERN.test(email)) {
+  } else if (!isValidEmail(email)) {
     fields.email = "Enter a valid email address.";
   }
 
@@ -105,7 +106,7 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
-    const email = String((req.body as { email: string }).email).trim().toLowerCase();
+    const email = normalizeEmail((req.body as { email?: unknown }).email);
     const password = String((req.body as { password: string }).password);
 
     const user = await getPrisma().user.findUnique({
