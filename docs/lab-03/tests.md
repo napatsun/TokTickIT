@@ -32,8 +32,8 @@ Legend for **Final**: `Pass` (executed and green in the run recorded in §10) ·
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| SEC-01 | SEC | FR-10, AC-15 | Requester calls any `/api/admin/*` endpoint directly | 403 for every admin route, regardless of frontend state | `server/tests/lab-03/authorization.api.test.ts` | Pending — `/api/admin/*` is not mounted in `feature/lab3-04-staff-ticketing`; the suite keeps an explicit `describe.skip` with a pointer to `feature/lab3-05-admin-users`. Asserting 403 today would pass because no route exists, which would be faking a result |
-| SEC-02 | SEC | FR-10, AC-15 | IT Staff calls any `/api/admin/*` endpoint directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending — same reason as SEC-01 (no admin routes in this branch) |
+| SEC-01 | SEC | FR-10, AC-15 | Requester calls any `/api/admin/*` endpoint directly | 403 for every admin route, regardless of frontend state | `server/tests/lab-03/authorization.api.test.ts` | Pass — live as of `feature/lab3-05-admin-users`: `/api/admin/*` is mounted, so 403 proves the guard ran (positive control asserts the same routes return 200 for an Administrator) |
+| SEC-02 | SEC | FR-10, AC-15 | IT Staff calls any `/api/admin/*` endpoint directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pass — same as SEC-01; plus contrast assertion that `/api/staff/owners` still returns 200 for IT Staff |
 | SEC-03 | SEC | AC-04, BR-04 | Requester calls `GET/POST /api/staff/tickets/:id/notes` | 403, no note content in response body | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | SEC-04 | SEC | FR-09 | Requester calls `/api/staff/tickets` (Queue) directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pass |
 | SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pass |
@@ -89,23 +89,23 @@ Legend for **Final**: `Pass` (executed and green in the run recorded in §10) ·
 
 ## 6. Administrator User Management
 
-Not implemented in `feature/lab3-04-staff-ticketing` (explicitly out of scope — it is the next branch). Every row below stays **Pending** until that branch lands.
+Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts` mounted in `app.ts`). All rows below were executed in the run recorded in §10.
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-28 | API | FR-24, FR-25 | List users, search by name/email, filter by role | Correct filtered/searched subset returned | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-29 | API | FR-26, BR-21, BR-25 | Create user with one role and initial password | 201, `mustChangePassword=true` forced, password never returned | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-30 | API | AC-12, BR-29 | Create/edit user with duplicate email | 422 field-level error, no user created/mutated | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-31 | API | FR-27 | Edit user's name/email/role/activation state | 200, fields updated correctly | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-32 | API | AC-13, BR-23, BR-30 | Administrator attempts to deactivate own account | 409 `SELF_DEACTIVATION`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-33 | API | AC-13, BR-24, BR-31 | Deactivate or change role of the last active Administrator (by a different admin, if only one exists in test fixture) | 409 `LAST_ACTIVE_ADMIN`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-34 | API | AC-14, FR-28, BR-25 | Reset a user's password to a new initial password | 200, target user's `mustChangePassword=true`; next login forces change (cross-check with API-08 style test) | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| API-35 | API | Invalid role | Create/edit user with an invalid role string | 422 validation error | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
-| SEC-09 | SEC | AC-15 | Non-Administrator attempts every `/api/admin/*` endpoint | 403 for each | `server/tests/lab-03/authorization.api.test.ts` | Pending — same reason as SEC-01/SEC-02: `/api/admin/*` is not mounted in this branch |
-| UI-08 | UI | Admin User Management §7 | List, search, role filter, Create/Edit modal render and validate correctly | Matches spec states (Idle/Validating/Busy/Success/Failure) | `client/tests/lab-03/UserManagement.test.tsx` | Pending |
-| UI-09 | UI | Admin User Management §7 | Self-deactivation and last-admin guard rules disable controls in UI | Toggle/role select disabled with correct tooltip in both guard scenarios | `client/tests/lab-03/UserManagement.test.tsx` | Pending |
-| E2E-06 | E2E | Full Admin flow | Login as Administrator → search/filter users → create user → edit user → reset password → attempt self-deactivation (blocked) | All steps succeed or are correctly blocked with visible feedback | `e2e/lab-03/user-administration.spec.ts` | Pending |
-| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping, responsive list/table | `artifacts/lab-03/screenshots/user-management/` | Pending |
+| API-28 | API | FR-24, FR-25 | List users, search by name/email, filter by role | Correct filtered/searched subset returned | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 11 assertions (projection, no-pagination, case-insensitive name/email search, role filter, combined q+role, inactive included, 400 on bad role, empty q/role) |
+| API-29 | API | FR-26, BR-21, BR-25 | Create user with one role and initial password | 201, `mustChangePassword=true` forced, password never returned | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 7 assertions (201+forced flag+bcrypt verify, flag forced even when caller sends false, email normalisation, isActive default/explicit, created admin can log in, 422 field errors, weak-policy rejects) |
+| API-30 | API | AC-12, BR-29 | Create/edit user with duplicate email | 422 field-level error, no user created/mutated | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 5 assertions: create-dup 422 `EMAIL_ALREADY_IN_USE` with unchanged row count, case-variant treated as same, active-vs-inactive answers byte-identical (BR-26), edit-onto-taken leaves target untouched, edit onto own case-variant allowed |
+| API-31 | API | FR-27 | Edit user's name/email/role/activation state | 200, fields updated correctly | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 7 assertions (full 4-field update, partial update, role change keeps forced-change flag, 404 unknown id, empty body 422, non-boolean isActive/blank name rejected with row unchanged, reactivate) |
+| API-32 | API | AC-13, BR-23, BR-30 | Administrator attempts to deactivate own account | 409 `SELF_DEACTIVATION`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 3 assertions: self `isActive:false` → 409 with row still active, self name/email edit still allowed, self-deactivation bundled with other edits rolls back the whole request |
+| API-33 | API | AC-13, BR-24, BR-31 | Deactivate or change role of the last active Administrator (by a different admin, if only one exists in test fixture) | 409 `LAST_ACTIVE_ADMIN`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 6 assertions: deactivate-last → 409, role-away-from-last → 409, sole-admin-on-self reports `LAST_ACTIVE_ADMIN` (not `SELF_DEACTIVATION`), allowed once a second active admin exists, inactive admins don't satisfy the invariant, concurrent demotion of final two admins leaves exactly one (SERIALIZABLE + retry) |
+| API-34 | API | AC-14, FR-28, BR-25 | Reset a user's password to a new initial password | 200, target user's `mustChangePassword=true`; next login forces change (cross-check with API-08 style test) | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 5 assertions: 200 `{ success: true }` + rehash + old password dead/new verifies, login succeeds but protected routes 403 `PASSWORD_CHANGE_REQUIRED`, weak new password 422 with hash untouched, 404 unknown id, reset of another admin keeps role/active |
+| API-35 | API | Invalid role | Create/edit user with an invalid role string | 422 validation error | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 3 assertions (create with `MANAGER` 422 + count unchanged, edit with `ADMIN` 422 + role unchanged, null/number/object role 422) |
+| SEC-09 | SEC | AC-15 | Non-Administrator attempts every `/api/admin/*` endpoint | 403 for each | `server/tests/lab-03/authorization.api.test.ts` | Pass — consolidated sweep: every admin route × {Requester, IT Staff} → 403 `FORBIDDEN`; Administrator control returns 200 |
+| UI-08 | UI | Admin User Management §7 | List, search, role filter, Create/Edit modal render and validate correctly | Matches spec states (Idle/Validating/Busy/Success/Failure) | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 20 assertions (columns, cards markup, debounced `q`, email search, role filter, empty/no-results, skeleton, retry, create idle/validate/busy/success, dup-email inline, generic banner, edit prefill/PATCH-changed-only, edit dup-email, 409 banner, reset confirm + policy block) |
+| UI-09 | UI | Admin User Management §7 | Self-deactivation and last-admin guard rules disable controls in UI | Toggle/role select disabled with correct tooltip in both guard scenarios | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 5 assertions (self → Active disabled + self tooltip, sole active admin → both disabled + last-admin tooltip, enabled with second admin, no inference from filtered view, guards off when roster fails) |
+| E2E-06 | E2E | Full Admin flow | Login as Administrator → search/filter users → create user → edit user → reset password → attempt self-deactivation (blocked) | All steps succeed or are correctly blocked with visible feedback | `e2e/lab-03/user-administration.spec.ts` | Pass — single flow test covering search, role filter, create (second active admin), edit, reset with mandated confirm copy, self-deactivation disabled with tooltip, extra-admin deactivation, last-admin guard (both controls disabled) |
+| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping, responsive list/table | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/user-management/` (`user-management-375.png`, `-768.png`, `-1280.png`, plus `create-user-modal-` equivalents) | Pass — all three widths green: stacked cards below 768px, full table at/above; Create modal fits without clipping at every width |
 
 ## 7. Data Migration & Seed
 
@@ -140,29 +140,29 @@ Not implemented in `feature/lab3-04-staff-ticketing` (explicitly out of scope �
 | AC-09 | API-24 |
 | AC-10 | API-25, API-26 |
 | AC-11 | API-12 |
-| AC-12 | API-30 (Pending — admin branch) |
-| AC-13 | API-32, API-33 (Pending — admin branch) |
-| AC-14 | API-10, API-34 (API-34 Pending — admin branch) |
-| AC-15 | SEC-01, SEC-02, SEC-09 (all Pending — admin branch; the routes they target do not exist yet) |
+| AC-12 | API-30 |
+| AC-13 | API-32, API-33 |
+| AC-14 | API-10, API-34 |
+| AC-15 | SEC-01, SEC-02, SEC-09 |
 | AC-16 | MIG-01 |
 | AC-17 | SEC-06a, SEC-06b |
 
 ---
 
-## 10. Recorded Run — feature/lab3-04-staff-ticketing
+## 10. Recorded Run — feature/lab3-05-admin-users
 
-Executed locally against the seeded PostgreSQL database (`server/.env`), branch `feature/lab3-04-staff-ticketing`.
+Executed locally against the seeded PostgreSQL database (`server/.env`), branch `feature/lab3-05-admin-users`.
 
 | Command | Result |
 |---|---|
 | `cd server && npx tsc --noEmit` | clean |
-| `cd server && npx vitest run` | **19 files passed · 407 tests passed · 3 skipped** (the 3 skips are SEC-01, SEC-02, SEC-09, intentionally left for the admin branch) |
+| `cd server && npx vitest run` | **20 files passed · 480 tests passed** (includes `users-admin.api.test.ts` 49 tests and `authorization.api.test.ts` 64 tests with zero skips — the 3 SEC-01/02/09 skips from the lab3-04 run are now implemented) |
 | `cd client && npx tsc --noEmit` | clean |
-| `cd client && npx vitest run` | **15 files passed · 266 tests passed** |
-| `npx playwright test` (repo root) | **15 tests passed** (E2E-01…E2E-05, RESP-01, RESP-02) |
+| `cd client && npx vitest run` | **16 files passed · 291 tests passed** (includes `UserManagement.test.tsx` 25 tests: UI-08 ×20, UI-09 ×5) |
+| `npx playwright test` (repo root) | **19 passed**: E2E-01…E2E-06 plus RESP-01/RESP-02/RESP-03 at all three widths (375/768/1280). Screenshots in `artifacts/lab-03/screenshots/user-management/` cover all widths (`user-management-{375,768,1280}.png` + `create-user-modal-{375,768,1280}.png`) |
 
-New/extended suites in this branch: `server/tests/lab-03/staff-queue.api.test.ts` (new), `server/tests/lab-03/staff-ticket-detail.api.test.ts` (extended, API-20…API-26), `server/tests/lab-03/comments-notes.api.test.ts` (extended, API-27), `server/tests/lab-03/authorization.api.test.ts` (SEC-03/04/06b/10, API-36 implemented; SEC-01/02/09 still skipped), `client/tests/lab-03/StaffTicketQueue.test.tsx` (new), `client/tests/lab-03/StaffTicketDetail.test.tsx` (new), `e2e/lab-03/staff-ticket-flow.spec.ts` (extended with E2E-05), `e2e/lab-03/responsive.spec.ts` (new).
+New/extended suites in this branch: `server/tests/lab-03/users-admin.api.test.ts` (new, API-28…API-35), `server/tests/lab-03/authorization.api.test.ts` (SEC-01/02/09 implemented, no remaining skips), `client/tests/lab-03/UserManagement.test.tsx` (new, UI-08/UI-09), `client/src/pages/AdminUsersPage.tsx` + shared `Dialog`/`ConfirmDialog`/`SearchInput`, `e2e/lab-03/user-administration.spec.ts` (new, E2E-06), `e2e/lab-03/responsive.spec.ts` (extended with RESP-03).
 
 ---
 
-Every AC has at least one mapped, executable automated test except AC-12/AC-13/AC-14/AC-15, which are owned by the Administrator User Management branch and are listed as Pending above rather than marked Pass without an implementation behind them.
+Every AC has at least one mapped, executable, passing automated test, and every row in this plan is green in the run recorded above.
