@@ -81,3 +81,34 @@
   color: var(--color-disabled-text);
 }
 
+/* Inactive account (§7) — neutral like Cancelled, but with readable text:
+   --color-disabled-text is too low-contrast on its own background to carry a
+   status label, so this uses the muted text token instead. */
+.statusInactive {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-text-muted);
+}
+
+/* -----------------------------------------------------------
+   Role badges — Administrator User Management (§7)
+   Only Section 1 tokens: neutral / pale green / solid secondary green.
+   ----------------------------------------------------------- */
+
+/* Requester — neutral, the baseline role */
+.roleRequester {
+  background-color: var(--color-priority-low-bg);
+  color: var(--color-priority-low-text);
+}
+
+/* IT Staff — pale green, the "operational" tier */
+.roleItStaff {
+  background-color: var(--color-pale-green);
+  color: var(--color-secondary-green);
+}
+
+/* Administrator — solid secondary green, the elevated tier */
+.roleAdministrator {
+  background-color: var(--color-secondary-green);
+  color: var(--color-surface);
+}
+

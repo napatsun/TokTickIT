@@ -12,6 +12,10 @@ const STATUS_STYLES: Record<string, string> = {
   CLOSED: styles.statusClosed,
   REOPENED: styles.statusReopened,
   CANCELLED: styles.statusCancelled,
+  // Account state (§7): active reads as success, inactive as neutral — never
+  // "error", because a deactivated account is a legitimate resting state.
+  ACTIVE: styles.statusResolved,
+  INACTIVE: styles.statusInactive,
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -23,6 +27,10 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: "Closed",
   REOPENED: "Reopened",
   CANCELLED: "Cancelled",
+  // Account state (ui-spec.md §7 User Management: "Status (Active/Inactive badge)").
+  // Same badge family as ticket status so the list reads as one visual language.
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
 };
 
 // IT Priority adds URGENT (BR-14) on top of the Requester scale.
@@ -40,9 +48,24 @@ const PRIORITY_LABELS: Record<string, string> = {
   URGENT: "Urgent",
 };
 
+// Role badges for the Administrator User Management list (ui-spec.md §7).
+// Reuses only the Section 1 tokens: neutral for Requester, pale green for
+// IT Staff, solid secondary green for the elevated Administrator tier.
+const ROLE_STYLES: Record<string, string> = {
+  REQUESTER: styles.roleRequester,
+  IT_STAFF: styles.roleItStaff,
+  ADMINISTRATOR: styles.roleAdministrator,
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  REQUESTER: "Requester",
+  IT_STAFF: "IT Staff",
+  ADMINISTRATOR: "Administrator",
+};
+
 interface BadgeProps {
   /** Which badge family to render. */
-  variant: "priority" | "status";
+  variant: "priority" | "status" | "role";
   /** The value to display. Unknown values fall back to a readable label. */
   value: string;
 }
@@ -70,10 +93,13 @@ function humanize(value: string): string {
  *              Cancelled (neutral gray)
  */
 export default function Badge({ variant, value }: BadgeProps) {
-  const isPriority = variant === "priority";
-  const cssClass = (isPriority ? PRIORITY_STYLES[value] : STATUS_STYLES[value]) ?? "";
-  const label =
-    (isPriority ? PRIORITY_LABELS[value] : STATUS_LABELS[value]) ?? humanize(value);
+  const styleMap =
+    variant === "priority" ? PRIORITY_STYLES : variant === "role" ? ROLE_STYLES : STATUS_STYLES;
+  const labelMap =
+    variant === "priority" ? PRIORITY_LABELS : variant === "role" ? ROLE_LABELS : STATUS_LABELS;
+
+  const cssClass = styleMap[value] ?? "";
+  const label = labelMap[value] ?? humanize(value);
 
   return (
     <span className={`${styles.badge} ${cssClass}`} role="status">
