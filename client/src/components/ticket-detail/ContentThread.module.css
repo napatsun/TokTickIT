@@ -21,7 +21,9 @@
    the colour, so colour is never the sole indicator (§9 accessibility). */
 .internalSection {
   background-color: var(--color-warning-bg);
-  border: 2px solid var(--color-warning);
+  /* AA-safe amber accent (§9): 4.94:1 against the amber tint, so the panel
+     boundary is well clear of the 3:1 non-text minimum. */
+  border: 2px solid var(--color-warning-text);
 }
 
 .heading {
@@ -38,7 +40,7 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .hint {
@@ -87,17 +89,9 @@
   color: var(--color-text);
 }
 
-/* Non-color redundancy (§1): the role is always written out. */
-.roleBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  background-color: var(--color-pale-green);
-  color: var(--color-secondary-green);
-}
+/* Author role badges use the shared Badge component (Badge.module.css) — the
+   same one the App Shell and the Administrator user list use — so a given role
+   never renders in two different colours. */
 
 .timestamp {
   font-size: var(--font-size-xs);
@@ -123,7 +117,7 @@
 }
 
 .internalSection .form {
-  border-top-color: var(--color-warning);
+  border-top-color: var(--color-warning-text);
 }
 
 .label {

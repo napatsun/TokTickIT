@@ -235,7 +235,11 @@ export default function TicketDetailPage() {
   if (error) {
     return (
       <div className={styles.page}>
-        <div className={styles.errorBanner}>
+        {/* Safe failure (§8): a generic message plus a retry affordance, never
+            a raw backend string. role="alert" announces it, matching every
+            other failure banner in the app (this one was the only one missing
+            it — feature/lab3-06 consistency pass). */}
+        <div className={styles.errorBanner} role="alert" data-testid="requester-detail-error">
           <p>{error}</p>
           <Button variant="tertiary" onClick={fetchTicketDetail}>
             Retry

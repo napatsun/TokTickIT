@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Badge from "../shared/Badge";
 import Button from "../shared/Button";
 import { apiClient } from "../../lib/apiClient";
 import styles from "./ContentThread.module.css";
@@ -79,11 +80,6 @@ function formatDateTime(isoString: string): string {
   });
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  REQUESTER: "Requester",
-  IT_STAFF: "IT Staff",
-  ADMINISTRATOR: "Administrator",
-};
 
 // ─── Component ──────────────────────────────────────────────────────────
 
@@ -226,9 +222,12 @@ export default function ContentThread({
             <li key={entry.id} className={styles.comment} data-testid={testIds.item}>
               <div className={styles.commentMeta}>
                 <span className={styles.author}>{entry.authorName}</span>
-                <span className={styles.roleBadge}>
-                  {ROLE_LABELS[entry.authorRole] ?? entry.authorRole}
-                </span>
+                {/* Shared role badge (§9 consistency): the same component and
+                    the same per-role colours as the App Shell header and the
+                    Administrator user list, so a role never looks different
+                    from screen to screen. Text is always present, so colour is
+                    never the sole indicator. */}
+                <Badge variant="role" value={entry.authorRole} />
                 <span className={styles.timestamp}>{formatDateTime(entry.createdAt)}</span>
               </div>
               <p className={styles.content}>{entry.content}</p>
@@ -240,7 +239,12 @@ export default function ContentThread({
       {/* Composer */}
       <form className={styles.form} onSubmit={handleSubmit}>
         {postError && (
-          <div className={styles.errorBanner} role="alert" data-testid={testIds.error}>
+          <div
+            className={styles.errorBanner}
+            role="alert"
+            id={`${textareaId}-error`}
+            data-testid={testIds.error}
+          >
             <p>{postError}</p>
           </div>
         )}
@@ -267,10 +271,21 @@ export default function ContentThread({
           maxLength={MAX_CONTENT_LENGTH}
           disabled={isPosting}
           placeholder={composerPlaceholder}
+          /* §9: the failure banner and the live character counter are both
+             associated with the composer, so a screen reader announces them
+             in the context of the field the user is typing into. */
+          aria-invalid={postError ? true : undefined}
+          aria-describedby={
+            postError ? `${textareaId}-error ${textareaId}-counter` : `${textareaId}-counter`
+          }
         />
 
         <div className={styles.formFooter}>
-          <span className={styles.charCount} data-testid={testIds.counter}>
+          <span
+            className={styles.charCount}
+            id={`${textareaId}-counter`}
+            data-testid={testIds.counter}
+          >
             {draft.length}/{MAX_CONTENT_LENGTH}
           </span>
           <Button

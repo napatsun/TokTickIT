@@ -188,8 +188,15 @@ export default function StaffQueuePage() {
     setPage(1);
   }
 
-  function ariaSort(field: SortableField): "ascending" | "descending" | "none" | undefined {
-    if (sortBy !== field) return undefined;
+  /**
+   * WAI-ARIA sort state for a sortable column.
+   *
+   * "none" (rather than omitting the attribute) marks the column as sortable
+   * but not currently sorted — which is what a screen-reader user needs to hear
+   * next to the other three states (§9).
+   */
+  function ariaSort(field: SortableField): "ascending" | "descending" | "none" {
+    if (sortBy !== field) return "none";
     return sortDir === "asc" ? "ascending" : "descending";
   }
 

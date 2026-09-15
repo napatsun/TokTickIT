@@ -369,7 +369,7 @@ export default function StaffTicketDetailPage() {
     return (
       <div className={styles.page}>
         <div className={styles.errorBanner} role="alert" data-testid="staff-detail-error">
-          <p>Couldn&apos;t load this ticket.</p>
+          <p>Couldn&apos;t load this ticket. Retry.</p>
           <Button variant="tertiary" onClick={() => void fetchDetail()}>
             Retry
           </Button>
@@ -440,8 +440,15 @@ export default function StaffTicketDetailPage() {
             </span>
           </div>
 
+          {/* §9: each inline failure is announced (role="alert") AND bound to
+              the control it belongs to, so the message is read in context. */}
           {ownerError && (
-            <div className={styles.inlineError} role="alert" data-testid="owner-error">
+            <div
+              className={styles.inlineError}
+              role="alert"
+              id="owner-error"
+              data-testid="owner-error"
+            >
               {ownerError}
             </div>
           )}
@@ -458,6 +465,7 @@ export default function StaffTicketDetailPage() {
                 busyLabel="Claiming…"
                 onClick={() => void claimTicket()}
                 disabled={ownerBusy}
+                aria-describedby={ownerError ? "owner-error" : undefined}
               >
                 Claim
               </Button>
@@ -471,6 +479,8 @@ export default function StaffTicketDetailPage() {
                 value={selectedOwner}
                 onChange={(event) => setSelectedOwner(event.target.value)}
                 disabled={ownerBusy}
+                aria-invalid={ownerError ? true : undefined}
+                aria-describedby={ownerError ? "owner-error" : undefined}
               >
                 <option value="">Select an IT Staff member…</option>
                 {owners.map((owner) => (
@@ -506,6 +516,8 @@ export default function StaffTicketDetailPage() {
               value={ticket.itPriority}
               onChange={(event) => void savePriority(event.target.value)}
               disabled={priorityBusy}
+              aria-invalid={priorityError ? true : undefined}
+              aria-describedby={priorityError ? "priority-error" : undefined}
             >
               {IT_PRIORITY_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -516,7 +528,12 @@ export default function StaffTicketDetailPage() {
           </label>
 
           {priorityError && (
-            <div className={styles.inlineError} role="alert" data-testid="priority-error">
+            <div
+              className={styles.inlineError}
+              role="alert"
+              id="priority-error"
+              data-testid="priority-error"
+            >
               {priorityError}
             </div>
           )}
@@ -550,6 +567,8 @@ export default function StaffTicketDetailPage() {
                 setStatusSaved(false);
               }}
               disabled={statusBusy || ticket.allowedStatusTransitions.length === 0}
+              aria-invalid={statusError ? true : undefined}
+              aria-describedby={statusError ? "status-error" : undefined}
             >
               <option value="">Select a status…</option>
               {ticket.allowedStatusTransitions.map((status) => (
@@ -576,7 +595,12 @@ export default function StaffTicketDetailPage() {
         )}
 
         {statusError && (
-          <div className={styles.inlineError} role="alert" data-testid="status-error">
+          <div
+            className={styles.inlineError}
+            role="alert"
+            id="status-error"
+            data-testid="status-error"
+          >
             {statusError}
           </div>
         )}

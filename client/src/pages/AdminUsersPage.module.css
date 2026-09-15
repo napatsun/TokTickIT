@@ -217,6 +217,13 @@
   cursor: not-allowed;
 }
 
+/* §9: the checkbox keeps a visible Zen Green focus ring (the default outline
+   is not sufficient contrast against the amber-tinted dialog surface). */
+.toggle input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
 .helperText {
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-sm);
@@ -228,7 +235,9 @@
 .guardNote {
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-sm);
-  color: var(--color-warning);
+  /* 13px text on the white dialog surface: --color-warning is only 3.25:1
+     there, so the AA-safe amber token is used instead (§9). */
+  color: var(--color-warning-text);
 }
 
 .subAction {

@@ -92,7 +92,9 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className={styles.page}>
+    // §9: this screen renders outside the App Shell (the password-change gate
+    // precedes it), so it supplies its own <main> landmark.
+    <main className={styles.page}>
       <div className={styles.card}>
         <h1 className={styles.title}>Set a new password</h1>
         <p className={styles.subtitle}>
@@ -115,6 +117,9 @@ export default function ChangePasswordPage() {
             value={newPassword}
             disabled={isBusy}
             errorMessage={errors.newPassword}
+            /* §9: the always-visible hint is announced with the field, and
+               stacks with the inline error when validation fails. */
+            describedBy="password-hint"
             onChange={(e) => {
               const value = e.target.value;
               setNewPassword(value);
@@ -124,7 +129,7 @@ export default function ChangePasswordPage() {
             }}
           />
           {/* §3: the complexity hint is always visible, not only on error */}
-          <p className={styles.hint} data-testid="password-hint">
+          <p className={styles.hint} id="password-hint" data-testid="password-hint">
             {HINT}
           </p>
 
@@ -158,6 +163,6 @@ export default function ChangePasswordPage() {
           </div>
         </form>
       </div>
-    </div>
+    </main>
   );
 }

@@ -708,11 +708,15 @@ export default function AdminUsersPage() {
                 inputType="password"
                 value={createValues.initialPassword}
                 errorMessage={createErrors.initialPassword}
+                /* §9: the helper text is announced with the field it explains. */
+                describedBy="create-password-helper"
                 onChange={(event) =>
                   setCreateValues((v) => ({ ...v, initialPassword: event.target.value }))
                 }
               />
-              <p className={styles.helperText}>{INITIAL_PASSWORD_HELPER}</p>
+              <p className={styles.helperText} id="create-password-helper">
+                {INITIAL_PASSWORD_HELPER}
+              </p>
             </div>
           </div>
         </Dialog>
@@ -808,10 +812,12 @@ export default function AdminUsersPage() {
 
             {/* ─── Set New Initial Password (separate sub-action, §7) ──── */}
             <section className={styles.subAction} aria-labelledby="reset-password-heading">
-              <h4 className={styles.subActionTitle} id="reset-password-heading">
+              {/* h3: one level below the dialog's h2 title (ui-spec §9 heading
+                  order). */}
+              <h3 className={styles.subActionTitle} id="reset-password-heading">
                 Set New Initial Password
-              </h4>
-              <p className={styles.subActionCopy}>
+              </h3>
+              <p className={styles.subActionCopy} id="reset-password-copy">
                 Sets a new password for {editTarget.name} and forces a change at their next login.
               </p>
 
@@ -826,6 +832,7 @@ export default function AdminUsersPage() {
                 inputType="password"
                 value={resetPasswordValue}
                 errorMessage={resetError}
+                describedBy="reset-password-copy"
                 onChange={(event) => setResetPasswordValue(event.target.value)}
               />
 
