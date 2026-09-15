@@ -67,7 +67,16 @@ Legend for **Final**: `Pass` (executed and green in the run recorded in §10) ·
 | API-19 | API | Invalid query params | Invalid `sortBy`/`status`/`priority` enum value | 400 with safe message | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
 | UI-04 | UI | IT Staff Queue §5 | Table renders columns, badges, pagination footer per handout mock | Matches expected structure; mobile breakpoint renders stacked cards | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass — path corrected to the shipped location |
 | UI-05 | UI | IT Staff Queue §5 | Empty and no-results states | Correct message + "Clear filters" affordance shown | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass — path corrected to the shipped location |
-| RESP-01 | RESP | §9 responsive | Queue screen at 375px/768px/1280px | No horizontal overflow, no clipping, card layout on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-queue/` (`queue-375.png`, `queue-768.png`, `queue-1280.png`) | Pass |
+| RESP-01 | RESP | §9 responsive | Queue screen at 375px/768px/1280px | No horizontal overflow, no clipping, no overlap, card layout on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-queue/` (`queue-375.png`, `queue-768.png`, `queue-1280.png`) | Pass — re-run in `feature/lab3-06-ui-polish-and-a11y` after the spec gained element-level clipping (`expectNoClipping`) and text-overlap (`expectNoTextOverlap`) assertions; green at all three widths |
+
+### 4b. Cross-Cutting Responsive & Visual Verification
+
+Added by `feature/lab3-06-ui-polish-and-a11y` (ui-spec.md §9, handout §8.7/9). RESP-01…RESP-05 all now share three layout assertions per screen per width: no document overflow (`scrollWidth <= clientWidth`), no element clipped outside the viewport, and no overlapping text elements.
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| RESP-04 | RESP | §9 responsive (ui-spec §2/§3) | Login (idle + generic failure banner) and the mandatory Change Password screen at 375px/768px/1280px, plus the Zen Green focus ring on the focused field | No overflow/clipping/overlap; the failure banner is the single generic copy; the focused input reports `rgb(11, 122, 70)`; the password gate renders with no shell nav | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/authentication/` (`login-{375,768,1280}.png`, `login-failure-{375,768,1280}.png`, `change-password-{375,768,1280}.png`) | Pass — 3 widths green |
+| RESP-05 | RESP | §9 responsive (ui-spec §1/§4) | App Shell navigation (hamburger collapse + role-scoped destinations) and the Requester Ticket Detail with its Public Comments panel and "appears resolved" marker at 375px/768px/1280px | Below 768px the full nav collapses into the hamburger and the opened menu exposes only Requester destinations, never staff/admin ones; above it the full nav is visible and the hamburger hidden; the marker ticket shows the marker badge with the formal Status badge unchanged, and the OPEN ticket offers the resolve action; no overflow/clipping/overlap anywhere | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/app-shell/` (`app-shell-{375,768,1280}.png`) + `artifacts/lab-03/screenshots/requester-ticket-detail/` (`requester-ticket-detail-{375,768,1280}.png`, `requester-resolve-mark-{375,768,1280}.png`) | Pass — 3 widths green |
 
 ## 5. IT Staff Ticket Operations (Ownership, Priority, Status, Comments, Notes)
 
@@ -85,7 +94,7 @@ Legend for **Final**: `Pass` (executed and green in the run recorded in §10) ·
 | UI-06 | UI | IT Staff Ticket Detail §6 | Public Comments and Internal Notes render as visually distinct panels | Snapshot confirms distinct styling/labels | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass — path corrected to the shipped location; asserts differing `data-variant`/class names, the lock icon, the IT-only heading, and separate composers/counters/endpoints |
 | UI-07 | UI | IT Staff Ticket Detail §6 | Status control only offers permitted next-states for current status | Rendered options match transition matrix exactly | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass — path corrected; asserts the rendered option set equals the §6.1 matrix for all 8 statuses |
 | E2E-05 | E2E | Full IT Staff flow | Login as IT Staff → open queue → claim ticket → set IT Priority → change status → post public comment → add internal note | All steps succeed, correct UI feedback and final ticket state | `e2e/lab-03/staff-ticket-flow.spec.ts` (IT Staff portion) | Pass |
-| RESP-02 | RESP | §9 responsive | Ticket Detail screen at 375px/768px/1280px | No overflow/clipping; Internal Notes panel remains visually distinct on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-ticket-detail/` (`staff-ticket-detail-375.png`, `-768.png`, `-1280.png`) | Pass — also asserts the notes panel's computed background differs from Public Comments' at every width |
+| RESP-02 | RESP | §9 responsive | Ticket Detail screen at 375px/768px/1280px | No overflow/clipping/overlap; Internal Notes panel remains visually distinct on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-ticket-detail/` (`staff-ticket-detail-375.png`, `-768.png`, `-1280.png`) | Pass — also asserts the notes panel's computed background differs from Public Comments' at every width; re-run in `feature/lab3-06-ui-polish-and-a11y` with the added clipping/overlap assertions (green at all three widths) |
 
 ## 6. Administrator User Management
 
@@ -105,7 +114,7 @@ Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts`
 | UI-08 | UI | Admin User Management §7 | List, search, role filter, Create/Edit modal render and validate correctly | Matches spec states (Idle/Validating/Busy/Success/Failure) | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 20 assertions (columns, cards markup, debounced `q`, email search, role filter, empty/no-results, skeleton, retry, create idle/validate/busy/success, dup-email inline, generic banner, edit prefill/PATCH-changed-only, edit dup-email, 409 banner, reset confirm + policy block) |
 | UI-09 | UI | Admin User Management §7 | Self-deactivation and last-admin guard rules disable controls in UI | Toggle/role select disabled with correct tooltip in both guard scenarios | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 5 assertions (self → Active disabled + self tooltip, sole active admin → both disabled + last-admin tooltip, enabled with second admin, no inference from filtered view, guards off when roster fails) |
 | E2E-06 | E2E | Full Admin flow | Login as Administrator → search/filter users → create user → edit user → reset password → attempt self-deactivation (blocked) | All steps succeed or are correctly blocked with visible feedback | `e2e/lab-03/user-administration.spec.ts` | Pass — single flow test covering search, role filter, create (second active admin), edit, reset with mandated confirm copy, self-deactivation disabled with tooltip, extra-admin deactivation, last-admin guard (both controls disabled) |
-| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping, responsive list/table | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/user-management/` (`user-management-375.png`, `-768.png`, `-1280.png`, plus `create-user-modal-` equivalents) | Pass — all three widths green: stacked cards below 768px, full table at/above; Create modal fits without clipping at every width |
+| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping/overlap, responsive list/table | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/user-management/` (`user-management-375.png`, `-768.png`, `-1280.png`, plus `create-user-modal-` equivalents) | Pass — all three widths green: stacked cards below 768px, full table at/above; Create modal fits without clipping at every width; re-run in `feature/lab3-06-ui-polish-and-a11y` with the added element-level clipping and text-overlap assertions |
 
 ## 7. Data Migration & Seed
 
@@ -119,7 +128,7 @@ Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts`
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| UI-10 | UI | §9 accessibility | Form error regions use `role="alert"`, labels bound via `for`/`id` across Login/Change Password/Create-Edit User forms | Automated a11y assertions (e.g., jest-axe) pass with no critical violations | `client/tests/lab-03/*` (shared a11y checks) | Pending — no automated axe-style a11y assertion exists yet (jest-axe is not a dependency); `role="alert"` and label binding are covered indirectly by the Login/ChangePassword/StaffTicketDetail suites, but that is not the axe check this row specifies |
+| UI-10 | UI | §9 accessibility | Form error regions use `role="alert"`, labels bound via `for`/`id` across Login/Change Password/Create-Edit User forms, **plus** automated axe scans and the modal keyboard contract | Automated a11y assertions pass with no violations at all | `client/tests/lab-03/Login.test.tsx`, `ChangePassword.test.tsx`, `UserManagement.test.tsx`, `StaffTicketQueue.test.tsx`, `StaffTicketDetail.test.tsx`, `AppShell.test.tsx`, `client/tests/lab-02/RequesterTicketDetail.test.tsx` (shared helper `client/tests/support/a11y.ts`) | **Pass** — `jest-axe` 10.0.0 added as a client dev dependency; **25 axe scans across 7 suites, 0 violations** (Login idle/validating/failure · Change Password idle/validating/failure · App Shell with the `region` rule enabled · Queue populated/no-results/failure · Ticket Detail populated/requester-signal/status-confirm/not-found/failure · User Management populated/create/edit-with-guards/reset-confirm/failure · Requester Ticket Detail populated/resolve-confirm/marked/remove-attachment/page-level-failure). The scan also drove one cross-cutting fix: the Requester Ticket Detail's page-level failure banner was the only one missing `role="alert"`. The scan found and closed one real violation: `heading-order` — dialog titles were `<h3>` under a page `<h1>`, now `<h2>` with the Edit sub-section at `<h3>`. `aria-describedby`/`role="alert"`/label binding are asserted directly in the Login, Change Password, Requester-Ticket-Detail and Staff-Ticket-Detail suites; the modal focus trap / Escape / focus-return contract is asserted in `UserManagement.test.tsx`. `color-contrast` cannot run in jsdom, so contrast is verified numerically instead — `docs/lab-03/visual-checklist.md` §5 records the computed ratio for every badge/banner pair |
 | SEC-10 | SEC | §6 api-spec safe errors | Any endpoint's 500 response body | Contains only generic message, no stack trace or internal detail | `server/tests/lab-03/authorization.api.test.ts` | Pass — forced on four staff endpoints by binding an out-of-int4-range ticket id (a real Prisma failure, no mocking of internals); asserts the body is exactly `{ error: { code: SERVER_ERROR, message: … } }` with no stack frame, ORM code, or repo path |
 | API-36 | API | §6 api-spec safe errors | Cross-owner ticket fetch (Requester B fetching Requester A's ticket) vs. non-existent ticket ID | Identical `404` shape for both cases (no existence leak) | `server/tests/lab-03/authorization.api.test.ts` | Pass — requester cross-owner 404 equals the non-existent 404; on the staff routes a non-existent id and a malformed id return the same generic body, and a staff read of another Requester's ticket is a real 200 (the queue is shared) |
 
@@ -165,4 +174,28 @@ New/extended suites in this branch: `server/tests/lab-03/users-admin.api.test.ts
 
 ---
 
-Every AC has at least one mapped, executable, passing automated test, and every row in this plan is green in the run recorded above.
+## 11. Recorded Run — feature/lab3-06-ui-polish-and-a11y
+
+Executed locally against the seeded PostgreSQL database (`server/.env`), branch `feature/lab3-06-ui-polish-and-a11y`. This branch adds no features: it is the cross-branch consistency, responsive and accessibility pass over every screen the sprint ships.
+
+| Command | Result |
+|---|---|
+| `cd server && npx tsc --noEmit` | clean |
+| `cd server && npx vitest run` | **20 files passed · 480 tests passed** (unchanged — no server edits in this branch) |
+| `cd client && npx tsc --noEmit` | clean |
+| `cd client && npx vitest run` | **16 files passed · 325 tests passed** (was 291; +34 assertions: 25 jest-axe scans, the dialog focus-trap/Escape/focus-return contract, `aria-describedby` wiring checks, and the sorting/`aria-sort` assertion) |
+| `npx playwright test` (repo root) | **25 passed** — E2E-01…E2E-06 plus RESP-01, RESP-02, RESP-03, **RESP-04** and **RESP-05** at 375/768/1280px |
+
+Screenshots captured/recaptured in this branch (`artifacts/lab-03/screenshots/`): `authentication/`, `app-shell/` and `requester-ticket-detail/` are new; `staff-queue/`, `staff-ticket-detail/` and `user-management/` were recaptured so they reflect the polish changes.
+
+Part 9 submission evidence (design consistency, role navigation, badges, editable-vs-read-only fields, validation placement, focus, clipping, overlap, horizontal overflow) is recorded per screen and per width in **`docs/lab-03/visual-checklist.md`**, which also carries the token-consistency audit (§4), the focus-visibility audit (§6) and the computed WCAG contrast table (§5).
+
+No existing test was weakened or deleted. Deliberate expectation updates made in this branch, all recorded above:
+
+- `StaffTicketQueue.test.tsx` — added an `aria-sort` assertion; the Queue now emits `aria-sort="none"` on sortable-but-unsorted columns, which is a strengthening of the component, not a relaxed test.
+- `UserManagement.test.tsx` — the two new reset-confirmation tests anchor their `getByLabelText` regex (`/^New initial password/`) exactly like the pre-existing UI-08 tests, so the query binds the input rather than the `<section aria-labelledby>` wrapper.
+- `RequesterTicketDetail.test.tsx` — appended axe/`aria-describedby` coverage; the pre-existing assertions (including the exact confirmation copy and the `requester-resolved-badge` marker) are untouched and still pass after those dialogs were moved onto the shared `Dialog` primitive.
+
+---
+
+Every AC has at least one mapped, executable, passing automated test, and every row in this plan is green in the runs recorded above.
