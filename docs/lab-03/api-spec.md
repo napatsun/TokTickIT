@@ -170,14 +170,14 @@ Auth for all endpoints in this section: session required, `role = ADMINISTRATOR`
 ### `POST /api/admin/users`
 **Body:** `{ "name","email","role","isActive","initialPassword" }`
 **201:** created user (without `passwordHash`); server sets `mustChangePassword = true` regardless of caller intent (BR-25).
-**422:** `{ "fields": { "email": "This email is already in use." } }` (BR-29) or other field errors (missing name, invalid role enum, weak initial password).
+**422:** `{ "fields": { "email": "This email is already in use." } }` (FR-29, BR-10) or other field errors (missing name, invalid role enum, weak initial password).
 
 ### `PATCH /api/admin/users/:id`
 **Body (any subset):** `{ "name","email","role","isActive" }`
 **200:** updated user.
-**422:** duplicate email (BR-29), invalid role.
-**409:** `LAST_ACTIVE_ADMIN` if the request would deactivate or change the role of the last active Administrator (BR-24, BR-31).
-**409:** `SELF_DEACTIVATION` if `isActive:false` is requested for the caller's own account (BR-23, BR-30).
+**422:** duplicate email (FR-29, BR-10), invalid role.
+**409:** `LAST_ACTIVE_ADMIN` if the request would deactivate or change the role of the last active Administrator (FR-31, BR-24).
+**409:** `SELF_DEACTIVATION` if `isActive:false` is requested for the caller's own account (FR-30, BR-23).
 **404:** user not found.
 
 ### `POST /api/admin/users/:id/reset-password`
