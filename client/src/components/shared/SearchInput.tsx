@@ -65,7 +65,7 @@ export default function SearchInput({
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newValue = e.target.value;
     (window as any).__si = (window as any).__si ?? [];
-    (window as any).__si.push(["change", newValue, String(e.nativeEvent?.inputType), Date.now()]);
+    (window as any).__si.push(["change", newValue, String((e.nativeEvent as InputEvent).inputType), Date.now()]);
     setLocalValue(newValue);
 
     if (debounceRef.current !== null) {

@@ -231,7 +231,14 @@ test.describe("RESP-03 — User Management responsiveness", () => {
 
       await expect(page).toHaveURL(/\/admin\/users$/, { timeout: 15_000 });
       await expect(page.getByTestId("users-table")).toBeAttached();
-      await expect(page.getByTestId("user-row").first()).toBeVisible({ timeout: 15_000 });
+      // The table rows only exist in layout at/above 768px; below that the
+      // stacked cards take over (same branch-on-viewport pattern as RESP-01,
+      // which uses 992px for the nine-column queue).
+      if (viewport.width < 768) {
+        await expect(page.getByTestId("user-card").first()).toBeVisible({ timeout: 15_000 });
+      } else {
+        await expect(page.getByTestId("user-row").first()).toBeVisible({ timeout: 15_000 });
+      }
       await page.waitForTimeout(400); // let the list settle
 
       await expectNoHorizontalOverflow(page, `User Management @ ${viewport.name}px`);
