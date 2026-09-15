@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "../../src/contexts/AuthContext";
 import ChangePasswordPage, { validateNewPassword } from "../../src/pages/ChangePasswordPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 /**
  * UI-02 — Mandatory Change Password screen (ui-spec.md §3)
@@ -241,5 +242,82 @@ describe("UI-02 — Change Password screen", () => {
     expect(validateNewPassword("12345678")).toMatch(/letter and a number/i);
     expect(validateNewPassword("")).toMatch(/required/i);
     expect(validateNewPassword("ValidPass123")).toBeUndefined();
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+describe("UI-10 — Change Password screen automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations in the idle state", async () => {
+    stubFetch();
+    renderChangePassword();
+    await ready();
+
+    await expectNoA11yViolations(document.body, "Change Password (idle)");
+  });
+
+  it("has no axe violations with both inline validation errors shown", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderChangePassword();
+
+    const { newPassword, confirmPassword, submit } = await ready();
+    await user.type(newPassword, "abcdefgh"); // no digit
+    await user.type(confirmPassword, "Different1");
+    await user.click(submit);
+    await screen.findByText(/include a letter and a number/i);
+
+    await expectNoA11yViolations(document.body, "Change Password (validating)");
+  });
+
+  it("has no axe violations with the safe failure banner shown", async () => {
+    stubFetch({
+      "/api/auth/change-password": {
+        status: 500,
+        body: { error: { code: "SERVER_ERROR", message: "boom" } },
+      },
+    });
+    const user = userEvent.setup();
+    renderChangePassword();
+
+    const { newPassword, confirmPassword, submit } = await ready();
+    await user.type(newPassword, "ValidPass123");
+    await user.type(confirmPassword, "ValidPass123");
+    await user.click(submit);
+    await screen.findByRole("alert");
+
+    await expectNoA11yViolations(document.body, "Change Password (failure)");
+  });
+
+  it("associates the always-visible policy hint with the new-password field", async () => {
+    stubFetch();
+    renderChangePassword();
+
+    const { newPassword } = await ready();
+    const hinted = newPassword.getAttribute("aria-describedby") ?? "";
+
+    // §3/§9: the hint is announced with the field rather than merely rendered near it.
+    expect(hinted.split(/\s+/)).toContain("password-hint");
+    expect(screen.getByTestId("password-hint")).toHaveAttribute("id", "password-hint");
+  });
+
+  it("adds the inline error to aria-describedby alongside the hint when invalid", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderChangePassword();
+
+    const { newPassword, confirmPassword, submit } = await ready();
+    await user.type(newPassword, "abcdefgh");
+    await user.type(confirmPassword, "abcdefgh");
+    await user.click(submit);
+    await screen.findByText(/include a letter and a number/i);
+
+    const describedBy = (newPassword.getAttribute("aria-describedby") ?? "").split(/\s+/);
+    expect(describedBy).toContain("password-hint");
+
+    const errorId = describedBy.find((id) => id.endsWith("-error"));
+    expect(errorId).toBeDefined();
+    expect(document.getElementById(errorId as string)).toHaveAttribute("role", "alert");
+    expect(newPassword).toHaveAttribute("aria-invalid", "true");
   });
 });

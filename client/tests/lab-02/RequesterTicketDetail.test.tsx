@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TicketDetailPage from "../../src/pages/TicketDetailPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 // ─── Mock apiClient ─────────────────────────────────────────────────────
 
@@ -634,5 +635,101 @@ describe('FR-15 — "Problem Appears Resolved" (ui-spec §4, AC-11)', () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByTestId("requester-resolved-badge")).not.toBeInTheDocument();
     expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+/**
+ * The Requester Ticket Detail is one of the screens this branch polishes, and
+ * it is the only place the Lab 2 confirmations (resolve-mark, remove
+ * attachment) render — both now go through the shared Dialog primitive, so
+ * their focus/keyboard contract is scanned here too.
+ */
+describe("UI-10 — Requester Ticket Detail automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations with the comments panel populated", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, comments: existingComments });
+    renderPage();
+    await screen.findAllByTestId("comment-item");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (populated)");
+  });
+
+  it("has no axe violations with the resolve-mark confirmation open", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    );
+    await screen.findByRole("dialog");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (resolve confirm)");
+  });
+
+  it("has no axe violations once the resolved marker is shown", async () => {
+    vi.clearAllMocks();
+    routeApi({
+      ticket: {
+        ...openTicket,
+        requesterMarkedResolved: true,
+        requesterMarkedResolvedAt: "2026-09-05T10:00:00.000Z",
+      },
+    });
+    renderPage();
+    await screen.findByTestId("requester-resolved-badge");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (marked resolved)");
+  });
+
+  it("has no axe violations with the remove-attachment dialog open", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, comments: existingComments });
+    renderPage();
+    await screen.findAllByTestId("comment-item");
+
+    await userEvent.click(screen.getAllByText("Remove")[0]);
+    await screen.findByTestId("remove-attachment-dialog");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (remove attachment)");
+  });
+
+  it("has no axe violations in the page-level safe-failure state", async () => {
+    vi.clearAllMocks();
+    mockApiResponse.mockReturnValue({ _ok: false, status: 500 });
+    renderPage();
+
+    const banner = await screen.findByTestId("requester-detail-error");
+    // §8/§9: the generic message + Retry affordance is announced as an alert.
+    expect(banner).toHaveAttribute("role", "alert");
+    expect(banner).toHaveTextContent("Couldn't load ticket details.");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (failure)");
+  });
+
+  it("associates the public-comment composer failure with the textarea", async () => {
+    vi.clearAllMocks();
+    routeApi({
+      ticket: openTicket,
+      comments: existingComments,
+      postComment: { _ok: false, status: 500 },
+    });
+    renderPage();
+
+    const textarea = await screen.findByLabelText("Add a comment");
+    await userEvent.type(textarea, "This draft must survive the failure");
+    await userEvent.click(screen.getByRole("button", { name: /post comment/i }));
+    await screen.findByTestId("comment-error");
+
+    // §9: the failure banner AND the live counter are bound to the composer.
+    const describedBy = (textarea.getAttribute("aria-describedby") ?? "").split(/\s+/);
+    expect(describedBy).toEqual(
+      expect.arrayContaining(["public-comment-error", "public-comment-counter"]),
+    );
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById("public-comment-error")).toHaveAttribute("role", "alert");
+    expect(screen.getByTestId("comment-counter")).toHaveAttribute("id", "public-comment-counter");
   });
 });

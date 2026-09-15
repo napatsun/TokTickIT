@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "../../src/contexts/AuthContext";
 import LoginPage, { bannerForCode } from "../../src/pages/LoginPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 /**
  * UI-01 — Login screen (ui-spec.md §2)
@@ -290,5 +291,70 @@ describe("UI-01 — Login screen", () => {
       "This account is unavailable. Contact your administrator.",
     );
     expect(bannerForCode("SOMETHING_NEW", "ignored")).toBe("Something went wrong. Please try again.");
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+describe("UI-10 — Login screen automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations in the idle state", async () => {
+    stubFetch();
+    renderLogin();
+    await screen.findByLabelText(/email/i);
+
+    await expectNoA11yViolations(document.body, "Login (idle)");
+  });
+
+  it("has no axe violations with inline validation errors shown", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(await screen.findByLabelText(/email/i), "not-an-email");
+    await user.type(screen.getByLabelText(/password/i), "x");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+    await screen.findByText(/enter a valid email address/i);
+
+    await expectNoA11yViolations(document.body, "Login (validating)");
+  });
+
+  it("has no axe violations with the generic failure banner shown", async () => {
+    stubFetch({
+      "/api/auth/login": {
+        status: 401,
+        body: { error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password." } },
+      },
+    });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(await screen.findByLabelText(/email/i), REQUESTER.email);
+    await user.type(screen.getByLabelText(/password/i), "WrongPassword1");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+    await screen.findByRole("alert");
+
+    await expectNoA11yViolations(document.body, "Login (failure)");
+  });
+
+  it("binds each error to its own field via aria-describedby and role=alert", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(await screen.findByLabelText(/email/i), "not-an-email");
+    await user.type(screen.getByLabelText(/password/i), "x");
+    await user.click(screen.getByRole("button", { name: /log in/i }));
+
+    const email = screen.getByLabelText(/email/i);
+    const describedBy = email.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+
+    // The referenced node is the field's own error message, is marked as an
+    // alert region, and lives inside the field's label group.
+    const errorNode = document.getElementById(describedBy as string);
+    expect(errorNode).not.toBeNull();
+    expect(errorNode).toHaveAttribute("role", "alert");
+    expect(errorNode).toHaveTextContent(/enter a valid email address/i);
   });
 });
