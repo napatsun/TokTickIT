@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import AdminUsersPage from "../../src/pages/AdminUsersPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 /**
  * Administrator User Management — tests.md §9 (ui-spec.md §7)
@@ -761,5 +762,128 @@ describe("UI-09 — self-deactivation and last-active-Administrator guards (ui-s
       "You cannot deactivate your own account.",
     );
     expect(within(dialog).getByTestId("role-guard")).not.toHaveAttribute("title");
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+/**
+ * Open the Edit User modal for the row whose edit button matches `name`.
+ *
+ * The list renders the same row twice (desktop table + mobile card list), so
+ * only the first match is clicked — the same table/card duality the existing
+ * UI-08 assertions account for.
+ */
+async function openEditDialog(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  renderPage();
+  await screen.findByTestId("users-table");
+  await user.click(screen.getAllByRole("button", { name })[0]);
+  return screen.getByTestId("edit-user-dialog");
+}
+
+describe("UI-10 — User Management automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations with a populated list", async () => {
+    renderPage();
+    await screen.findByTestId("users-table");
+
+    await expectNoA11yViolations(document.body, "User Management (populated)");
+  });
+
+  it("has no axe violations with the Create User modal open", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("users-table");
+
+    await user.click(screen.getByTestId("create-user-button"));
+    await screen.findByTestId("create-user-dialog");
+
+    await expectNoA11yViolations(document.body, "User Management (create modal)");
+  });
+
+  it("has no axe violations with the Edit modal and its guard notes open", async () => {
+    const user = userEvent.setup();
+    // The sole active Administrator: both guard notes render, so the check also
+    // covers the disabled-control + description wiring.
+    await openEditDialog(user, /edit System Administrator/i);
+
+    await expectNoA11yViolations(document.body, "User Management (edit modal, guards)");
+  });
+
+  it("has no axe violations with the reset-password confirmation stacked on the edit modal", async () => {
+    const user = userEvent.setup();
+    await openEditDialog(user, /edit Alice Chen/i);
+
+    // Anchored so it binds to the input and not the <section aria-labelledby>
+    // that introduces the sub-action (same convention as the UI-08 tests).
+    await user.type(screen.getByLabelText(/^New initial password/), "Temp12345");
+    await user.click(screen.getByTestId("reset-password-button"));
+    await screen.findByTestId("reset-password-confirm");
+
+    await expectNoA11yViolations(document.body, "User Management (reset confirm)");
+  });
+
+  it("has no axe violations in the failure state", async () => {
+    listShouldFail = true;
+    renderPage();
+    await screen.findByTestId("users-error");
+
+    await expectNoA11yViolations(document.body, "User Management (failure)");
+  });
+});
+
+// ─── UI-10: modal keyboard contract (ui-spec §9) ─────────────────────────
+
+describe("UI-10 — modal keyboard contract: focus trap, Escape, focus return", () => {
+  it("moves focus into the dialog, traps Tab, and restores focus to the trigger", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("users-table");
+
+    const trigger = screen.getByTestId("create-user-button");
+    await user.click(trigger);
+
+    const dialog = await screen.findByTestId("create-user-dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+
+    // Focus lands on the first control inside the dialog, not behind it.
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveFocus();
+
+    // Shift+Tab from the first control wraps to the last (the primary action)…
+    await user.tab({ shift: true });
+    expect(within(dialog).getByRole("button", { name: /^Create User$/ })).toHaveFocus();
+
+    // …and Tab from the last wraps back to the first.
+    await user.tab();
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveFocus();
+
+    // Escape closes the dialog and hands focus back to the control that opened it.
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByTestId("create-user-dialog")).not.toBeInTheDocument();
+    });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("gives the keyboard to the top-most dialog when confirmations are stacked", async () => {
+    const user = userEvent.setup();
+    const editDialog = await openEditDialog(user, /edit Alice Chen/i);
+
+    await user.type(screen.getByLabelText(/^New initial password/), "Temp12345");
+    const resetTrigger = screen.getByTestId("reset-password-button");
+    await user.click(resetTrigger);
+    await screen.findByTestId("reset-password-confirm");
+
+    // Escape dismisses ONLY the confirmation and leaves the Edit modal open —
+    // without the top-most-dialog rule both would close at once.
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByTestId("reset-password-confirm")).not.toBeInTheDocument();
+    });
+    expect(editDialog).toBeInTheDocument();
+    expect(screen.getByTestId("edit-user-dialog")).toBeInTheDocument();
+
+    // Focus returned to the control that opened the confirmation, so keyboard
+    // users carry on inside the Edit modal instead of being dropped to <body>.
+    expect(resetTrigger).toHaveFocus();
   });
 });

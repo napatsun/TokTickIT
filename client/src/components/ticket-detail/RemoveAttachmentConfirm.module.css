@@ -1,140 +1,64 @@
 /* ============================================================
-   RemoveAttachmentConfirm — §9 Remove flow
-   ============================================================
-   Inline confirm dialog with removal reason textarea
+   RemoveAttachmentConfirm — §9 Remove flow (dialog body only)
+
+   The overlay, surface, title, error banner, action row and mobile
+   behaviour now come from the shared Dialog primitive (Dialog.module.css)
+   so this confirmation matches every other dialog in the app. Only the
+   reason field is component-specific.
    ============================================================ */
-
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.dialog {
-  background-color: var(--color-surface, #fff);
-  border: 1px solid #dde7e1;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  padding: 24px;
-  width: 100%;
-  max-width: 440px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.title {
-  font-size: var(--font-size-h3, 16px);
-  font-weight: 600;
-  color: var(--color-text, #1e2b24);
-  margin: 0;
-}
 
 .fieldGroup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1);
 }
 
 .label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text, #1e2b24);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
 }
 
 .required {
-  color: var(--color-error, #b3261e);
+  color: var(--color-error);
 }
 
 .textarea {
   width: 100%;
   min-height: 80px;
-  padding: 10px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  border: 1px solid var(--color-field-editable-border, #c7d3cc);
-  border-radius: 6px;
-  background-color: var(--color-field-editable-bg, #fff);
-  color: var(--color-text, #1e2b24);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-md);
+  font-family: var(--font-family);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-field-editable-bg);
+  color: var(--color-text);
   resize: vertical;
   box-sizing: border-box;
 }
 
 .textarea:focus {
   outline: none;
-  border-color: var(--color-secondary-green, #0b7a46);
-  box-shadow: 0 0 0 2px var(--color-secondary-green, #0b7a46);
+  border-color: var(--color-secondary-green);
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 .charCount {
-  font-size: 12px;
-  color: var(--color-text-muted, #5b6b62);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
   text-align: right;
 }
 
-.errorBanner {
-  background-color: var(--color-error-bg, #fbeae9);
-  border: 1px solid var(--color-error, #b3261e);
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-
-.errorBanner p {
-  color: var(--color-error, #b3261e);
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .errorText {
-  font-size: 13px;
-  color: var(--color-error, #b3261e);
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
   margin: 0;
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* ============================================================
-   §11: Responsive — Mobile <768px
-   Dialog stays within viewport; buttons ≥44px touch targets;
-   textarea usable on mobile.
-   ============================================================ */
+/* §9: mobile — 16px text prevents iOS zoom-on-focus; taller field. */
 @media (max-width: 767px) {
-  .overlay {
-    padding: 16px;
-    align-items: flex-end;
-  }
-
-  .dialog {
-    max-width: 100%;
-    padding: 20px 16px;
-    border-radius: 12px 12px 0 0;
-  }
-
   .textarea {
     min-height: 100px;
-    font-size: 16px; /* Prevent iOS zoom on focus */
-  }
-
-  /* Buttons full-width and ≥44px */
-  .actions {
-    flex-direction: column-reverse;
-    gap: 8px;
-  }
-
-  .actions button {
-    min-height: 44px;
-    width: 100%;
+    font-size: 16px;
   }
 }

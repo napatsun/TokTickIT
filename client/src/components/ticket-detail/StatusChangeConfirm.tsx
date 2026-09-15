@@ -5,13 +5,13 @@
  * transitions: Resolved, Closed, and Cancelled. Other permitted transitions
  * apply immediately.
  *
- * Reuses ResolveMarkConfirm's dialog styles so the two confirmations are
- * visually identical (Zen Green tokens, no second visual language), while this
- * component stays separate because its copy and lifecycle are staff-specific.
+ * Rendered through the shared ConfirmDialog/Dialog primitive (ui-spec.md §7) so
+ * every confirmation in the app shares one overlay, one surface treatment, and
+ * one set of modal keyboard behaviours (focus in on open, Tab trapped, Escape
+ * to cancel, focus returned on close — §9).
  */
 
-import Button from "../shared/Button";
-import styles from "./ResolveMarkConfirm.module.css";
+import ConfirmDialog from "../shared/ConfirmDialog";
 
 /** Human-readable labels for the status enum (also used by the detail page). */
 export const STATUS_LABELS: Record<string, string> = {
@@ -59,44 +59,20 @@ export default function StatusChangeConfirm({
   const toLabel = STATUS_LABELS[to] ?? to;
 
   return (
-    <div className={styles.overlay}>
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="status-change-title"
-        data-testid="status-confirm-dialog"
-      >
-        <h3 className={styles.title} id="status-change-title">
-          Change status to {toLabel}
-        </h3>
-
-        {error && (
-          <div className={styles.errorBanner} role="alert">
-            <p>{error}</p>
-          </div>
-        )}
-
-        <p className={styles.copy}>
-          {STATUS_CONFIRM_COPY[to] ??
-            `Move this ticket from ${STATUS_LABELS[from] ?? from} to ${toLabel}?`}
-        </p>
-
-        <div className={styles.actions}>
-          <Button variant="secondary" type="button" onClick={onCancel} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            variant={busy ? "busy" : "primary"}
-            busyLabel="Updating…"
-            type="button"
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            Continue
-          </Button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      title={`Change status to ${toLabel}`}
+      copy={
+        STATUS_CONFIRM_COPY[to] ??
+        `Move this ticket from ${STATUS_LABELS[from] ?? from} to ${toLabel}?`
+      }
+      confirmLabel="Continue"
+      busyLabel="Updating…"
+      busy={busy}
+      error={error}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      testId="status-confirm-dialog"
+    />
   );
 }
+

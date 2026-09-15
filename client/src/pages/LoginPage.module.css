@@ -76,7 +76,9 @@
     padding: var(--space-4);
   }
 
-  .actions {
-    justify-content: stretch;
+  /* Full-width primary action on a phone: a comfortable ≥44px touch target
+     that matches the Change Password screen's mobile treatment. */
+  .actions > * {
+    width: 100%;
   }
 }

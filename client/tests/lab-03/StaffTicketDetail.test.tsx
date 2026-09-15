@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import StaffTicketDetailPage from "../../src/pages/StaffTicketDetailPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 /**
  * IT Staff Ticket Detail — tests.md §5 (ui-spec.md §6)
@@ -476,4 +477,111 @@ describe("UI-07 — Status control offers only permitted next states (ui-spec §
       });
     });
   }
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+/** A public comment authored by a Requester, for the populated-panel scan. */
+const COMMENT_ITEM = {
+  id: "comment-1",
+  ticketId: 42,
+  authorId: "req-1",
+  authorName: "Jennifer Anderson",
+  authorRole: "REQUESTER",
+  content: "Still seeing the issue after the update.",
+  createdAt: "2026-09-01T09:15:00.000Z",
+};
+
+describe("UI-10 — Ticket Detail automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations with both comment panels populated", async () => {
+    routeApi({ comments: [COMMENT_ITEM], notes: [NOTE_ITEM] });
+    await renderLoaded();
+    await screen.findByLabelText("Add an internal note");
+
+    await expectNoA11yViolations(document.body, "Staff Ticket Detail (populated)");
+  });
+
+  it("has no axe violations with the requester appears-resolved banner shown", async () => {
+    routeApi({
+      ticket: makeTicket({
+        requesterMarkedResolved: true,
+        requesterMarkedResolvedAt: "2026-09-01T09:00:00.000Z",
+      }),
+    });
+    await renderLoaded();
+
+    await expectNoA11yViolations(document.body, "Staff Ticket Detail (requester signal)");
+  });
+
+  it("has no axe violations with the status confirmation dialog open", async () => {
+    const user = userEvent.setup();
+    routeApi({ ticket: makeTicket({ status: "IN_PROGRESS" }) });
+    await renderLoaded();
+
+    await user.selectOptions(screen.getByLabelText(/change status/i), "CANCELLED");
+    await user.click(screen.getByRole("button", { name: /^change status$/i }));
+
+    const dialog = await screen.findByTestId("status-confirm-dialog");
+    // The shared Dialog primitive: named by its own heading and modal to AT.
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    const labelledBy = dialog.getAttribute("aria-labelledby");
+    expect(labelledBy).toBeTruthy();
+    expect(document.getElementById(labelledBy as string)).toHaveTextContent(
+      "Change status to Cancelled",
+    );
+
+    await expectNoA11yViolations(document.body, "Staff Ticket Detail (status confirm)");
+  });
+
+  it("has no axe violations in the not-found and safe-failure states", async () => {
+    routeApi({ detailOk: false, detailStatus: 404 });
+    renderPage();
+    await screen.findByTestId("staff-detail-not-found");
+    await expectNoA11yViolations(document.body, "Staff Ticket Detail (not found)");
+
+    routeApi({ detailOk: false, detailStatus: 500 });
+    renderPage();
+    await screen.findAllByTestId("staff-detail-error");
+    await expectNoA11yViolations(document.body, "Staff Ticket Detail (failure)");
+  });
+
+  it("binds an inline action failure to the control that caused it", async () => {
+    routeApi({ ticket: makeTicket({ status: "IN_PROGRESS" }) });
+
+    // Fail just the status PATCH, leaving everything else healthy so the rest of
+    // the screen stays interactive (the §6 per-control micro-state rule).
+    const healthy = mockApiClient.getMockImplementation()!;
+    mockApiClient.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/status")) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            error: { code: "INVALID_TRANSITION", message: "That change is not allowed." },
+          }),
+        };
+      }
+      return healthy(url, init);
+    });
+
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    const select = screen.getByLabelText(/change status/i);
+    await user.selectOptions(select, "WAITING_FOR_REQUESTER");
+    await user.click(screen.getByRole("button", { name: /^change status$/i }));
+
+    await screen.findByTestId("status-error");
+
+    // §9: the failure is announced AND associated with its own select, and it
+    // carries the server's safe message rather than an internal detail.
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(select).toHaveAttribute("aria-describedby", "status-error");
+    const errorNode = document.getElementById("status-error");
+    expect(errorNode).toHaveAttribute("role", "alert");
+    expect(errorNode).toHaveTextContent(/not allowed/i);
+
+    // The rest of the screen still works — Claim/priority are unaffected.
+    expect(screen.getByLabelText(/^IT Priority/i)).toBeEnabled();
+  });
 });

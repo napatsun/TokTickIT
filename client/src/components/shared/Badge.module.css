@@ -28,10 +28,12 @@
   color: var(--color-priority-low-text);
 }
 
-/* Medium — amber bg (uses existing Section 1 tokens) */
+/* Medium — amber bg (uses existing Section 1 tokens).
+   Text uses --color-warning-text so the 12px label meets WCAG AA on the amber
+   background (ui-spec.md §9); the hue is the same amber, only darkened. */
 .priorityMedium {
   background-color: var(--color-warning-bg);
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 /* High — red-tinted, NOT full error red (derived from error) */
@@ -60,12 +62,12 @@
   color: var(--color-secondary-green);          /* #0B7A46 (§1) */
 }
 
-/* In progress / waiting — amber, "needs attention" */
+/* In progress / waiting — amber, "needs attention" (AA-safe amber text) */
 .statusInProgress,
 .statusWaiting,
 .statusReopened {
   background-color: var(--color-warning-bg);
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 /* Resolved / closed — success green */
@@ -75,10 +77,13 @@
   color: var(--color-success);
 }
 
-/* Cancelled — neutral, not an error */
+/* Cancelled — neutral, not an error.
+   §9: --color-disabled-text is far too light to carry a label (2.14:1); the
+   disabled token is reserved for actually-disabled controls (WCAG 1.4.3 makes
+   those exempt from contrast). --color-text-muted reads at 4.74:1 here. */
 .statusCancelled {
   background-color: var(--color-disabled-bg);
-  color: var(--color-disabled-text);
+  color: var(--color-text-muted);
 }
 
 /* Inactive account (§7) — neutral like Cancelled, but with readable text:

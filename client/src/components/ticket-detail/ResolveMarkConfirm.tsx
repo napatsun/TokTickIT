@@ -5,11 +5,14 @@
  * UI spec so the Requester understands this does not formally close the ticket
  * (BR-05/BR-20).
  *
- * Same inline-dialog pattern as RemoveAttachmentConfirm (Zen Green tokens).
+ * Rendered through the shared ConfirmDialog/Dialog primitive (ui-spec.md §7) so
+ * this confirmation is pixel-identical to StatusChangeConfirm and the
+ * Administrator confirmations, and inherits the same keyboard behaviour: focus
+ * moves into the dialog on open, Tab is trapped, Escape cancels, and focus
+ * returns to the trigger on close (§9).
  */
 
-import Button from "../shared/Button";
-import styles from "./ResolveMarkConfirm.module.css";
+import ConfirmDialog from "../shared/ConfirmDialog";
 
 export const RESOLVE_MARK_CONFIRM_COPY =
   "This tells IT Staff the issue seems fixed. IT Staff will still need to formally close the ticket. Continue?";
@@ -30,35 +33,15 @@ export default function ResolveMarkConfirm({
   error,
 }: ResolveMarkConfirmProps) {
   return (
-    <div className={styles.overlay}>
-      <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="resolve-mark-title">
-        <h3 className={styles.title} id="resolve-mark-title">
-          Problem Appears Resolved
-        </h3>
-
-        {error && (
-          <div className={styles.errorBanner} role="alert">
-            <p>{error}</p>
-          </div>
-        )}
-
-        <p className={styles.copy}>{RESOLVE_MARK_CONFIRM_COPY}</p>
-
-        <div className={styles.actions}>
-          <Button variant="secondary" type="button" onClick={onCancel} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            variant={busy ? "busy" : "primary"}
-            busyLabel="Sending…"
-            type="button"
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            Continue
-          </Button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      title="Problem Appears Resolved"
+      copy={RESOLVE_MARK_CONFIRM_COPY}
+      confirmLabel="Continue"
+      busyLabel="Sending…"
+      busy={busy}
+      error={error}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }

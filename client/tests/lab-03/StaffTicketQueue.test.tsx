@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import StaffQueuePage from "../../src/pages/StaffQueuePage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 /**
  * IT Staff Ticket Queue — tests.md §4 (ui-spec.md §5)
@@ -353,5 +354,60 @@ describe("UI-05 — empty and no-results states (ui-spec §5)", () => {
     await user.click(within(banner).getByRole("button", { name: /retry/i }));
 
     expect(await screen.findAllByTestId("queue-row")).toHaveLength(2);
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+describe("UI-10 — Queue automated accessibility (ui-spec §9)", () => {
+  beforeEach(() => {
+    routeApi();
+  });
+
+  it("has no axe violations with a populated queue", async () => {
+    renderPage();
+    await screen.findAllByTestId("queue-row");
+
+    await expectNoA11yViolations(document.body, "Queue (populated)");
+  });
+
+  it("has no axe violations in the no-results state", async () => {
+    renderPage();
+    await screen.findAllByTestId("queue-row");
+
+    routeApi({ response: queueResponse({ items: [], total: 0, totalPages: 1 }) });
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText(/^Status/i), "CANCELLED");
+    await screen.findByTestId("queue-empty");
+
+    await expectNoA11yViolations(document.body, "Queue (no results)");
+  });
+
+  it("has no axe violations in the failure state", async () => {
+    routeApi({ ok: false, status: 500 });
+    renderPage();
+    await screen.findByTestId("queue-error");
+
+    await expectNoA11yViolations(document.body, "Queue (failure)");
+  });
+
+  it("marks the sortable headers with aria-sort and keeps the controls labelled", async () => {
+    renderPage();
+    const table = await screen.findByTestId("queue-table");
+
+    // Default sort is createdAt desc; the other sortable columns report "none".
+    expect(
+      within(table).getByRole("columnheader", { name: /^Created Date/ }),
+    ).toHaveAttribute("aria-sort", "descending");
+    expect(
+      within(table).getByRole("columnheader", { name: /^IT Priority/ }),
+    ).toHaveAttribute("aria-sort", "none");
+
+    // Every filter control is reachable by its visible label.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^filters$/i }));
+    for (const label of [/^Status/i, /^IT Priority/i, /^Ownership/i]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
   });
 });

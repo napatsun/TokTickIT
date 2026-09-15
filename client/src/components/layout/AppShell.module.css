@@ -36,7 +36,9 @@
   align-items: center;
   height: 100%;
   padding: 0 12px;
-  color: rgba(255, 255, 255, 0.75);
+  /* §9: 0.85 white over the primary green reads at 5.27:1; the previous 0.75
+     was 4.46:1 and just missed WCAG AA for 14px text. */
+  color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -46,6 +48,16 @@
 
 .navLink:hover {
   color: #ffffff;
+}
+
+/* §9: visible focus indicator on every shell control. The pale-green Zen Green
+   token is used on the dark header (same choice as .logoutButton) because
+   secondary-green is too close to the header's primary green to be seen. */
+.navLink:focus-visible,
+.mobileNavLink:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-pale-green);
+  outline-offset: -2px;
+  border-radius: 2px;
 }
 
 .navLinkActive {
@@ -116,6 +128,13 @@
   color: #ffffff;
   cursor: pointer;
   padding: 0;
+}
+
+.hamburgerButton:focus-visible,
+.mobileLogoutButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-pale-green);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .hamburgerIcon {

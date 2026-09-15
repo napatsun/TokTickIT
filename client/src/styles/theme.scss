@@ -72,11 +72,22 @@ $spacer-7: 3rem;     // 48px
   --color-field-editable-bg: #FFFFFF;
   --color-field-editable-border: #C7D3CC;
   --color-field-readonly-bg: #F1EFE7;
+  // Read-only border: previously only an inline fallback in Field.module.css
+  // (`var(--color-field-readonly-border, #c7d3cc)`); declared here so the token
+  // actually exists (feature/lab3-06). Same value — no new colour.
+  --color-field-readonly-border: #C7D3CC;
 
   --color-error: #B3261E;
   --color-error-bg: #FBEAE9;
   --color-warning: #B8860B;
   --color-warning-bg: #FFF6E0;
+  // Amber TEXT/accent companion to --color-warning (feature/lab3-06).
+  // --color-warning (#B8860B) only reaches 3.02:1 on --color-warning-bg and
+  // 3.25:1 on the white dialog surface, which fails WCAG AA for the 12-13px
+  // amber badge/guard-note text that Lab 3-04/05 introduced.
+  // This is the same amber hue darkened to 4.94:1 / 5.32:1 — a contrast
+  // correction of an existing token, not a new palette entry.
+  --color-warning-text: #8A6508;
   --color-success: #0B7A46;
   --color-success-bg: #EAF6EF;
 

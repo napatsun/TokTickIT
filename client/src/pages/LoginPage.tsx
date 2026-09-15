@@ -107,7 +107,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className={styles.page}>
+    // §9: the public Login screen is the page's main content, so it carries the
+    // <main> landmark (every authenticated screen gets one from the App Shell).
+    <main className={styles.page}>
       <div className={styles.card}>
         <div className={styles.brand}>
           <span className={styles.wordmark}>TokTickIT</span>
@@ -169,6 +171,6 @@ export default function LoginPage() {
           </div>
         </form>
       </div>
-    </div>
+    </main>
   );
 }

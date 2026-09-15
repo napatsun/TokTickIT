@@ -35,6 +35,14 @@
   max-width: 560px;
 }
 
+/* The container itself is focusable as a fallback when the dialog holds no
+   focusable control, so it needs the Zen Green focus token rather than the
+   browser default ring. */
+.dialog:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
 .title {
   margin: 0;
   font-size: var(--font-size-h2);
