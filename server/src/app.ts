@@ -13,6 +13,7 @@ import {
 } from "./middleware/auth.js";
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { staffRouter } from "./routes/staff-tickets.js";
+import { adminRouter } from "./routes/admin-users.js";
 import { toContentDto, validateContent } from "./lib/content.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
@@ -47,6 +48,18 @@ app.use(
   enforcePasswordChange,
   requireRole(["IT_STAFF", "ADMINISTRATOR"]),
   staffRouter,
+);
+
+// ─── Administrator User Management (api-spec.md §4) ───────────────────
+// Administrator-only. The role guard runs BEFORE the router, so a Requester
+// or IT Staff caller is rejected with 403 FORBIDDEN by the middleware and no
+// handler (and therefore no user data) is ever reached — SEC-01, SEC-02, SEC-09.
+app.use(
+  "/api/admin",
+  requireAuth,
+  enforcePasswordChange,
+  requireRole(["ADMINISTRATOR"]),
+  adminRouter,
 );
 
 app.get("/api/health", (_req: Request, res: Response) => {

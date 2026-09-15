@@ -37,11 +37,17 @@ const prisma = getPrisma();
  *   API-36  cross-owner vs non-existent ticket fetch shapes are identical
  *   + unit coverage for the reusable role guard and the mustChangePassword gate
  *
- * SEC-01 / SEC-02 / SEC-09 (non-Administrator calling /api/admin/*) stay
- * SKIPPED on purpose: this branch (feature/lab3-04-staff-ticketing) does NOT
- * mount /api/admin/*, so asserting 403 or 404 there would be meaningless. They
- * belong to the Administrator User Management branch
- * (feature/lab3-05-admin-users), which is the branch that creates those routes.
+ *   SEC-01  Requester → every /api/admin/* route is 403 with no user data
+ *   SEC-02  IT Staff → every /api/admin/* route is 403 with no user data
+ *   SEC-09  the consolidated non-Administrator sweep over every admin route
+ *           (see the note on that describe block: SEC-01/02 and SEC-09 assert
+ *           the same thing, so the route table is shared rather than tripled)
+ *
+ * All three rows are live as of feature/lab3-05-admin-users — /api/admin/* is
+ * mounted in app.ts, so a 403 now proves the guard ran, not that the route is
+ * missing. The positive controls in SEC-01/SEC-09 pin that distinction.
+ *
+ * There are NO remaining `.skip()` placeholders in this file.
  */
 
 let requesterA: TestUser;
@@ -150,6 +156,10 @@ describe("SEC-08 — unauthenticated access (FR-10)", () => {
     ["get", "/api/tickets/TKT-2026-000001/comments"],
     ["post", "/api/tickets/TKT-2026-000001/comments"],
     ["post", "/api/tickets/TKT-2026-000001/resolve-mark"],
+    ["get", "/api/admin/users"],
+    ["post", "/api/admin/users"],
+    ["patch", "/api/admin/users/placeholder-user-id"],
+    ["post", "/api/admin/users/placeholder-user-id/reset-password"],
   ];
 
   for (const [method, path] of protectedRoutes) {
@@ -256,16 +266,162 @@ describe("enforcePasswordChange — gate middleware (BR-02)", () => {
   });
 });
 
-// ─── Placeholders for later branches ────────────────────────────────────
+// ─── SEC-01 / SEC-02 / SEC-09: /api/admin/* is Administrator-only (AC-15) ─
 
-describe.skip("SEC-01/02 — non-Administrator calling /api/admin/* (AC-15)", () => {
-  // INTENTIONALLY SKIPPED in feature/lab3-04-staff-ticketing.
-  // /api/admin/* is not mounted yet — Administrator User Management is the NEXT
-  // branch (feature/lab3-05-admin-users). Asserting 403 (or 404) here today
-  // would pass for the wrong reason (no route at all), so these rows stay
-  // Pending until that branch adds the routes and un-skips them.
-  it("Requester calling any /api/admin/* endpoint → 403", () => {});
-  it("IT Staff calling any /api/admin/* endpoint → 403", () => {});
+type AdminRoute = { method: "get" | "post" | "patch"; path: string; body?: unknown };
+
+/**
+ * The complete route inventory of api-spec.md §4.
+ *
+ * SEC-01, SEC-02 and SEC-09 all sweep this one list, so adding an admin
+ * endpoint here is the only edit needed for every non-Administrator assertion
+ * below to cover it. The placeholder user id is deliberately bogus: a 403 must
+ * be produced by the role guard BEFORE any handler or lookup runs, so the id is
+ * never reached. If that ever stops being true these tests fail loudly.
+ */
+const ADMIN_ROUTES: AdminRoute[] = [
+  { method: "get", path: "/api/admin/users" },
+  {
+    method: "post",
+    path: "/api/admin/users",
+    body: { name: "Intruder", email: "intruder@test.local", role: "REQUESTER", initialPassword: "Password123!" },
+  },
+  { method: "patch", path: "/api/admin/users/placeholder-user-id", body: { name: "Intruder" } },
+  {
+    method: "post",
+    path: "/api/admin/users/placeholder-user-id/reset-password",
+    body: { newInitialPassword: "Password123!" },
+  },
+];
+
+function routeLabel(route: AdminRoute): string {
+  return `${route.method.toUpperCase()} ${route.path}`;
+}
+
+/** Call one admin route as `client`, echoing CSRF on state-changing methods. */
+function callAdminRoute(client: SessionClient, route: AdminRoute): request.Test {
+  switch (route.method) {
+    case "get":
+      return client.agent.get(route.path);
+    case "post":
+      return csrf(client, client.agent.post(route.path)).send((route.body ?? {}) as object);
+    case "patch":
+      return csrf(client, client.agent.patch(route.path)).send((route.body ?? {}) as object);
+  }
+}
+
+/** Assert a response carries only the generic envelope — no stack, no ORM, no user data. */
+function expectForbiddenEnvelope(res: request.Response, label: string): void {
+  expect(res.status, label).toBe(403);
+  expect(res.body.error.code, label).toBe("FORBIDDEN");
+  expect(Object.keys(res.body), label).toEqual(["error"]);
+  expect(Object.keys(res.body.error).sort(), label).toEqual(["code", "message"]);
+
+  const serialised = JSON.stringify(res.body);
+  expect(serialised, label).not.toMatch(/at .*\.ts:\d+/); // stack frame
+  expect(serialised, label).not.toMatch(/prisma|PrismaClient|P20\d\d/i);
+  expect(serialised, label).not.toMatch(/server\/src|node_modules/);
+  // No user-shaped payload may appear in a refusal.
+  for (const probe of [admin.email, requesterA.email, staff.email, admin.id]) {
+    expect(serialised, label).not.toContain(probe);
+  }
+  expect(res.body.items, label).toBeUndefined();
+}
+
+/**
+ * SEC-01 — Requester blocked from every /api/admin/* endpoint (AC-15).
+ */
+describe("SEC-01 — Requester calling /api/admin/* (AC-15)", () => {
+  for (const route of ADMIN_ROUTES) {
+    it(`${routeLabel(route)} → 403 FORBIDDEN with no user data`, async () => {
+      const res = await callAdminRoute(clientA, route);
+      expectForbiddenEnvelope(res, `Requester ${routeLabel(route)}`);
+    });
+  }
+
+  it("positive control — the same routes DO exist and answer an Administrator", async () => {
+    // Without this, SEC-01 could pass simply because /api/admin/* was never
+    // mounted (which is exactly why the previous branch left this row Pending).
+    const list = await callAdminRoute(adminClient, ADMIN_ROUTES[0]);
+    expect(list.status).toBe(200);
+    expect(Array.isArray(list.body.items)).toBe(true);
+  });
+
+  it("cannot be talked past the guard by a role field in the request body", async () => {
+    // The sweep above already sends bodies; this pins the specific attempt of
+    // smuggling `role: "ADMINISTRATOR"` into the update payload.
+    const res = await csrf(clientA, clientA.agent.patch(`/api/admin/users/${requesterA.id}`)).send({
+      role: "ADMINISTRATOR",
+      isActive: true,
+    });
+
+    expectForbiddenEnvelope(res, "Requester smuggling an admin role");
+
+    const row = await prisma.user.findUnique({
+      where: { id: requesterA.id },
+      select: { role: true },
+    });
+    expect(row?.role).toBe("REQUESTER");
+  });
+});
+
+/**
+ * SEC-02 — IT Staff blocked from every /api/admin/* endpoint (AC-15).
+ *
+ * IT Staff legitimately reach the shared-staff queue (SEC-04) and the Reassign
+ * picker (`GET /api/staff/owners`), but the Administrator user-management group
+ * is a strictly higher privilege tier and must reject them nonetheless.
+ */
+describe("SEC-02 — IT Staff calling /api/admin/* (AC-15)", () => {
+  for (const route of ADMIN_ROUTES) {
+    it(`${routeLabel(route)} → 403 FORBIDDEN with no user data`, async () => {
+      const res = await callAdminRoute(staffClient, route);
+      expectForbiddenEnvelope(res, `IT Staff ${routeLabel(route)}`);
+    });
+  }
+
+  it("IT Staff can still use the staff-scoped ownership picker", async () => {
+    // Documents the deliberate split: /api/staff/* is IT-Staff-accessible,
+    // /api/admin/* is not. See the /api/staff/owners reconciliation note in
+    // server/src/routes/staff-tickets.ts and the branch-05 report.
+    const res = await staffClient.agent.get("/api/staff/owners");
+    expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * SEC-09 — non-Administrator sweep over every /api/admin/* endpoint (AC-15).
+ *
+ * tests.md lists SEC-01/02 and SEC-09 as separate rows, but their assertion
+ * sets are the same shape. Rather than write the sweep three times, SEC-09 is
+ * the consolidated version: it walks EVERY admin route × EVERY non-Administrator
+ * role in one place, and SEC-01/SEC-02 above keep the role-specific framing
+ * (data-leak probes, the staff-scope contrast) that the separate rows imply.
+ * A failure here fails all three rows, which is the intended coupling.
+ */
+describe("SEC-09 — every /api/admin/* endpoint rejects non-Administrators (AC-15)", () => {
+  // Lazy getters, not the clients themselves: a describe callback runs during
+  // collection, before beforeAll has logged anybody in, so capturing the
+  // clients eagerly here would capture `undefined`.
+  const nonAdminRoles: Array<[string, () => SessionClient]> = [
+    ["Requester", () => clientA],
+    ["IT Staff", () => staffClient],
+  ];
+
+  for (const [roleName, getClient] of nonAdminRoles) {
+    for (const route of ADMIN_ROUTES) {
+      it(`${roleName} → ${routeLabel(route)} → 403`, async () => {
+        const res = await callAdminRoute(getClient(), route);
+        expect(res.status, `${roleName} ${routeLabel(route)}`).toBe(403);
+        expect(res.body.error.code).toBe("FORBIDDEN");
+      });
+    }
+  }
+
+  it("the Administrator role is the only one that gets through", async () => {
+    const allowed = await callAdminRoute(adminClient, { method: "get", path: "/api/admin/users" });
+    expect(allowed.status).toBe(200);
+  });
 });
 
 // ─── SEC-03 ─────────────────────────────────────────────────────────────
@@ -502,13 +658,6 @@ describe("SEC-07 — cross-owner ticket fetch (ownership)", () => {
     expect(resolveMark.status).toBe(404);
     expect(resolveMark.body.error.code).toBe("TICKET_NOT_FOUND");
   });
-});
-
-describe.skip("SEC-09 — every /api/admin/* endpoint rejects non-Administrators (AC-15)", () => {
-  // INTENTIONALLY SKIPPED — same reason as SEC-01/02: /api/admin/* does not
-  // exist in feature/lab3-04-staff-ticketing. The Administrator User Management
-  // branch (feature/lab3-05-admin-users) mounts those routes and owns this row.
-  it("returns 403 for each admin route", () => {});
 });
 
 // ─── SEC-10 ─────────────────────────────────────────────────────────────

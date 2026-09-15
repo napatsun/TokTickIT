@@ -7,14 +7,17 @@ import path from "node:path";
  *
  *   RESP-01  Queue screen at 375px / 768px / 1280px
  *   RESP-02  Ticket Detail screen at 375px / 768px / 1280px
+ *   RESP-03  User Management screen at 375px / 768px / 1280px
  *
  * For each width this spec:
  *   1. asserts there is no horizontal page overflow (ui-spec.md §9),
- *   2. asserts the correct layout is active — stacked cards below 992px,
- *      the full table at 992px and above,
+ *   2. asserts the correct layout is active — stacked cards below the screen's
+ *      breakpoint, the full table at or above it (992px for the nine-column
+ *      queue, 768px for the five-column user list),
  *   3. writes a screenshot to the artifacts directory the deliverable names:
  *        artifacts/lab-03/screenshots/staff-queue/
  *        artifacts/lab-03/screenshots/staff-ticket-detail/
+ *        artifacts/lab-03/screenshots/user-management/
  *
  * Credentials are the documented LOCAL DEV seed values; Playwright's
  * globalSetup re-seeds the database before the run.
@@ -23,8 +26,12 @@ import path from "node:path";
 const STAFF = { email: "alice.chen@toktickit.example.com", password: "Password123!" };
 const CHANGED_PASSWORD = "E2eChanged123";
 
+/** Seeded Administrator: NOT flagged for a first-login change (README). */
+const ADMIN = { email: "admin@toktickit.example.com", password: "Admin123!" };
+
 const QUEUE_DIR = path.resolve("artifacts/lab-03/screenshots/staff-queue");
 const DETAIL_DIR = path.resolve("artifacts/lab-03/screenshots/staff-ticket-detail");
+const USERS_DIR = path.resolve("artifacts/lab-03/screenshots/user-management");
 
 /** Ticket with a seeded Internal Note, so both panels are populated. */
 const DETAIL_TICKET = "TKT-2026-000006";
@@ -70,6 +77,19 @@ async function loginStaff(page: Page) {
       timeout: 15_000,
     });
   }
+}
+
+/**
+ * Log the Administrator in. The seeded Administrator holds a normal password
+ * (mustChangePassword = false), so there is no forced-change step to handle —
+ * if that ever becomes true this fails loudly rather than silently skipping
+ * the screen under test.
+ */
+async function loginAdministrator(page: Page) {
+  await page.goto("/login");
+  await submitLogin(page, ADMIN.email, ADMIN.password);
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 });
+  expect(page.url()).not.toContain("/change-password");
 }
 
 /** ui-spec.md §9: no horizontal scroll at any of the required widths. */
@@ -191,6 +211,75 @@ test.describe("RESP-02 — IT Staff Ticket Detail responsiveness", () => {
 
       await page.screenshot({
         path: path.join(DETAIL_DIR, `staff-ticket-detail-${viewport.name}.png`),
+        fullPage: true,
+      });
+    });
+  }
+});
+
+// ─── RESP-03 — Administrator User Management ────────────────────────────
+
+test.describe("RESP-03 — User Management responsiveness", () => {
+  test.beforeAll(() => {
+    fs.mkdirSync(USERS_DIR, { recursive: true });
+  });
+
+  for (const viewport of VIEWPORTS) {
+    test(`renders User Management without overflow at ${viewport.name}px`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await loginAdministrator(page);
+
+      await expect(page).toHaveURL(/\/admin\/users$/, { timeout: 15_000 });
+      await expect(page.getByTestId("users-table")).toBeAttached();
+      // The table rows only exist in layout at/above 768px; below that the
+      // stacked cards take over (same branch-on-viewport pattern as RESP-01,
+      // which uses 992px for the nine-column queue).
+      if (viewport.width < 768) {
+        await expect(page.getByTestId("user-card").first()).toBeVisible({ timeout: 15_000 });
+      } else {
+        await expect(page.getByTestId("user-row").first()).toBeVisible({ timeout: 15_000 });
+      }
+      await page.waitForTimeout(400); // let the list settle
+
+      await expectNoHorizontalOverflow(page, `User Management @ ${viewport.name}px`);
+
+      const tableVisible = await isVisibleInLayout(page.getByTestId("users-table"));
+      const cardsVisible = await isVisibleInLayout(page.getByTestId("users-cards"));
+
+      if (viewport.width < 768) {
+        // Five columns is too many for a phone: stacked cards take over.
+        expect(cardsVisible, `cards at ${viewport.name}px`).toBe(true);
+        expect(tableVisible, `table hidden at ${viewport.name}px`).toBe(false);
+        await expect(page.getByTestId("user-card").first()).toBeVisible();
+        expect(await page.getByTestId("user-card").count()).toBeGreaterThan(0);
+      } else {
+        expect(tableVisible, `table at ${viewport.name}px`).toBe(true);
+        expect(cardsVisible, `cards hidden at ${viewport.name}px`).toBe(false);
+        await expect(page.getByTestId("user-row").first()).toBeVisible();
+      }
+
+      // The Create modal is the widest thing on this screen — prove it also
+      // fits without clipping at the narrowest width.
+      await page.getByTestId("create-user-button").click();
+      const dialog = page.getByTestId("create-user-dialog");
+      await expect(dialog).toBeVisible();
+      await expectNoHorizontalOverflow(page, `Create User modal @ ${viewport.name}px`);
+
+      const dialogBox = await dialog.boundingBox();
+      expect(dialogBox, `dialog box at ${viewport.name}px`).not.toBeNull();
+      expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(viewport.width + 1);
+
+      await page.screenshot({
+        path: path.join(USERS_DIR, `create-user-modal-${viewport.name}.png`),
+        fullPage: true,
+      });
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+
+      await page.screenshot({
+        path: path.join(USERS_DIR, `user-management-${viewport.name}.png`),
         fullPage: true,
       });
     });

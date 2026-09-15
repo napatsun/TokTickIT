@@ -26,7 +26,7 @@ import AdminUsersPage from "./pages/AdminUsersPage.js";
  *   /tickets, /tickets/new, /tickets/:ticketNumber   Requester
  *   /staff/queue            IT Staff, Administrator   Ticket Queue (§5)
  *   /staff/tickets/:id      IT Staff, Administrator   Ticket Detail (§6)
- *   /admin/users            Administrator             (stub until the admin branch)
+ *   /admin/users            Administrator             User Management (§7)
  *   /*                      role-aware home redirect
  *
  * The Lab 2 Development Requester selector (/select-requester) is gone (FR-11).
@@ -108,6 +108,9 @@ export default function App() {
                 </RequireRole>
               }
             />
+            {/* Administrator User Management (feature/lab3-05-admin-users).
+                Same route the branch-02 placeholder occupied — replaced, not
+                duplicated. */}
             <Route
               path="/admin/users"
               element={
