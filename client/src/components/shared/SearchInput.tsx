@@ -37,8 +37,6 @@ export default function SearchInput({
 
   // Sync from parent when value changes externally (e.g. Clear Filters)
   useEffect(() => {
-    (window as any).__si = (window as any).__si ?? [];
-    (window as any).__si.push(["sync", value, lastSyncedValue.current, Date.now()]);
     if (value !== lastSyncedValue.current) {
       // Cancel any pending debounce first. Without this, a parent reset that
       // lands inside the 300ms window is silently undone when the stale timer
@@ -64,8 +62,6 @@ export default function SearchInput({
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newValue = e.target.value;
-    (window as any).__si = (window as any).__si ?? [];
-    (window as any).__si.push(["change", newValue, String((e.nativeEvent as InputEvent).inputType), Date.now()]);
     setLocalValue(newValue);
 
     if (debounceRef.current !== null) {
@@ -73,8 +69,6 @@ export default function SearchInput({
     }
 
     debounceRef.current = setTimeout(() => {
-      (window as any).__si = (window as any).__si ?? [];
-      (window as any).__si.push(["fire", newValue, Date.now()]);
       lastSyncedValue.current = newValue;
       onSearch(newValue);
     }, DEBOUNCE_MS);
