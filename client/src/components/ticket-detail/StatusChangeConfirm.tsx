@@ -56,7 +56,7 @@ export default function StatusChangeConfirm({
   busy = false,
   error,
 }: StatusChangeConfirmProps) {
-  const toLabel = STATUS_LABELS[to];
+  const toLabel = STATUS_LABELS[to] ?? to;
 
   return (
     <ConfirmDialog
@@ -75,3 +75,4 @@ export default function StatusChangeConfirm({
     />
   );
 }
+
