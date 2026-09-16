@@ -4,133 +4,120 @@ This plan is authored before/alongside implementation per course policy. "Final"
 
 Legend for **Type**: `UNIT` unit test · `API` API/integration test · `UI` UI component test · `SEC` security/authorization test · `MIG` migration/regression test · `E2E` end-to-end test · `RESP` responsive/visual test.
 
-Legend for **Final**: `Pass` (executed and green in the run recorded in §10) · `Pending` (no assertion exists yet, or the route it targets is out of scope for the current branch) · `Fail`.
-
 ---
 
 ## 1. Authentication
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-01 | API | AC-01 | Valid login (active user, correct credentials) | 200, session cookie set, safe user payload (no password hash) returned | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-02 | API | AC-05, BR-06 | Login with wrong password | 401, generic `INVALID_CREDENTIALS`, no field-level hint | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-03 | API | AC-05, BR-06 | Login with non-existent email | 401, same generic message as API-02 | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-04 | API | AC-06, BR-09 | Login attempt on inactive account with correct password | 401, generic "account unavailable" message, no distinction from wrong-password case at the response-shape level | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-05 | API | BR-01 | Login with missing email/password fields | 422 field-level validation errors | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-06 | API | FR-05, BR-08 | Logout invalidates session | 200 on logout; subsequent authenticated call with old cookie returns 401 | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-07 | API | FR-04, BR-11 | `GET /api/auth/me` for authenticated user | 200, returns id/name/email/role/mustChangePassword, never passwordHash | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-08 | API | AC-02, BR-02 | Any protected endpoint called while `mustChangePassword=true` | 403 `PASSWORD_CHANGE_REQUIRED` for all routes except `/auth/logout`, `/auth/me`, `/auth/change-password` | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-09 | API | FR-07 | Change password with weak new password / mismatched confirmation | 422 field-level errors, `mustChangePassword` remains true | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| API-10 | API | AC-14 | Change password with valid new password | 200, `mustChangePassword` becomes false, subsequent protected calls succeed | `server/tests/lab-03/auth.api.test.ts` | Pass |
-| UNIT-01 | UNIT | BR-07 | Password hashing function | Produces salted hash, never equals plaintext, verify() matches correct password only | `server/tests/lab-03/password-hash.unit.test.ts` | Pass |
-| E2E-02 | E2E | AC-02 | Initial-password login then mandatory change, full browser flow | Login → redirected to Change Password → normal app inaccessible until saved → app opens after valid change | `e2e/lab-03/first-login.spec.ts` | Pass — E2E-02 is implemented in `e2e/lab-03/authentication.spec.ts` (verified in the recorded run) |
-| E2E-01 | E2E | AC-01, AC-05 | Full login flow: valid login, invalid login, busy state | Correct redirect, correct error banners, spinner shown during request | `e2e/lab-03/authentication.spec.ts` | Pass |
-| UI-01 | UI | Login screen §2 | Login form renders validation, busy, and failure states correctly | Component snapshot/interaction matches spec states | `client/tests/lab-03/Login.test.tsx` | Pass — path corrected to the shipped location |
-| UI-02 | UI | Change Password screen §3 | Form validates length/match rules, shows inline hints | Correct inline validation messages | `client/tests/lab-03/ChangePassword.test.tsx` | Pass — path corrected to the shipped location |
+| API-01 | API | AC-01 | Valid login (active user, correct credentials) | 200, session cookie set, safe user payload (no password hash) returned | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-02 | API | AC-05, BR-06 | Login with wrong password | 401, generic `INVALID_CREDENTIALS`, no field-level hint | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-03 | API | AC-05, BR-06 | Login with non-existent email | 401, same generic message as API-02 | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-04 | API | AC-06, BR-09 | Login attempt on inactive account with correct password | 401, generic "account unavailable" message, no distinction from wrong-password case at the response-shape level | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-05 | API | BR-01 | Login with missing email/password fields | 422 field-level validation errors | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-06 | API | FR-05, BR-08 | Logout invalidates session | 200 on logout; subsequent authenticated call with old cookie returns 401 | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-07 | API | FR-04, BR-11 | `GET /api/auth/me` for authenticated user | 200, returns id/name/email/role/mustChangePassword, never passwordHash | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-08 | API | AC-02, BR-02 | Any protected endpoint called while `mustChangePassword=true` | 403 `PASSWORD_CHANGE_REQUIRED` for all routes except `/auth/logout`, `/auth/me`, `/auth/change-password` | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-09 | API | FR-07 | Change password with weak new password / mismatched confirmation | 422 field-level errors, `mustChangePassword` remains true | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| API-10 | API | AC-14 | Change password with valid new password | 200, `mustChangePassword` becomes false, subsequent protected calls succeed | `server/tests/lab-03/auth.api.test.ts` | Pending |
+| UNIT-01 | UNIT | BR-07 | Password hashing function | Produces salted hash, never equals plaintext, verify() matches correct password only | `server/tests/lab-03/password-hash.unit.test.ts` | Pending |
+| E2E-02 | E2E | AC-02 | Initial-password login then mandatory change, full browser flow | Login → redirected to Change Password → normal app inaccessible until saved → app opens after valid change | `e2e/lab-03/first-login.spec.ts` | Pending |
+| E2E-01 | E2E | AC-01, AC-05 | Full login flow: valid login, invalid login, busy state | Correct redirect, correct error banners, spinner shown during request | `e2e/lab-03/authentication.spec.ts` | Pending |
+| UI-01 | UI | Login screen §2 | Login form renders validation, busy, and failure states correctly | Component snapshot/interaction matches spec states | `client/.lab-03 tests/Login.test.tsx` | Pending |
+| UI-02 | UI | Change Password screen §3 | Form validates length/match rules, shows inline hints | Correct inline validation messages | `client/.lab-03 tests/ChangePassword.test.tsx` | Pending |
 
 ## 2. Authorization / Role Navigation
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| SEC-01 | SEC | FR-10, AC-15 | Requester calls any `/api/admin/*` endpoint directly | 403 for every admin route, regardless of frontend state | `server/tests/lab-03/authorization.api.test.ts` | Pass — live as of `feature/lab3-05-admin-users`: `/api/admin/*` is mounted, so 403 proves the guard ran (positive control asserts the same routes return 200 for an Administrator) |
-| SEC-02 | SEC | FR-10, AC-15 | IT Staff calls any `/api/admin/*` endpoint directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pass — same as SEC-01; plus contrast assertion that `/api/staff/owners` still returns 200 for IT Staff |
-| SEC-03 | SEC | AC-04, BR-04 | Requester calls `GET/POST /api/staff/tickets/:id/notes` | 403, no note content in response body | `server/tests/lab-03/authorization.api.test.ts` | Pass |
-| SEC-04 | SEC | FR-09 | Requester calls `/api/staff/tickets` (Queue) directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pass |
-| SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pass |
+| SEC-01 | SEC | FR-10, AC-15 | Requester calls any `/api/admin/*` endpoint directly | 403 for every admin route, regardless of frontend state | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-02 | SEC | FR-10, AC-15 | IT Staff calls any `/api/admin/*` endpoint directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-03 | SEC | AC-04, BR-04 | Requester calls `GET/POST /api/staff/tickets/:id/notes` | 403, no note content in response body | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-04 | SEC | FR-09 | Requester calls `/api/staff/tickets` (Queue) directly | 403 | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-05 | SEC | AC-03, BR-03 | Requester submits ticket-create/update body with a different `requesterId` | Backend ignores supplied `requesterId`; ticket is owned by session user only | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 | SEC-06a | SEC | AC-17, BR-04 | Schema-level guard (added in feature/lab3-03-requester-regression): `GET /api/tickets/:ticketNumber` response contains no `internalNotes`/`internalNote` key, checked recursively + as a raw-JSON substring, so the assertion still fails loudly if a future query ever starts including the relation | No internal-data key present in the Requester detail response, today and after the model is added | `server/tests/lab-02/ticket-detail.api.test.ts` (L359-394) | Pass |
-| SEC-06b | SEC | AC-17, BR-04 | Full cross-role assertion (feature/lab3-04-staff-ticketing, once `InternalNote` model exists): IT Staff-authored Internal Note; Requester fetches same ticket's comment/notes payload via every Requester-reachable endpoint | Internal Note absent entirely from every Requester-facing response | `server/tests/lab-03/authorization.api.test.ts` | Pass — implemented; the fixture creates a real note as IT Staff and the assertions walk `/api/auth/me`, `/api/categories`, `/api/related-systems`, `/api/tickets`, `/api/tickets/:ticketNumber`, `/api/tickets/:ticketNumber/comments` plus cross-owner 404 bodies, checking both the marker substring and a recursive `/internal/i` key scan |
-| SEC-07 | SEC | Ownership | Requester A requests Requester B's ticket by ID | 404 (not 403) to avoid existence leak | `server/tests/lab-03/authorization.api.test.ts` | Pass |
-| SEC-08 | SEC | Unauthenticated | Any protected endpoint called with no session cookie | 401 for every protected route | `server/tests/lab-03/authorization.api.test.ts` | Pass |
-| E2E-03 | E2E | FR-08 | Role-based navigation rendering for each of the 3 roles | Only permitted nav destinations visible per role; direct URL nav to a forbidden route redirects/blocks | `e2e/lab-03/authentication.spec.ts` | Pass |
+| SEC-06b | SEC | AC-17, BR-04 | Full cross-role assertion (feature/lab3-04-staff-ticketing, once `InternalNote` model exists): IT Staff-authored Internal Note; Requester fetches same ticket's comment/notes payload via every Requester-reachable endpoint | Internal Note absent entirely from every Requester-facing response | `server/tests/lab-03/authorization.api.test.ts` | Pending — un-skip once InternalNote model lands |
+| SEC-07 | SEC | Ownership | Requester A requests Requester B's ticket by ID | 404 (not 403) to avoid existence leak | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| SEC-08 | SEC | Unauthenticated | Any protected endpoint called with no session cookie | 401 for every protected route | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| E2E-03 | E2E | FR-08 | Role-based navigation rendering for each of the 3 roles | Only permitted nav destinations visible per role; direct URL nav to a forbidden route redirects/blocks | `e2e/lab-03/authentication.spec.ts` | Pending |
 
 ## 3. Requester Regression & New Features
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| MIG-01 | MIG | AC-16, BR-27 | Migrated Lab 2 Requester logs in and lists their pre-existing Tickets | All pre-Lab-3 Tickets visible, correctly owned, Attachments intact | `server/tests/lab-03/migration.api.test.ts` | Pass |
-| MIG-02 | MIG | §7.2 spec | Development-Requester selector code path is fully removed | No selector component renders; no client state referencing old selector remains (static check + E2E) | `e2e/lab-03/authentication.spec.ts` | Pass |
-| API-11 | API | FR-14, BR-16, BR-17 | Requester posts a Public Comment (valid, empty, whitespace-only, > 2000 chars) | Valid: 201; empty/whitespace: 422; too long: 422 | `server/tests/lab-03/comments-notes.api.test.ts` | Pass |
-| API-12 | API | FR-15, AC-11, BR-05, BR-20 | Requester marks Ticket "appears resolved" | 200, `requesterMarkedResolved=true`, `status` field unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-13 | API | BR-05 | Requester attempts to directly PATCH ticket `status` | Endpoint not reachable by Requester role / 403 if attempted via staff endpoint | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass — path corrected: the shipped API-13 assertions live in the Requester half of `staff-ticket-detail.api.test.ts`, not in `authorization.api.test.ts` |
-| UI-03 | UI | Requester Ticket Detail §4 | Public Comments panel renders list + post form + character counter | Correct render and disabled state for empty input | `client/tests/lab-02/RequesterTicketDetail.test.tsx` | Pass — path corrected: the shipped requester-side panel assertions live with the Lab 2 ticket-detail suite that exercises them; the IT Staff half is UI-06 in `client/tests/lab-03/StaffTicketDetail.test.tsx` |
-| E2E-04 | E2E | Full Requester flow | Login as migrated Requester → view ticket → post public comment → mark appears-resolved → logout | All steps succeed with correct UI feedback at each stage | `e2e/lab-03/staff-ticket-flow.spec.ts` (Requester portion) | Pass |
+| MIG-01 | MIG | AC-16, BR-27 | Migrated Lab 2 Requester logs in and lists their pre-existing Tickets | All pre-Lab-3 Tickets visible, correctly owned, Attachments intact | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-02 | MIG | §7.2 spec | Development-Requester selector code path is fully removed | No selector component renders; no client state referencing old selector remains (static check + E2E) | `e2e/lab-03/authentication.spec.ts` | Pending |
+| API-11 | API | FR-14, BR-16, BR-17 | Requester posts a Public Comment (valid, empty, whitespace-only, > 2000 chars) | Valid: 201; empty/whitespace: 422; too long: 422 | `server/tests/lab-03/comments-notes.api.test.ts` | Pending |
+| API-12 | API | FR-15, AC-11, BR-05, BR-20 | Requester marks Ticket "appears resolved" | 200, `requesterMarkedResolved=true`, `status` field unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-13 | API | BR-05 | Requester attempts to directly PATCH ticket `status` | Endpoint not reachable by Requester role / 403 if attempted via staff endpoint | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| UI-03 | UI | Requester Ticket Detail §4 | Public Comments panel renders list + post form + character counter | Correct render and disabled state for empty input | `client/.lab-03 tests/StaffTicketDetail.test.tsx` (shared component) | Pending |
+| E2E-04 | E2E | Full Requester flow | Login as migrated Requester → view ticket → post public comment → mark appears-resolved → logout | All steps succeed with correct UI feedback at each stage | `e2e/lab-03/staff-ticket-flow.spec.ts` (Requester portion) | Pending |
 
 ## 4. IT Staff Ticket Queue
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-14 | API | FR-16 | Queue default listing (no filters) | 200, paginated result, default sort by createdAt desc | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| API-15 | API | FR-16 | Queue search `q` by ticket number and by summary substring | Correct filtered subset returned for both cases | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| API-16 | API | FR-16 | Queue filter by `status`, `priority`, `owner=unassigned`, `owner=me` | Each filter returns only matching tickets | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| API-17 | API | FR-16 | Queue sort by `itPriority` and `status`, both `asc`/`desc` | Correct ordering in response | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| API-18 | API | FR-16 | Pagination with `page`/`pageSize`, including out-of-range page | Correct slice returned; out-of-range page returns empty `items` with correct `total`/`totalPages` | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| API-19 | API | Invalid query params | Invalid `sortBy`/`status`/`priority` enum value | 400 with safe message | `server/tests/lab-03/staff-queue.api.test.ts` | Pass |
-| UI-04 | UI | IT Staff Queue §5 | Table renders columns, badges, pagination footer per handout mock | Matches expected structure; mobile breakpoint renders stacked cards | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass — path corrected to the shipped location |
-| UI-05 | UI | IT Staff Queue §5 | Empty and no-results states | Correct message + "Clear filters" affordance shown | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass — path corrected to the shipped location |
-| RESP-01 | RESP | §9 responsive | Queue screen at 375px/768px/1280px | No horizontal overflow, no clipping, no overlap, card layout on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-queue/` (`queue-375.png`, `queue-768.png`, `queue-1280.png`) | Pass — re-run in `feature/lab3-06-ui-polish-and-a11y` after the spec gained element-level clipping (`expectNoClipping`) and text-overlap (`expectNoTextOverlap`) assertions; green at all three widths |
-
-### 4b. Cross-Cutting Responsive & Visual Verification
-
-Added by `feature/lab3-06-ui-polish-and-a11y` (ui-spec.md §9, handout §8.7/9). RESP-01…RESP-05 all now share three layout assertions per screen per width: no document overflow (`scrollWidth <= clientWidth`), no element clipped outside the viewport, and no overlapping text elements.
-
-| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
-|---|---|---|---|---|---|---|
-| RESP-04 | RESP | §9 responsive (ui-spec §2/§3) | Login (idle + generic failure banner) and the mandatory Change Password screen at 375px/768px/1280px, plus the Zen Green focus ring on the focused field | No overflow/clipping/overlap; the failure banner is the single generic copy; the focused input reports `rgb(11, 122, 70)`; the password gate renders with no shell nav | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/authentication/` (`login-{375,768,1280}.png`, `login-failure-{375,768,1280}.png`, `change-password-{375,768,1280}.png`) | Pass — 3 widths green |
-| RESP-05 | RESP | §9 responsive (ui-spec §1/§4) | App Shell navigation (hamburger collapse + role-scoped destinations) and the Requester Ticket Detail with its Public Comments panel and "appears resolved" marker at 375px/768px/1280px | Below 768px the full nav collapses into the hamburger and the opened menu exposes only Requester destinations, never staff/admin ones; above it the full nav is visible and the hamburger hidden; the marker ticket shows the marker badge with the formal Status badge unchanged, and the OPEN ticket offers the resolve action; no overflow/clipping/overlap anywhere | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/app-shell/` (`app-shell-{375,768,1280}.png`) + `artifacts/lab-03/screenshots/requester-ticket-detail/` (`requester-ticket-detail-{375,768,1280}.png`, `requester-resolve-mark-{375,768,1280}.png`) | Pass — 3 widths green |
+| API-14 | API | FR-16 | Queue default listing (no filters) | 200, paginated result, default sort by createdAt desc | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| API-15 | API | FR-16 | Queue search `q` by ticket number and by summary substring | Correct filtered subset returned for both cases | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| API-16 | API | FR-16 | Queue filter by `status`, `priority`, `owner=unassigned`, `owner=me` | Each filter returns only matching tickets | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| API-17 | API | FR-16 | Queue sort by `itPriority` and `status`, both `asc`/`desc` | Correct ordering in response | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| API-18 | API | FR-16 | Pagination with `page`/`pageSize`, including out-of-range page | Correct slice returned; out-of-range page returns empty `items` with correct `total`/`totalPages` | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| API-19 | API | Invalid query params | Invalid `sortBy`/`status`/`priority` enum value | 400 with safe message | `server/tests/lab-03/staff-queue.api.test.ts` | Pending |
+| UI-04 | UI | IT Staff Queue §5 | Table renders columns, badges, pagination footer per handout mock | Matches expected structure; mobile breakpoint renders stacked cards | `client/.lab-03 tests/StaffTicketQueue.test.tsx` | Pending |
+| UI-05 | UI | IT Staff Queue §5 | Empty and no-results states | Correct message + "Clear filters" affordance shown | `client/.lab-03 tests/StaffTicketQueue.test.tsx` | Pending |
+| RESP-01 | RESP | §9 responsive | Queue screen at 375px/768px/1280px | No horizontal overflow, no clipping, card layout on mobile | `artifacts/lab-03/screenshots/staff-queue/` (manual + Playwright viewport test) | Pending |
 
 ## 5. IT Staff Ticket Operations (Ownership, Priority, Status, Comments, Notes)
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-20 | API | AC-07, BR-12, BR-13 | Claim an unassigned ticket | 200, `ownerId` set to caller | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-21 | API | AC-08, BR-13 | Claim an already-assigned ticket | 409 `ALREADY_ASSIGNED` | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-22 | API | FR-19 | Reassign ticket to another active IT Staff | 200, `ownerId` updated | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-23 | API | BR-12 | Reassign ticket to an inactive user or a Requester | 422 `INVALID_OWNER` | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-24 | API | AC-09, BR-14, BR-15 | Update IT Priority | 200, `itPriority` changes, `requestedPriority` unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-25 | API | AC-10, BR-19 | Attempt disallowed status transition (e.g., New → Closed) | 409 `INVALID_TRANSITION` with allowed list, status unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass |
-| API-26 | API | BR-19 | Attempt every permitted transition in the matrix (parameterized) | 200 for each, status updates correctly | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pass — parameterized over all 64 `from`→`to` cells: 18 permitted (200) and 46 blocked (409 with `from`/`to`/`allowed`), plus a guard test pinning the 18/46 split |
-| API-27 | API | FR-22, BR-16-18 | IT Staff posts Public Comment and Internal Note (valid/empty/too-long) | Correct 201/422 per case for both endpoints | `server/tests/lab-03/comments-notes.api.test.ts` | Pass — also asserts the staff routes return byte-identical `CONTENT_REQUIRED`/`CONTENT_TOO_LONG` codes and messages to the Requester route, proving the shared validation path (`server/src/lib/content.ts`) |
-| API-08 (dup ref) | API | AC-04 | (see Authorization §2, SEC-03) Requester blocked from notes | — | `server/tests/lab-03/authorization.api.test.ts` | Pass — duplicate of SEC-03; file path corrected from the placeholder `notes.apitest.ts` |
-| UI-06 | UI | IT Staff Ticket Detail §6 | Public Comments and Internal Notes render as visually distinct panels | Snapshot confirms distinct styling/labels | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass — path corrected to the shipped location; asserts differing `data-variant`/class names, the lock icon, the IT-only heading, and separate composers/counters/endpoints |
-| UI-07 | UI | IT Staff Ticket Detail §6 | Status control only offers permitted next-states for current status | Rendered options match transition matrix exactly | `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass — path corrected; asserts the rendered option set equals the §6.1 matrix for all 8 statuses |
-| E2E-05 | E2E | Full IT Staff flow | Login as IT Staff → open queue → claim ticket → set IT Priority → change status → post public comment → add internal note | All steps succeed, correct UI feedback and final ticket state | `e2e/lab-03/staff-ticket-flow.spec.ts` (IT Staff portion) | Pass |
-| RESP-02 | RESP | §9 responsive | Ticket Detail screen at 375px/768px/1280px | No overflow/clipping/overlap; Internal Notes panel remains visually distinct on mobile | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/staff-ticket-detail/` (`staff-ticket-detail-375.png`, `-768.png`, `-1280.png`) | Pass — also asserts the notes panel's computed background differs from Public Comments' at every width; re-run in `feature/lab3-06-ui-polish-and-a11y` with the added clipping/overlap assertions (green at all three widths) |
+| API-20 | API | AC-07, BR-12, BR-13 | Claim an unassigned ticket | 200, `ownerId` set to caller | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-21 | API | AC-08, BR-13 | Claim an already-assigned ticket | 409 `ALREADY_ASSIGNED` | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-22 | API | FR-19 | Reassign ticket to another active IT Staff | 200, `ownerId` updated | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-23 | API | BR-12 | Reassign ticket to an inactive user or a Requester | 422 `INVALID_OWNER` | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-24 | API | AC-09, BR-14, BR-15 | Update IT Priority | 200, `itPriority` changes, `requestedPriority` unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-25 | API | AC-10, BR-19 | Attempt disallowed status transition (e.g., New → Closed) | 409 `INVALID_TRANSITION` with allowed list, status unchanged | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-26 | API | BR-19 | Attempt every permitted transition in the matrix (parameterized) | 200 for each, status updates correctly | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Pending |
+| API-27 | API | FR-22, BR-16-18 | IT Staff posts Public Comment and Internal Note (valid/empty/too-long) | Correct 201/422 per case for both endpoints | `server/tests/lab-03/comments-notes.api.test.ts` | Pending |
+| API-08 (dup ref) | API | AC-04 | (see Authorization §2, SEC-03) Requester blocked from notes | — | `server/tests/lab-03/notes.apitest.ts` | Pending |
+| UI-06 | UI | IT Staff Ticket Detail §6 | Public Comments and Internal Notes render as visually distinct panels | Snapshot confirms distinct styling/labels | `client/.lab-03 tests/StaffTicketDetail.test.tsx` | Pending |
+| UI-07 | UI | IT Staff Ticket Detail §6 | Status control only offers permitted next-states for current status | Rendered options match transition matrix exactly | `client/.lab-03 tests/StaffTicketDetail.test.tsx` | Pending |
+| E2E-05 | E2E | Full IT Staff flow | Login as IT Staff → open queue → claim ticket → set IT Priority → change status → post public comment → add internal note | All steps succeed, correct UI feedback and final ticket state | `e2e/lab-03/staff-ticket-flow.spec.ts` | Pending |
+| RESP-02 | RESP | §9 responsive | Ticket Detail screen at 375px/768px/1280px | No overflow/clipping; Internal Notes panel remains visually distinct on mobile | `artifacts/lab-03/screenshots/staff-ticket-detail/` | Pending |
 
 ## 6. Administrator User Management
 
-Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts` mounted in `app.ts`). All rows below were executed in the run recorded in §10.
-
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| API-28 | API | FR-24, FR-25 | List users, search by name/email, filter by role | Correct filtered/searched subset returned | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 11 assertions (projection, no-pagination, case-insensitive name/email search, role filter, combined q+role, inactive included, 400 on bad role, empty q/role) |
-| API-29 | API | FR-26, BR-21, BR-25 | Create user with one role and initial password | 201, `mustChangePassword=true` forced, password never returned | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 7 assertions (201+forced flag+bcrypt verify, flag forced even when caller sends false, email normalisation, isActive default/explicit, created admin can log in, 422 field errors, weak-policy rejects) |
-| API-30 | API | AC-12, BR-29 | Create/edit user with duplicate email | 422 field-level error, no user created/mutated | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 5 assertions: create-dup 422 `EMAIL_ALREADY_IN_USE` with unchanged row count, case-variant treated as same, active-vs-inactive answers byte-identical (BR-26), edit-onto-taken leaves target untouched, edit onto own case-variant allowed |
-| API-31 | API | FR-27 | Edit user's name/email/role/activation state | 200, fields updated correctly | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 7 assertions (full 4-field update, partial update, role change keeps forced-change flag, 404 unknown id, empty body 422, non-boolean isActive/blank name rejected with row unchanged, reactivate) |
-| API-32 | API | AC-13, BR-23, BR-30 | Administrator attempts to deactivate own account | 409 `SELF_DEACTIVATION`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 3 assertions: self `isActive:false` → 409 with row still active, self name/email edit still allowed, self-deactivation bundled with other edits rolls back the whole request |
-| API-33 | API | AC-13, BR-24, BR-31 | Deactivate or change role of the last active Administrator (by a different admin, if only one exists in test fixture) | 409 `LAST_ACTIVE_ADMIN`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 6 assertions: deactivate-last → 409, role-away-from-last → 409, sole-admin-on-self reports `LAST_ACTIVE_ADMIN` (not `SELF_DEACTIVATION`), allowed once a second active admin exists, inactive admins don't satisfy the invariant, concurrent demotion of final two admins leaves exactly one (SERIALIZABLE + retry) |
-| API-34 | API | AC-14, FR-28, BR-25 | Reset a user's password to a new initial password | 200, target user's `mustChangePassword=true`; next login forces change (cross-check with API-08 style test) | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 5 assertions: 200 `{ success: true }` + rehash + old password dead/new verifies, login succeeds but protected routes 403 `PASSWORD_CHANGE_REQUIRED`, weak new password 422 with hash untouched, 404 unknown id, reset of another admin keeps role/active |
-| API-35 | API | Invalid role | Create/edit user with an invalid role string | 422 validation error | `server/tests/lab-03/users-admin.api.test.ts` | Pass — 3 assertions (create with `MANAGER` 422 + count unchanged, edit with `ADMIN` 422 + role unchanged, null/number/object role 422) |
-| SEC-09 | SEC | AC-15 | Non-Administrator attempts every `/api/admin/*` endpoint | 403 for each | `server/tests/lab-03/authorization.api.test.ts` | Pass — consolidated sweep: every admin route × {Requester, IT Staff} → 403 `FORBIDDEN`; Administrator control returns 200 |
-| UI-08 | UI | Admin User Management §7 | List, search, role filter, Create/Edit modal render and validate correctly | Matches spec states (Idle/Validating/Busy/Success/Failure) | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 20 assertions (columns, cards markup, debounced `q`, email search, role filter, empty/no-results, skeleton, retry, create idle/validate/busy/success, dup-email inline, generic banner, edit prefill/PATCH-changed-only, edit dup-email, 409 banner, reset confirm + policy block) |
-| UI-09 | UI | Admin User Management §7 | Self-deactivation and last-admin guard rules disable controls in UI | Toggle/role select disabled with correct tooltip in both guard scenarios | `client/tests/lab-03/UserManagement.test.tsx` | Pass — 5 assertions (self → Active disabled + self tooltip, sole active admin → both disabled + last-admin tooltip, enabled with second admin, no inference from filtered view, guards off when roster fails) |
-| E2E-06 | E2E | Full Admin flow | Login as Administrator → search/filter users → create user → edit user → reset password → attempt self-deactivation (blocked) | All steps succeed or are correctly blocked with visible feedback | `e2e/lab-03/user-administration.spec.ts` | Pass — single flow test covering search, role filter, create (second active admin), edit, reset with mandated confirm copy, self-deactivation disabled with tooltip, extra-admin deactivation, last-admin guard (both controls disabled) |
-| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping/overlap, responsive list/table | `e2e/lab-03/responsive.spec.ts` + `artifacts/lab-03/screenshots/user-management/` (`user-management-375.png`, `-768.png`, `-1280.png`, plus `create-user-modal-` equivalents) | Pass — all three widths green: stacked cards below 768px, full table at/above; Create modal fits without clipping at every width; re-run in `feature/lab3-06-ui-polish-and-a11y` with the added element-level clipping and text-overlap assertions |
+| API-28 | API | FR-24, FR-25 | List users, search by name/email, filter by role | Correct filtered/searched subset returned | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
+| API-29 | API | FR-26, BR-21, BR-25 | Create user with one role and initial password | 201, `mustChangePassword=true` forced, password never returned | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
+| API-30 | API | AC-12, FR-29, BR-10 | Create/edit user with duplicate email | 422 field-level error, no user created/mutated | `server/tests/lab-03/users-admin.api.test.ts` | Pass |
+| API-31 | API | FR-27 | Edit user's name/email/role/activation state | 200, fields updated correctly | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
+| API-32 | API | AC-13, FR-30, BR-23 | Administrator attempts to deactivate own account | 409 `SELF_DEACTIVATION`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass |
+| API-33 | API | AC-13, FR-31, BR-24 | Deactivate or change role of the last active Administrator (by a different admin, if only one exists in test fixture) | 409 `LAST_ACTIVE_ADMIN`, no change persisted | `server/tests/lab-03/users-admin.api.test.ts` | Pass |
+| API-34 | API | AC-14, FR-28, BR-25 | Reset a user's password to a new initial password | 200, target user's `mustChangePassword=true`; next login forces change (cross-check with API-08 style test) | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
+| API-35 | API | Invalid role | Create/edit user with an invalid role string | 422 validation error | `server/tests/lab-03/users-admin.api.test.ts` | Pending |
+| SEC-09 | SEC | AC-15 | Non-Administrator attempts every `/api/admin/*` endpoint | 403 for each | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| UI-08 | UI | Admin User Management §7 | List, search, role filter, Create/Edit modal render and validate correctly | Matches spec states (Idle/Validating/Busy/Success/Failure) | `client/.lab-03 tests/UserManagement.test.tsx` | Pending |
+| UI-09 | UI | Admin User Management §7 | Self-deactivation and last-admin guard rules disable controls in UI | Toggle/role select disabled with correct tooltip in both guard scenarios | `client/.lab-03 tests/UserManagement.test.tsx` | Pending |
+| E2E-06 | E2E | Full Admin flow | Login as Administrator → search/filter users → create user → edit user → reset password → attempt self-deactivation (blocked) | All steps succeed or are correctly blocked with visible feedback | `e2e/lab-03/user-administration.spec.ts` | Pending |
+| RESP-03 | RESP | §9 responsive | User Management screen at 375px/768px/1280px | No overflow/clipping, responsive list/table | `artifacts/lab-03/screenshots/user-management/` | Pending |
 
 ## 7. Data Migration & Seed
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| MIG-03 | MIG | §7.2, §7.3 spec | Seed script run twice in a row | Idempotent — second run does not duplicate users/tickets | `server/tests/lab-03/migration.api.test.ts` + `server/tests/lab-02/seed.idempotency.test.ts` | Pass — the Lab 2 idempotency suite was extended to clear `InternalNote` before `Ticket` (the new RESTRICT FK) and to compare `internalNotes` counts |
-| MIG-04 | MIG | §7.3 spec | Seed data volume check | ≥4 active + 1 inactive Requester; ≥3 active + 1 inactive IT Staff; ≥1 active Administrator present | `server/tests/lab-03/migration.api.test.ts` | Pass |
-| MIG-05 | MIG | §7.2 spec | Pre-existing Ticket/Attachment referential integrity post-migration | No orphaned Tickets; all `requesterId` FKs resolve to a valid User | `server/tests/lab-03/migration.api.test.ts` | Pass |
+| MIG-03 | MIG | §7.2, §7.3 spec | Seed script run twice in a row | Idempotent — second run does not duplicate users/tickets | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-04 | MIG | §7.3 spec | Seed data volume check | ≥4 active + 1 inactive Requester; ≥3 active + 1 inactive IT Staff; ≥1 active Administrator present | `server/tests/lab-03/migration.api.test.ts` | Pending |
+| MIG-05 | MIG | §7.2 spec | Pre-existing Ticket/Attachment referential integrity post-migration | No orphaned Tickets; all `requesterId` FKs resolve to a valid User | `server/tests/lab-03/migration.api.test.ts` | Pending |
 
 ## 8. Accessibility & Cross-Cutting Safe-Failure
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| UI-10 | UI | §9 accessibility | Form error regions use `role="alert"`, labels bound via `for`/`id` across Login/Change Password/Create-Edit User forms, **plus** automated axe scans and the modal keyboard contract | Automated a11y assertions pass with no violations at all | `client/tests/lab-03/Login.test.tsx`, `ChangePassword.test.tsx`, `UserManagement.test.tsx`, `StaffTicketQueue.test.tsx`, `StaffTicketDetail.test.tsx`, `AppShell.test.tsx`, `client/tests/lab-02/RequesterTicketDetail.test.tsx` (shared helper `client/tests/support/a11y.ts`) | **Pass** — `jest-axe` 10.0.0 added as a client dev dependency; **25 axe scans across 7 suites, 0 violations** (Login idle/validating/failure · Change Password idle/validating/failure · App Shell with the `region` rule enabled · Queue populated/no-results/failure · Ticket Detail populated/requester-signal/status-confirm/not-found/failure · User Management populated/create/edit-with-guards/reset-confirm/failure · Requester Ticket Detail populated/resolve-confirm/marked/remove-attachment/page-level-failure). The scan also drove one cross-cutting fix: the Requester Ticket Detail's page-level failure banner was the only one missing `role="alert"`. The scan found and closed one real violation: `heading-order` — dialog titles were `<h3>` under a page `<h1>`, now `<h2>` with the Edit sub-section at `<h3>`. `aria-describedby`/`role="alert"`/label binding are asserted directly in the Login, Change Password, Requester-Ticket-Detail and Staff-Ticket-Detail suites; the modal focus trap / Escape / focus-return contract is asserted in `UserManagement.test.tsx`. `color-contrast` cannot run in jsdom, so contrast is verified numerically instead — `docs/lab-03/visual-checklist.md` §5 records the computed ratio for every badge/banner pair |
-| SEC-10 | SEC | §6 api-spec safe errors | Any endpoint's 500 response body | Contains only generic message, no stack trace or internal detail | `server/tests/lab-03/authorization.api.test.ts` | Pass — forced on four staff endpoints by binding an out-of-int4-range ticket id (a real Prisma failure, no mocking of internals); asserts the body is exactly `{ error: { code: SERVER_ERROR, message: … } }` with no stack frame, ORM code, or repo path |
-| API-36 | API | §6 api-spec safe errors | Cross-owner ticket fetch (Requester B fetching Requester A's ticket) vs. non-existent ticket ID | Identical `404` shape for both cases (no existence leak) | `server/tests/lab-03/authorization.api.test.ts` | Pass — requester cross-owner 404 equals the non-existent 404; on the staff routes a non-existent id and a malformed id return the same generic body, and a staff read of another Requester's ticket is a real 200 (the queue is shared) |
+| UI-10 | UI | §9 accessibility | Form error regions use `role="alert"`, labels bound via `for`/`id` across Login/Change Password/Create-Edit User forms | Automated a11y assertions (e.g., jest-axe) pass with no critical violations | `client/.lab-03 tests/*` (shared a11y checks) | Pending |
+| SEC-10 | SEC | §6 api-spec safe errors | Any endpoint's 500 response body | Contains only generic message, no stack trace or internal detail | `server/tests/lab-03/authorization.api.test.ts` | Pending |
+| API-36 | API | §6 api-spec safe errors | Cross-owner ticket fetch (Requester B fetching Requester A's ticket) vs. non-existent ticket ID | Identical `404` shape for both cases (no existence leak) | `server/tests/lab-03/authorization.api.test.ts` | Pending |
 
 ---
 
@@ -147,7 +134,7 @@ Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts`
 | AC-07 | API-20 |
 | AC-08 | API-21 |
 | AC-09 | API-24 |
-| AC-10 | API-25, API-26 |
+| AC-10 | API-25 |
 | AC-11 | API-12 |
 | AC-12 | API-30 |
 | AC-13 | API-32, API-33 |
@@ -156,46 +143,4 @@ Implemented in `feature/lab3-05-admin-users` (`server/src/routes/admin-users.ts`
 | AC-16 | MIG-01 |
 | AC-17 | SEC-06a, SEC-06b |
 
----
-
-## 10. Recorded Run — feature/lab3-05-admin-users
-
-Executed locally against the seeded PostgreSQL database (`server/.env`), branch `feature/lab3-05-admin-users`.
-
-| Command | Result |
-|---|---|
-| `cd server && npx tsc --noEmit` | clean |
-| `cd server && npx vitest run` | **20 files passed · 480 tests passed** (includes `users-admin.api.test.ts` 49 tests and `authorization.api.test.ts` 64 tests with zero skips — the 3 SEC-01/02/09 skips from the lab3-04 run are now implemented) |
-| `cd client && npx tsc --noEmit` | clean |
-| `cd client && npx vitest run` | **16 files passed · 291 tests passed** (includes `UserManagement.test.tsx` 25 tests: UI-08 ×20, UI-09 ×5) |
-| `npx playwright test` (repo root) | **19 passed**: E2E-01…E2E-06 plus RESP-01/RESP-02/RESP-03 at all three widths (375/768/1280). Screenshots in `artifacts/lab-03/screenshots/user-management/` cover all widths (`user-management-{375,768,1280}.png` + `create-user-modal-{375,768,1280}.png`) |
-
-New/extended suites in this branch: `server/tests/lab-03/users-admin.api.test.ts` (new, API-28…API-35), `server/tests/lab-03/authorization.api.test.ts` (SEC-01/02/09 implemented, no remaining skips), `client/tests/lab-03/UserManagement.test.tsx` (new, UI-08/UI-09), `client/src/pages/AdminUsersPage.tsx` + shared `Dialog`/`ConfirmDialog`/`SearchInput`, `e2e/lab-03/user-administration.spec.ts` (new, E2E-06), `e2e/lab-03/responsive.spec.ts` (extended with RESP-03).
-
----
-
-## 11. Recorded Run — feature/lab3-06-ui-polish-and-a11y
-
-Executed locally against the seeded PostgreSQL database (`server/.env`), branch `feature/lab3-06-ui-polish-and-a11y`. This branch adds no features: it is the cross-branch consistency, responsive and accessibility pass over every screen the sprint ships.
-
-| Command | Result |
-|---|---|
-| `cd server && npx tsc --noEmit` | clean |
-| `cd server && npx vitest run` | **20 files passed · 480 tests passed** (unchanged — no server edits in this branch) |
-| `cd client && npx tsc --noEmit` | clean |
-| `cd client && npx vitest run` | **16 files passed · 325 tests passed** (was 291; +34 assertions: 25 jest-axe scans, the dialog focus-trap/Escape/focus-return contract, `aria-describedby` wiring checks, and the sorting/`aria-sort` assertion) |
-| `npx playwright test` (repo root) | **25 passed** — E2E-01…E2E-06 plus RESP-01, RESP-02, RESP-03, **RESP-04** and **RESP-05** at 375/768/1280px |
-
-Screenshots captured/recaptured in this branch (`artifacts/lab-03/screenshots/`): `authentication/`, `app-shell/` and `requester-ticket-detail/` are new; `staff-queue/`, `staff-ticket-detail/` and `user-management/` were recaptured so they reflect the polish changes.
-
-Part 9 submission evidence (design consistency, role navigation, badges, editable-vs-read-only fields, validation placement, focus, clipping, overlap, horizontal overflow) is recorded per screen and per width in **`docs/lab-03/visual-checklist.md`**, which also carries the token-consistency audit (§4), the focus-visibility audit (§6) and the computed WCAG contrast table (§5).
-
-No existing test was weakened or deleted. Deliberate expectation updates made in this branch, all recorded above:
-
-- `StaffTicketQueue.test.tsx` — added an `aria-sort` assertion; the Queue now emits `aria-sort="none"` on sortable-but-unsorted columns, which is a strengthening of the component, not a relaxed test.
-- `UserManagement.test.tsx` — the two new reset-confirmation tests anchor their `getByLabelText` regex (`/^New initial password/`) exactly like the pre-existing UI-08 tests, so the query binds the input rather than the `<section aria-labelledby>` wrapper.
-- `RequesterTicketDetail.test.tsx` — appended axe/`aria-describedby` coverage; the pre-existing assertions (including the exact confirmation copy and the `requester-resolved-badge` marker) are untouched and still pass after those dialogs were moved onto the shared `Dialog` primitive.
-
----
-
-Every AC has at least one mapped, executable, passing automated test, and every row in this plan is green in the runs recorded above.
+Every AC has at least one mapped, executable automated test. "Final" status in every table above must be updated to **Pass/Fail** with a link/reference to the actual CI or local test run output before submission (Part 3 of the grading rubric requires complete passing output from `main`).

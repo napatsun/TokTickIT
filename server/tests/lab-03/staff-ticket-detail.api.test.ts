@@ -475,6 +475,14 @@ describe("GET /api/staff/tickets/:id — shared Ticket Detail", () => {
     const missing = await getStaffDetail(staffClientA, 9_999_999);
     const malformed = await staffClientA.agent.get("/api/staff/tickets/not-a-real-id");
 
+    // Assert each response's status BEFORE comparing bodies: a bare
+    // toEqual(missing.body) once masked a transient non-JSON 500 as a
+    // confusing "expected { error } to deeply equal {}" body mismatch
+    // (observed once on the first post-migrate-reset full run).
+    expect(missing.status).toBe(404);
+    expect(missing.body).toEqual({
+      error: { code: "TICKET_NOT_FOUND", message: "Ticket not found." },
+    });
     expect(malformed.status).toBe(404);
     expect(malformed.body).toEqual(missing.body);
   });
