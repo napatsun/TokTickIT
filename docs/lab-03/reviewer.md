@@ -129,7 +129,27 @@ assertion ที่ต้องรอ InternalNote model ใน feature/lab3-04-
 ### For KRITTAPHAT PANYASOMPHAN — 67070501052 — [@krittaphato3](https://github.com/krittaphato3)
 
 **1. PR #50** — https://github.com/krittaphato3/TokTickIT/pull/50
+
 - **My comment:** รบกวนช่วยเช็ค test เพิ่มเติมนิดนึงครับ ว่าเคสที่เปลี่ยน owner + priority พร้อมกัน ,reopen โดยไม่มี reason และเรียก API ที่ไม่ได้รับอนุญาต ครอบคลุมยังครับ ยังไงบอกมาอีกทีนะครับ
-- **Partner's response:** 
+
+- **Partner's response:** ได้ครับ เดี๋ยวลองเช็คให้นะครับ
+
+- **Partner's response:** @napatsun เช็คครบแล้วครับ สรุปผลทั้ง 3 เคส (commit bed7649 ที่ push เพิ่มเข้า PR นี้):
+
+1) เปลี่ยน owner + priority พร้อมกัน (combined ops pass)
+เพิ่มเทสที่จำลอง "รอบทำงานเดียว" — claim (owner เปลี่ยน + IT Priority copy ตาม BR-13 ผ่าน itPriorityCopied: true) → แก้ IT Priority ต่อทันที → ปิดท้ายด้วย REOPENED พร้อม reason แล้ว assert ทั้งสาม write (owner, itPriority, status) persist ลง DB จริง พร้อมเทสเดิมที่แยกบทบาทสอง staff account ยืนยันว่า write ต่อเนื่องใน pass เดียวยังถูก gate ด้วย IT_STAFF ทุกจุด
+
+2) reopen โดยไม่มี reason (BR-15)
+เดิมเทสเฉพาะจาก RESOLVED — เพิ่มครบทุก source ที่ REOPENED ได้: RESOLVED, CLOSED, CANCELLED แต่ละเคส assert 400 details.field = reason พร้อมข้อความ A reason comment is required to reopen from <source>, เคส reason เป็น whitespace ล้วนก็ถูกปฏิเสธเหมือนกัน และ DB ไม่เปลี่ยน พร้อมเคส positive คู่กัน: ใส่ reason ถูกต้องแล้ว reopen สำเร็จจากทั้ง 3 source
+
+3) เรียก API ที่ไม่ได้รับอนุญาต (§12/BR-20)
+เดิมเทสกระจายเป็นจุด ๆ — รวมเป็น matrix เดียวใน staff-ticket-detail.api.test.ts ครอบคลุมทุก route ของ /api/staff/* (11 routes: list, owners, detail, comments GET/POST, notes GET/POST, owner, it-priority, status, attachment download):
+
+REQUESTER → 403 ทุก route ยกเว้น internal-notes ที่เป็น masked 404 ตาม §1.5 และ body ไม่มี ticket number หลุด
+ADMINISTRATOR → 403 บน write owner/it-priority/status (AD-02 view-only) และ DB ไม่เปลี่ยน — ส่วน comment/note ยังโพสต์ได้ 201 ตาม BR-04 (ทดสอบให้เห็นชัดว่าไม่ถูก block เกิน)
+ไม่มี session → 401 ทุก route พร้อม assert ว่า body ไม่มี ticket number หลุดออกไป
+ผลรัน: staff-ticket-detail.api.test.ts ผ่าน 65/65 เทส, ชุด lab-03 ทั้งหมด 153/153 ผ่าน อัปเดตแถวเอกสาร docs/lab-03/tests.md (T-OWN-01, T-STAT-01, T-STAT-02, T-AUTHZ-01) ให้ตรงกับ coverage ที่เพิ่มแล้วครับ
+
+- **My comment:** เยี่ยมมากครับคุณโอโซน เรียบร้อยดีครับ
 
 ---
