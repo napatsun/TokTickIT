@@ -1,0 +1,10 @@
+=== npx playwright test (root: Playwright + Chromium) ===
+Running 7 tests using 1 worker
+  ✓  1 [chromium] › e2e/lab-03/authentication.spec.ts:54:3 › E2E-01 — full login flow › shows the busy state, then lands the Administrator in the app (1.3s)
+  ✓  2 [chromium] › e2e/lab-03/authentication.spec.ts:68:3 › E2E-01 — full login flow › shows one generic banner for invalid credentials (313ms)
+  ✓  3 [chromium] › e2e/lab-03/authentication.spec.ts:81:3 › E2E-02 — mandatory first-login password change › forces the Change Password screen before the app is reachable (567ms)
+  ✓  4 [chromium] › e2e/lab-03/authentication.spec.ts:114:3 › E2E-03 — role-based navigation › Administrator only sees User Management (292ms)
+  ✓  5 [chromium] › e2e/lab-03/authentication.spec.ts:125:3 › E2E-03 — role-based navigation › IT Staff only sees Ticket Queue and cannot open Requester routes (463ms)
+  ✓  6 [chromium] › e2e/lab-03/authentication.spec.ts:139:3 › E2E-03 — role-based navigation › Requester only sees Requester navigation and cannot open the Admin route (485ms)
+  ✓  7 [chromium] › e2e/lab-03/authentication.spec.ts:154:3 › E2E-03 — role-based navigation › no Development Requester selector remains in the shell (MIG-02) (304ms)
+  7 passed (6.5s)

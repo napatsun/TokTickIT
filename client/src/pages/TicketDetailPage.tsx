@@ -18,6 +18,8 @@ import Field from "../components/shared/Field";
 import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import AttachmentSection from "../components/ticket-detail/AttachmentSection";
+import PublicCommentsPanel from "../components/ticket-detail/PublicCommentsPanel";
+import ResolveMarkConfirm from "../components/ticket-detail/ResolveMarkConfirm";
 import { apiClient } from "../lib/apiClient";
 import styles from "./TicketDetailPage.module.css";
 
@@ -37,6 +39,9 @@ interface TicketData {
   currentStatus: string;
   ticketOwner: string | null;
   resolutionSummary: string | null;
+  // BR-05/BR-20: separate from `currentStatus` — never a formal status change.
+  requesterMarkedResolved?: boolean;
+  requesterMarkedResolvedAt?: string | null;
 }
 
 interface AttachmentData {
@@ -80,6 +85,12 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * ui-spec.md §4: "Problem Appears Resolved" is offered only for these statuses
+ * and only while the marker has not already been set.
+ */
+const RESOLVE_MARK_ELIGIBLE_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER"];
+
 // ─── Component ──────────────────────────────────────────────────────────
 
 export default function TicketDetailPage() {
@@ -93,6 +104,11 @@ export default function TicketDetailPage() {
   }>({ active: [], removed: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ─── "Problem Appears Resolved" state (ui-spec.md §4) ────────────────
+  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
+  const [isMarkingResolved, setIsMarkingResolved] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
   // ─── Fetch ticket detail ──────────────────────────────────────────
   const fetchTicketDetail = useCallback(async () => {
@@ -137,6 +153,51 @@ export default function TicketDetailPage() {
     fetchTicketDetail();
   }, [fetchTicketDetail]);
 
+  // ─── "Problem Appears Resolved" ──────────────────────────────────────
+  const handleResolveMarkConfirm = useCallback(async () => {
+    if (!ticketNumber) return;
+
+    setIsMarkingResolved(true);
+    setResolveError(null);
+
+    try {
+      const response = await apiClient(`/api/tickets/${ticketNumber}/resolve-mark`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setResolveError(
+          body?.error?.message ?? "Couldn't record your response. Please try again.",
+        );
+        return; // dialog stays open, state unchanged
+      }
+
+      const data = (await response.json()) as {
+        requesterMarkedResolved: boolean;
+        requesterMarkedResolvedAt: string | null;
+      };
+
+      // The formal status is untouched (BR-20) — only the marker changes.
+      setTicket((current) =>
+        current
+          ? {
+              ...current,
+              requesterMarkedResolved: data.requesterMarkedResolved,
+              requesterMarkedResolvedAt: data.requesterMarkedResolvedAt,
+            }
+          : current,
+      );
+      setShowResolveConfirm(false);
+    } catch {
+      setResolveError(
+        "Couldn't record your response. Please check your connection and try again.",
+      );
+    } finally {
+      setIsMarkingResolved(false);
+    }
+  }, [ticketNumber]);
+
   // ─── Render: Loading state ────────────────────────────────────────
   if (isLoading) {
     return (
@@ -174,7 +235,11 @@ export default function TicketDetailPage() {
   if (error) {
     return (
       <div className={styles.page}>
-        <div className={styles.errorBanner}>
+        {/* Safe failure (§8): a generic message plus a retry affordance, never
+            a raw backend string. role="alert" announces it, matching every
+            other failure banner in the app (this one was the only one missing
+            it — feature/lab3-06 consistency pass). */}
+        <div className={styles.errorBanner} role="alert" data-testid="requester-detail-error">
           <p>{error}</p>
           <Button variant="tertiary" onClick={fetchTicketDetail}>
             Retry
@@ -186,6 +251,10 @@ export default function TicketDetailPage() {
 
   // ─── Render: Happy path ───────────────────────────────────────────
   if (!ticket) return null;
+
+  const canMarkResolved =
+    RESOLVE_MARK_ELIGIBLE_STATUSES.includes(ticket.currentStatus) &&
+    !ticket.requesterMarkedResolved;
 
   return (
     <div className={styles.page}>
@@ -244,6 +313,31 @@ export default function TicketDetailPage() {
         </p>
       </section>
 
+      {/* §4: "Problem Appears Resolved" — visually distinct from the Status
+          badge; it never implies a formal status change (BR-05/BR-20). */}
+      {(canMarkResolved || ticket.requesterMarkedResolved) && (
+        <section className={styles.resolveSection} data-testid="resolve-mark-section">
+          {ticket.requesterMarkedResolved ? (
+            <p className={styles.requesterResolvedMarker} data-testid="requester-resolved-badge">
+              You marked this as resolved on{" "}
+              {ticket.requesterMarkedResolvedAt
+                ? formatDate(ticket.requesterMarkedResolvedAt)
+                : "an earlier date"}
+              . IT Staff will confirm and close the ticket.
+            </p>
+          ) : (
+            <>
+              <p className={styles.resolveHint}>
+                Has IT fixed the problem? Let them know it looks resolved.
+              </p>
+              <Button variant="secondary" onClick={() => setShowResolveConfirm(true)}>
+                Problem Appears Resolved
+              </Button>
+            </>
+          )}
+        </section>
+      )}
+
       {/* Divider */}
       <hr className={styles.divider} />
 
@@ -255,6 +349,22 @@ export default function TicketDetailPage() {
         onAttachmentAdded={handleAttachmentAdded}
         onAttachmentRemoved={handleAttachmentRemoved}
       />
+
+      {/* §4: Public Comments panel (Requester route — own ticket only) */}
+      <PublicCommentsPanel commentsPath={`/api/tickets/${ticket.ticketNumber}/comments`} />
+
+      {/* §4: confirmation dialog for the appears-resolved action */}
+      {showResolveConfirm && (
+        <ResolveMarkConfirm
+          onConfirm={handleResolveMarkConfirm}
+          onCancel={() => {
+            setShowResolveConfirm(false);
+            setResolveError(null);
+          }}
+          busy={isMarkingResolved}
+          error={resolveError}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,13 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -29,8 +36,12 @@ const prisma = getPrisma();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3 (BR-03): fixtures are real Users authenticated through a session
+// cookie, not a DevRequester id in a request header.
+let requesterA: TestUser;
+let requesterB: TestUser;
+let clientA: SessionClient;
+let clientB: SessionClient;
 let categoryHardware: { id: number; name: string };
 let categorySoftware: { id: number; name: string };
 let categoryNetwork: { id: number; name: string };
@@ -42,10 +53,8 @@ const ticketIdsA: number[] = [];
 /** ticketNumber of the "laptop" search target for requesterA */
 let laptopTicketNumber: string;
 
-function get(path: string, requesterId: number) {
-  return request(app)
-    .get(path)
-    .set("X-Dev-Requester-Id", String(requesterId));
+function get(path: string, client: SessionClient) {
+  return client.agent.get(path);
 }
 
 // ─── Seed data ───────────────────────────────────────────────────────────
@@ -54,14 +63,11 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
-    orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
-  });
-  expect(requesters.length).toBeGreaterThanOrEqual(2);
-  requesterA = requesters[0];
-  requesterB = requesters[1];
+  // Dedicated fixtures (no seeded rows) so this suite owns its ticket set.
+  requesterA = await createTestUser({ name: "My Tickets Requester A" });
+  requesterB = await createTestUser({ name: "My Tickets Requester B" });
+  clientA = await loginAs(app, requesterA.email);
+  clientB = await loginAs(app, requesterB.email);
 
   // ── Categories ────────────────────────────────────────────────────────
   const categories = await prisma.category.findMany({
@@ -87,15 +93,6 @@ beforeAll(async () => {
   });
   expect(rs).toBeDefined();
   relatedSystem = rs!;
-
-  // ── Clean up any leftover tickets from prior test runs ────────────────
-  // (Only delete tickets for our two requesters to avoid affecting parallel tests)
-  await prisma.attachment.deleteMany({
-    where: { ticket: { requesterId: { in: [requesterA.id, requesterB.id] } } },
-  });
-  await prisma.ticket.deleteMany({
-    where: { requesterId: { in: [requesterA.id, requesterB.id] } },
-  });
 
   // ── Create tickets for requesterA ─────────────────────────────────────
   // We need enough tickets for pagination test (42 total for requesterA)
@@ -157,13 +154,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Clean up test tickets
-  await prisma.attachment.deleteMany({
-    where: { ticket: { requesterId: { in: [requesterA.id, requesterB.id] } } },
-  });
-  await prisma.ticket.deleteMany({
-    where: { requesterId: { in: [requesterA.id, requesterB.id] } },
-  });
+  // Clean up the fixture users and every ticket/attachment they own
+  await cleanupTestUsers([requesterA.id, requesterB.id]);
   await prisma.$disconnect();
 });
 
@@ -175,7 +167,7 @@ describe("GET /api/tickets", () => {
   describe("API-09: requestor isolation (AC-10)", () => {
     it("returns only requesterA's tickets, never requesterB's", async () => {
       // Use pageSize=50 to get all 42 tickets in one page
-      const res = await get("/api/tickets?pageSize=50", requesterA.id);
+      const res = await get("/api/tickets?pageSize=50", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBe(42);
@@ -187,7 +179,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("returns only requesterB's tickets, never requesterA's", async () => {
-      const res = await get("/api/tickets", requesterB.id);
+      const res = await get("/api/tickets", clientB);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBe(3);
@@ -212,7 +204,7 @@ describe("GET /api/tickets", () => {
       const suffix = laptopTicketNumber.slice(-4);
       const res = await get(
         `/api/tickets?search=${suffix}`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -221,7 +213,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("search matches summary substring (case-insensitive)", async () => {
-      const res = await get("/api/tickets?search=laptop+battery", requesterA.id);
+      const res = await get("/api/tickets?search=laptop+battery", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBeGreaterThanOrEqual(1);
@@ -234,7 +226,7 @@ describe("GET /api/tickets", () => {
     it("search returns empty when no match", async () => {
       const res = await get(
         "/api/tickets?search=ZZZZZNONEXISTENT",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -250,7 +242,7 @@ describe("GET /api/tickets", () => {
       // Use pageSize=50 to get all 14 Hardware tickets in one page
       const res = await get(
         `/api/tickets?categoryId=${categoryHardware.id}&pageSize=50`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -264,7 +256,7 @@ describe("GET /api/tickets", () => {
     it("returns only Software tickets", async () => {
       const res = await get(
         `/api/tickets?categoryId=${categorySoftware.id}`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -278,7 +270,7 @@ describe("GET /api/tickets", () => {
 
   describe("API-12: pagination (AC-15)", () => {
     it("page 1 shows 10 tickets with correct pagination metadata", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=10", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=10", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBe(10);
@@ -291,8 +283,8 @@ describe("GET /api/tickets", () => {
     });
 
     it("page 2 returns the next distinct 10 tickets", async () => {
-      const res1 = await get("/api/tickets?page=1&pageSize=10", requesterA.id);
-      const res2 = await get("/api/tickets?page=2&pageSize=10", requesterA.id);
+      const res1 = await get("/api/tickets?page=1&pageSize=10", clientA);
+      const res2 = await get("/api/tickets?page=2&pageSize=10", clientA);
 
       expect(res2.status).toBe(200);
       expect(res2.body.tickets.length).toBe(10);
@@ -307,7 +299,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("page 5 shows the last 2 tickets", async () => {
-      const res = await get("/api/tickets?page=5&pageSize=10", requesterA.id);
+      const res = await get("/api/tickets?page=5&pageSize=10", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBe(2);
@@ -319,21 +311,21 @@ describe("GET /api/tickets", () => {
 
   describe("API-13: parameter clamping (BR-17)", () => {
     it("clamps page=0 to page=1 (not a 400)", async () => {
-      const res = await get("/api/tickets?page=0&pageSize=10", requesterA.id);
+      const res = await get("/api/tickets?page=0&pageSize=10", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.page).toBe(1);
     });
 
     it("clamps negative page to 1", async () => {
-      const res = await get("/api/tickets?page=-5&pageSize=10", requesterA.id);
+      const res = await get("/api/tickets?page=-5&pageSize=10", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.page).toBe(1);
     });
 
     it("clamps pageSize=999 to pageSize=10 (fallback)", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=999", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=999", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.pageSize).toBe(10);
@@ -341,14 +333,14 @@ describe("GET /api/tickets", () => {
     });
 
     it("clamps pageSize=0 to pageSize=10", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=0", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=0", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.pageSize).toBe(10);
     });
 
     it("accepts valid pageSize=20", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=20", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=20", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.pageSize).toBe(20);
@@ -356,7 +348,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("accepts valid pageSize=50", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=50", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=50", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.pagination.pageSize).toBe(50);
@@ -370,7 +362,7 @@ describe("GET /api/tickets", () => {
     it("returns 400 for invalid requestedPriority", async () => {
       const res = await get(
         "/api/tickets?requestedPriority=URGENT",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(400);
@@ -381,7 +373,7 @@ describe("GET /api/tickets", () => {
     it("returns 400 for invalid sortBy", async () => {
       const res = await get(
         "/api/tickets?sortBy=invalidField",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(400);
@@ -390,7 +382,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("returns 400 for invalid sortDir", async () => {
-      const res = await get("/api/tickets?sortDir=random", requesterA.id);
+      const res = await get("/api/tickets?sortDir=random", clientA);
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
@@ -400,7 +392,7 @@ describe("GET /api/tickets", () => {
     it("returns 400 for invalid currentStatus", async () => {
       const res = await get(
         "/api/tickets?currentStatus=CLOSED",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(400);
@@ -413,7 +405,7 @@ describe("GET /api/tickets", () => {
 
   describe("API-36: filterOptions.categories (BR-15)", () => {
     it("contains only distinct categories from requesterA's tickets", async () => {
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       const cats = res.body.filterOptions.categories;
@@ -433,7 +425,7 @@ describe("GET /api/tickets", () => {
     it("does not include categories that have no tickets for this requester", async () => {
       // "Account and Access" exists as an active category but requesterA has
       // no tickets in it — it should not appear in filterOptions.
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       const catNames = res.body.filterOptions.categories.map(
@@ -447,7 +439,7 @@ describe("GET /api/tickets", () => {
 
   describe("API-37: filterOptions.requestedPriorities (BR-15)", () => {
     it("contains only distinct priorities present in requesterA's tickets", async () => {
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       const priorities = res.body.filterOptions.requestedPriorities;
@@ -461,7 +453,7 @@ describe("GET /api/tickets", () => {
 
   describe("API-38: filterOptions.currentStatuses (BR-15)", () => {
     it("contains only distinct statuses present in requesterA's tickets", async () => {
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       const statuses = res.body.filterOptions.currentStatuses;
@@ -475,10 +467,10 @@ describe("GET /api/tickets", () => {
 
   describe("API-39: filterOptions independent of filters (BR-15)", () => {
     it("returns same filterOptions whether or not a categoryId filter is applied", async () => {
-      const resNoFilter = await get("/api/tickets", requesterA.id);
+      const resNoFilter = await get("/api/tickets", clientA);
       const resWithFilter = await get(
         `/api/tickets?categoryId=${categoryHardware.id}`,
-        requesterA.id,
+        clientA,
       );
 
       expect(resNoFilter.status).toBe(200);
@@ -491,10 +483,10 @@ describe("GET /api/tickets", () => {
     });
 
     it("returns same filterOptions when search is active", async () => {
-      const resNoFilter = await get("/api/tickets", requesterA.id);
+      const resNoFilter = await get("/api/tickets", clientA);
       const resWithSearch = await get(
         "/api/tickets?search=laptop",
-        requesterA.id,
+        clientA,
       );
 
       expect(resWithSearch.status).toBe(200);
@@ -510,25 +502,20 @@ describe("GET /api/tickets", () => {
     // Use a requester that has no tickets. After our cleanup in beforeAll,
     // requesterB has 3 tickets, but we need a clean one.
     // We'll create a temporary requester with no tickets.
-    let emptyRequester: { id: number };
+    let emptyRequester: TestUser;
+    let emptyClient: SessionClient;
 
     beforeAll(async () => {
-      const r = await prisma.devRequester.create({
-        data: {
-          fullName: "Empty Requester",
-          email: `empty-${crypto.randomUUID()}@test.com`,
-          isActive: true,
-        },
-      });
-      emptyRequester = r;
+      emptyRequester = await createTestUser({ name: "Empty Requester" });
+      emptyClient = await loginAs(app, emptyRequester.email);
     });
 
     afterAll(async () => {
-      await prisma.devRequester.delete({ where: { id: emptyRequester.id } });
+      await cleanupTestUsers([emptyRequester.id]);
     });
 
     it("returns empty filterOptions arrays when requester has zero tickets", async () => {
-      const res = await get("/api/tickets", emptyRequester.id);
+      const res = await get("/api/tickets", emptyClient);
 
       expect(res.status).toBe(200);
       expect(res.body.tickets.length).toBe(0);
@@ -543,7 +530,7 @@ describe("GET /api/tickets", () => {
 
   describe("API-41: filterOptions cross-requester isolation (BR-12)", () => {
     it("requesterB's filterOptions does not include values only from requesterA", async () => {
-      const res = await get("/api/tickets", requesterB.id);
+      const res = await get("/api/tickets", clientB);
 
       expect(res.status).toBe(200);
 
@@ -566,7 +553,7 @@ describe("GET /api/tickets", () => {
 
   describe("response shape", () => {
     it("returns tickets, pagination, and filterOptions at top level", async () => {
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("tickets");
@@ -576,7 +563,7 @@ describe("GET /api/tickets", () => {
     });
 
     it("each ticket has all required fields", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=1", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=1", clientA);
 
       expect(res.status).toBe(200);
       const ticket = res.body.tickets[0];
@@ -593,17 +580,20 @@ describe("GET /api/tickets", () => {
       expect(ticket).toHaveProperty("updatedAt");
     });
 
-    it("itPriority and ticketOwner are null in Lab 2", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=1", requesterA.id);
+    it("carries a valid IT Priority and an unassigned ticketOwner", async () => {
+      const res = await get("/api/tickets?page=1&pageSize=1", clientA);
 
       expect(res.status).toBe(200);
       const ticket = res.body.tickets[0];
-      expect(ticket.itPriority).toBeNull();
+      // Fixtures created directly through Prisma take the schema default;
+      // tickets created through POST /api/tickets mirror Requested Priority
+      // (BR-14) — asserted in create-ticket.api.test.ts.
+      expect(["LOW", "MEDIUM", "HIGH", "URGENT"]).toContain(ticket.itPriority);
       expect(ticket.ticketOwner).toBeNull();
     });
 
     it("pagination has all required fields", async () => {
-      const res = await get("/api/tickets", requesterA.id);
+      const res = await get("/api/tickets", clientA);
 
       expect(res.status).toBe(200);
       const p = res.body.pagination;
@@ -622,7 +612,7 @@ describe("GET /api/tickets", () => {
 
   describe("default sort (BR-16)", () => {
     it("defaults to createdAt desc (newest first)", async () => {
-      const res = await get("/api/tickets?page=1&pageSize=10", requesterA.id);
+      const res = await get("/api/tickets?page=1&pageSize=10", clientA);
 
       expect(res.status).toBe(200);
       const dates = res.body.tickets.map((t: any) => new Date(t.createdAt).getTime());
@@ -638,7 +628,7 @@ describe("GET /api/tickets", () => {
     it("sorts by updatedAt asc", async () => {
       const res = await get(
         "/api/tickets?sortBy=updatedAt&sortDir=asc&page=1&pageSize=10",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -651,7 +641,7 @@ describe("GET /api/tickets", () => {
     it("sorts by createdAt asc", async () => {
       const res = await get(
         "/api/tickets?sortBy=createdAt&sortDir=asc&page=1&pageSize=10",
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -665,18 +655,23 @@ describe("GET /api/tickets", () => {
   // ─── Auth ─────────────────────────────────────────────────────────────
 
   describe("auth", () => {
-    it("returns 401 without X-Dev-Requester-Id header", async () => {
+    it("returns 401 without a session", async () => {
       const res = await request(app).get("/api/tickets");
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("returns 401 with non-existent requester id", async () => {
-      const res = await get("/api/tickets", 99999);
+    it("returns 403 for a session whose role is not REQUESTER", async () => {
+      const staff = await createTestUser({ role: "IT_STAFF" });
+      const staffClient = await loginAs(app, staff.email);
 
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      const res = await staffClient.agent.get("/api/tickets");
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+
+      await cleanupTestUsers([staff.id]);
     });
   });
 });

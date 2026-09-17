@@ -6,19 +6,20 @@
  *            All header fields render as read-only, no editable inputs
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TicketDetailPage from "../../src/pages/TicketDetailPage";
+import { expectNoA11yViolations } from "../support/a11y";
 
 // ─── Mock apiClient ─────────────────────────────────────────────────────
 
 const mockApiResponse = vi.fn();
 
 vi.mock("../../src/lib/apiClient", () => ({
-  apiClient: vi.fn(async (_url: string | URL | Request) => {
-    const result = mockApiResponse();
+  apiClient: vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const result = mockApiResponse(String(url), init);
     const data = await result;
     return {
       ok: data._ok !== undefined ? data._ok : true,
@@ -345,10 +346,390 @@ describe("UI-12 — Ticket Detail renders with correct fields", () => {
       expect(screen.getByDisplayValue("TKT-2026-000501")).toBeInTheDocument();
     });
 
-    // Check that all text inputs are readonly (not disabled — Field uses readonly attribute)
-    const inputs = screen.getAllByRole("textbox");
+    // Every read-only ticket field. The Lab 3 Public Comments composer is a
+    // textarea and is intentionally excluded here (see UI-03 below).
+    const inputs = screen
+      .getAllByRole("textbox")
+      .filter((element) => element.id !== "public-comment");
+
+    expect(inputs.length).toBeGreaterThan(0);
     for (const input of inputs) {
       expect(input).toHaveAttribute("readonly");
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// Lab 3 additions (ui-spec.md §4): Public Comments + "Problem Appears
+// Resolved". Kept in this file because the Requester Ticket Detail screen and
+// its fixtures already live here.
+// ══════════════════════════════════════════════════════════════════════
+
+const openTicket = {
+  ...mockTicket,
+  currentStatus: "OPEN",
+  requesterMarkedResolved: false,
+  requesterMarkedResolvedAt: null,
+};
+
+const existingComments = [
+  {
+    id: "comment-1",
+    ticketId: 501,
+    authorId: "user-1",
+    authorName: "Jennifer Anderson",
+    authorRole: "REQUESTER",
+    content: "The battery diagnostic finished.",
+    createdAt: "2026-09-01T09:00:00.000Z",
+  },
+  {
+    id: "comment-2",
+    ticketId: 501,
+    authorId: "user-2",
+    authorName: "Alice Chen",
+    authorRole: "IT_STAFF",
+    content: "A replacement battery is on order.",
+    createdAt: "2026-09-01T09:20:00.000Z",
+  },
+];
+
+/** Route the mocked apiClient by URL so ticket / comments / resolve-mark can differ. */
+function routeApi(options: {
+  ticket: Record<string, unknown>;
+  comments?: typeof existingComments;
+  postComment?: { _ok: boolean; status?: number; body?: unknown };
+  resolveMark?: { _ok: boolean; status?: number };
+}) {
+  mockApiResponse.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.includes("/comments")) {
+      if (init?.method === "POST") {
+        const post = options.postComment ?? { _ok: true };
+        if (!post._ok) return { _ok: false, status: post.status ?? 500 };
+        const parsed = JSON.parse(String(init.body)) as { content: string };
+        return {
+          id: `comment-${existingComments.length + 1}`,
+          ticketId: 501,
+          authorId: "user-1",
+          authorName: "Jennifer Anderson",
+          authorRole: "REQUESTER",
+          content: parsed.content,
+          createdAt: "2026-09-10T10:00:00.000Z",
+        };
+      }
+      return { items: options.comments ?? [] };
+    }
+
+    if (url.includes("/resolve-mark")) {
+      const mark = options.resolveMark ?? { _ok: true };
+      if (!mark._ok) return { _ok: false, status: mark.status ?? 500 };
+      return {
+        requesterMarkedResolved: true,
+        requesterMarkedResolvedAt: "2026-09-10T10:00:00.000Z",
+      };
+    }
+
+    return { ticket: options.ticket, attachments: mockAttachments };
+  });
+}
+
+describe("UI-03 — Public Comments panel (ui-spec §4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, comments: existingComments });
+  });
+
+  it("renders the comment list oldest-first with author name, role, and timestamp", async () => {
+    renderPage();
+
+    const items = await screen.findAllByTestId("comment-item");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("The battery diagnostic finished.");
+    expect(items[1]).toHaveTextContent("A replacement battery is on order.");
+
+    expect(screen.getByText("Jennifer Anderson")).toBeInTheDocument();
+    expect(screen.getByText("Alice Chen")).toBeInTheDocument();
+    // Human-readable role labels, not raw enum values, scoped to each comment.
+    expect(within(items[0]).getByText("Requester")).toBeInTheDocument();
+    expect(within(items[1]).getByText("IT Staff")).toBeInTheDocument();
+    expect(screen.getByText("Public Comments")).toBeInTheDocument();
+  });
+
+  it("shows the empty state when the ticket has no comments", async () => {
+    routeApi({ ticket: openTicket, comments: [] });
+    renderPage();
+
+    expect(await screen.findByTestId("comments-empty")).toBeInTheDocument();
+  });
+
+  it("disables Post Comment while the draft is empty or whitespace-only", async () => {
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: /post comment/i });
+    expect(button).toBeDisabled();
+
+    const textarea = screen.getByLabelText("Add a comment");
+    await userEvent.type(textarea, "    ");
+    expect(button).toBeDisabled();
+
+    await userEvent.type(textarea, "Something helpful");
+    expect(button).toBeEnabled();
+  });
+
+  it("shows a live character counter against the 2,000 character limit (BR-18)", async () => {
+    renderPage();
+
+    const textarea = await screen.findByLabelText("Add a comment");
+    expect(textarea).toHaveAttribute("maxlength", "2000");
+    expect(screen.getByTestId("comment-counter")).toHaveTextContent("0/2000");
+
+    await userEvent.type(textarea, "Battery");
+    expect(screen.getByTestId("comment-counter")).toHaveTextContent("7/2000");
+  });
+
+  it("posts a comment, appends it to the list, and clears the draft", async () => {
+    renderPage();
+
+    const textarea = await screen.findByLabelText("Add a comment");
+    await userEvent.type(textarea, "Still seeing the drain.");
+    await userEvent.click(screen.getByRole("button", { name: /post comment/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("comment-success")).toBeInTheDocument();
+    });
+
+    const items = screen.getAllByTestId("comment-item");
+    expect(items).toHaveLength(3);
+    expect(items[2]).toHaveTextContent("Still seeing the drain.");
+    expect(screen.getByLabelText("Add a comment")).toHaveValue("");
+  });
+
+  it("preserves the draft and shows a safe banner when posting fails", async () => {
+    routeApi({
+      ticket: openTicket,
+      comments: existingComments,
+      postComment: { _ok: false, status: 500 },
+    });
+    renderPage();
+
+    const textarea = await screen.findByLabelText("Add a comment");
+    await userEvent.type(textarea, "This draft must survive the failure");
+    await userEvent.click(screen.getByRole("button", { name: /post comment/i }));
+
+    expect(await screen.findByTestId("comment-error")).toBeInTheDocument();
+    // Draft preserved so the user does not lose their text.
+    expect(screen.getByLabelText("Add a comment")).toHaveValue(
+      "This draft must survive the failure",
+    );
+    expect(screen.getAllByTestId("comment-item")).toHaveLength(2);
+  });
+});
+
+describe('FR-15 — "Problem Appears Resolved" (ui-spec §4, AC-11)', () => {
+  it("shows the action for an eligible status", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    expect(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("requester-resolved-badge")).not.toBeInTheDocument();
+  });
+
+  it("hides the action for statuses that are not eligible", async () => {
+    for (const status of ["NEW", "RESOLVED", "CLOSED", "CANCELLED"]) {
+      vi.clearAllMocks();
+      routeApi({ ticket: { ...mockTicket, currentStatus: status, requesterMarkedResolved: false } });
+      const { unmount } = renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("TKT-2026-000501")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByRole("button", { name: /problem appears resolved/i }),
+        `${status} should not offer the action`,
+      ).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("shows the marker badge and hides the action once already marked", async () => {
+    vi.clearAllMocks();
+    routeApi({
+      ticket: {
+        ...mockTicket,
+        currentStatus: "OPEN",
+        requesterMarkedResolved: true,
+        requesterMarkedResolvedAt: "2026-09-05T10:00:00.000Z",
+      },
+    });
+    renderPage();
+
+    const badge = await screen.findByTestId("requester-resolved-badge");
+    expect(badge).toHaveTextContent(/You marked this as resolved on/i);
+    expect(
+      screen.queryByRole("button", { name: /problem appears resolved/i }),
+    ).not.toBeInTheDocument();
+    // The formal Status badge is unchanged and separate from the marker.
+    expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+
+  it("asks for confirmation with the exact spec copy before sending", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    );
+
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "This tells IT Staff the issue seems fixed. IT Staff will still need to formally close the ticket. Continue?",
+    );
+
+    // Cancel closes the dialog without sending anything.
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /problem appears resolved/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("confirms, records the marker, keeps currentStatus untouched, and hides the action", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByTestId("requester-resolved-badge")).toHaveTextContent(
+      /You marked this as resolved on/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /problem appears resolved/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Status badge still shows the formal status (BR-20).
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(screen.queryByText("Resolved")).not.toBeInTheDocument();
+  });
+
+  it("shows a safe banner and leaves the state unchanged when the request fails", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, resolveMark: { _ok: false, status: 500 } });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn't record your response/i,
+    );
+    // Dialog stays open and the action is still offered.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByTestId("requester-resolved-badge")).not.toBeInTheDocument();
+    expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+});
+
+// ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
+
+/**
+ * The Requester Ticket Detail is one of the screens this branch polishes, and
+ * it is the only place the Lab 2 confirmations (resolve-mark, remove
+ * attachment) render — both now go through the shared Dialog primitive, so
+ * their focus/keyboard contract is scanned here too.
+ */
+describe("UI-10 — Requester Ticket Detail automated accessibility (ui-spec §9)", () => {
+  it("has no axe violations with the comments panel populated", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, comments: existingComments });
+    renderPage();
+    await screen.findAllByTestId("comment-item");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (populated)");
+  });
+
+  it("has no axe violations with the resolve-mark confirmation open", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    );
+    await screen.findByRole("dialog");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (resolve confirm)");
+  });
+
+  it("has no axe violations once the resolved marker is shown", async () => {
+    vi.clearAllMocks();
+    routeApi({
+      ticket: {
+        ...openTicket,
+        requesterMarkedResolved: true,
+        requesterMarkedResolvedAt: "2026-09-05T10:00:00.000Z",
+      },
+    });
+    renderPage();
+    await screen.findByTestId("requester-resolved-badge");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (marked resolved)");
+  });
+
+  it("has no axe violations with the remove-attachment dialog open", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, comments: existingComments });
+    renderPage();
+    await screen.findAllByTestId("comment-item");
+
+    await userEvent.click(screen.getAllByText("Remove")[0]);
+    await screen.findByTestId("remove-attachment-dialog");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (remove attachment)");
+  });
+
+  it("has no axe violations in the page-level safe-failure state", async () => {
+    vi.clearAllMocks();
+    mockApiResponse.mockReturnValue({ _ok: false, status: 500 });
+    renderPage();
+
+    const banner = await screen.findByTestId("requester-detail-error");
+    // §8/§9: the generic message + Retry affordance is announced as an alert.
+    expect(banner).toHaveAttribute("role", "alert");
+    expect(banner).toHaveTextContent("Couldn't load ticket details.");
+
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (failure)");
+  });
+
+  it("associates the public-comment composer failure with the textarea", async () => {
+    vi.clearAllMocks();
+    routeApi({
+      ticket: openTicket,
+      comments: existingComments,
+      postComment: { _ok: false, status: 500 },
+    });
+    renderPage();
+
+    const textarea = await screen.findByLabelText("Add a comment");
+    await userEvent.type(textarea, "This draft must survive the failure");
+    await userEvent.click(screen.getByRole("button", { name: /post comment/i }));
+    await screen.findByTestId("comment-error");
+
+    // §9: the failure banner AND the live counter are bound to the composer.
+    const describedBy = (textarea.getAttribute("aria-describedby") ?? "").split(/\s+/);
+    expect(describedBy).toEqual(
+      expect.arrayContaining(["public-comment-error", "public-comment-counter"]),
+    );
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById("public-comment-error")).toHaveAttribute("role", "alert");
+    expect(screen.getByTestId("comment-counter")).toHaveAttribute("id", "public-comment-counter");
   });
 });

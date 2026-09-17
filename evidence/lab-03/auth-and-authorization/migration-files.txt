@@ -1,0 +1,9 @@
+=== git branch ===
+feature/lab3-02-auth-and-authorization
+
+=== migration files ===
+20260811054857_init
+20260825052318_lab2_add_ticketing_tables
+20260825054242_lab2_add_related_system_active_flag
+20260913000000_lab3_auth_and_authorization
+migration_lock.toml

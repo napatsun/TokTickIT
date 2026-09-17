@@ -18,15 +18,31 @@ enum RequestedPriority {
   HIGH
 }
 
+// Lab 3 (api-spec.md §3): IT Priority accepts URGENT in addition to the
+// Requester-facing scale, so IT Staff can escalate beyond "High".
 enum ItPriority {
   LOW
   MEDIUM
   HIGH
+  URGENT
 }
 
-enum CurrentStatus {
+// Lab 3 (specification.md §7.1)
+enum Role {
+  REQUESTER
+  IT_STAFF
+  ADMINISTRATOR
+}
+
+enum TicketStatus {
   NEW
-  // Extensible — additional statuses added in future labs
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
 }
 
 // ─── Lab 1 ───────────────────────────────────────────────
@@ -40,18 +56,25 @@ model Category {
   tickets Ticket[]
 }
 
-// ─── Lab 2 ───────────────────────────────────────────────
+// ─── Lab 3: real identity ────────────────────────────────
 
-model DevRequester {
-  id        Int      @id @default(autoincrement())
-  fullName  String
-  email     String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+model User {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  passwordHash       String
+  role               Role
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  tickets             Ticket[]
-  uploadedAttachments Attachment[] @relation("UploadedBy")
-  removedAttachments  Attachment[] @relation("RemovedBy")
+  ticketsCreated      Ticket[]        @relation("RequesterTickets")
+  ticketsOwned        Ticket[]        @relation("OwnerTickets")
+  publicComments      PublicComment[]
+  internalNotes       InternalNote[]
+  uploadedAttachments Attachment[]    @relation("UploadedBy")
+  removedAttachments  Attachment[]    @relation("RemovedBy")
 }
 
 model RelatedSystem {
@@ -65,27 +88,69 @@ model RelatedSystem {
 model Ticket {
   id                Int               @id @default(autoincrement())
   ticketNumber      String            @unique
-  requesterId       Int
+  // Lab 3 §7.1: requester identity is a real User, not a DevRequester.
+  requesterId       String
+  // Lab 3 §7.1: at most one primary Ticket Owner (active IT Staff/Administrator).
+  ownerId           String?
   categoryId        Int
   relatedSystemId   Int
   summary           String
   description       String            @db.Text
   requestedPriority RequestedPriority
-  itPriority        ItPriority?
-  currentStatus     CurrentStatus     @default(NEW)
-  ticketOwnerId     Int?
+  // BR-14: defaults to requestedPriority at creation; only IT Staff/Administrator may change it.
+  itPriority        ItPriority        @default(MEDIUM)
+  status            TicketStatus      @default(NEW)
+  // BR-05 / BR-20: "Problem Appears Resolved" signal — never overwrites status.
+  requesterMarkedResolved   Boolean   @default(false)
+  requesterMarkedResolvedAt DateTime?
   resolutionSummary String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  requester     DevRequester  @relation(fields: [requesterId], references: [id], onDelete: Restrict)
-  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  relatedSystem RelatedSystem @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
-  attachments   Attachment[]
+  requester      User            @relation("RequesterTickets", fields: [requesterId], references: [id], onDelete: Restrict)
+  owner          User?           @relation("OwnerTickets", fields: [ownerId], references: [id], onDelete: Restrict)
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  relatedSystem  RelatedSystem   @relation(fields: [relatedSystemId], references: [id], onDelete: Restrict)
+  attachments    Attachment[]
+  publicComments PublicComment[]
+  internalNotes  InternalNote[]
 
   @@index([requesterId])
   @@index([requesterId, createdAt])
+  @@index([ownerId])
+  @@index([status])
   @@index([summary])
+}
+
+// Lab 3 (FR-14, BR-16/17/18): a Public Comment on a Ticket, append-only.
+// Visible to the Requester, IT Staff, and Administrator (BR-04).
+model PublicComment {
+  id        String   @id @default(cuid())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+// Lab 3 (FR-22, BR-04, BR-16/17/18): an Internal Note on a Ticket, append-only
+// and visible ONLY to IT Staff and Administrator. Mirrors PublicComment's
+// shape deliberately so the two share one validation/rendering code path while
+// remaining separate models (BR-04 keeps private content out of every
+// Requester-facing query, which is only provable if the tables are distinct).
+model InternalNote {
+  id        String   @id @default(cuid())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model Attachment {
@@ -95,16 +160,18 @@ model Attachment {
   storedFileName        String       @unique
   mimeType              String
   fileSizeBytes         Int
-  uploadedByRequesterId Int
+  // Field names kept from Lab 2 to avoid churn in the Lab 2 attachment
+  // contract; the FK now points at User (Lab 3 §7.1 data change).
+  uploadedByRequesterId String
   uploadedAt            DateTime     @default(now())
   isRemoved             Boolean      @default(false)
   removedAt             DateTime?
   removedReason         String?
-  removedByRequesterId  Int?
+  removedByRequesterId  String?
 
-  ticket              Ticket        @relation(fields: [ticketId], references: [id], onDelete: Restrict)
-  uploadedByRequester DevRequester  @relation("UploadedBy", fields: [uploadedByRequesterId], references: [id], onDelete: Restrict)
-  removedByRequester  DevRequester? @relation("RemovedBy", fields: [removedByRequesterId], references: [id], onDelete: Restrict)
+  ticket              Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  uploadedByRequester User   @relation("UploadedBy", fields: [uploadedByRequesterId], references: [id], onDelete: Restrict)
+  removedByRequester  User?  @relation("RemovedBy", fields: [removedByRequesterId], references: [id], onDelete: Restrict)
 
   @@index([ticketId])
 }

@@ -1,29 +1,27 @@
 /**
- * Requester Context Middleware — BR-41 single access point
+ * Requester Context Middleware — BR-03 / BR-41 single access point
  *
- * Extracts the `X-Dev-Requester-Id` header, re-verifies against the database
- * on every request (BR-05), and attaches `req.currentRequester` for
- * downstream route handlers.
+ * Lab 3 derives Requester identity exclusively from the authenticated session
+ * (`req.session.userId`, resolved to `req.currentUser` by `requireAuth`). The
+ * Lab 2 `X-Dev-Requester-Id` development header is removed: a request without
+ * a session never reaches a Requester endpoint (api-spec.md §2, BR-03).
  *
- * In Lab 3, this middleware is the ONLY file that changes when real
- * session-based authentication replaces the dev-requester header.
- *
- * Response shape on failure matches api-spec.md Common Error Shape:
- *   401 { error: { code: "INVALID_REQUESTER_CONTEXT", message: "..." } }
+ * This middleware runs *after* `requireAuth` + `enforcePasswordChange` +
+ * `requireRole(["REQUESTER"])` and only re-projects the session identity into
+ * the Lab 2 `currentRequester` shape (`{ id, fullName, email }`) so the
+ * existing handler code and response contract stay unchanged. `User.name` is
+ * exposed as `fullName` for the Lab 2 response contract.
  */
 
 import { Request, Response, NextFunction } from "express";
-import { getPrisma } from "../prisma.js";
 
 // ─── TypeScript augmentation ────────────────────────────────────────────
-// Extend Express Request so downstream handlers can read
-// `req.currentRequester` with full type safety.
 
 declare global {
   namespace Express {
     interface Request {
       currentRequester?: {
-        id: number;
+        id: string;
         fullName: string;
         email: string;
       };
@@ -31,69 +29,26 @@ declare global {
   }
 }
 
-// ─── Error response helper ──────────────────────────────────────────────
-
-function rejectUnauthorized(res: Response): void {
-  res.status(401).json({
-    error: {
-      code: "INVALID_REQUESTER_CONTEXT",
-      message: "No active Development Requester selected.",
-    },
-  });
-}
-
 // ─── Middleware ──────────────────────────────────────────────────────────
 
-export async function requesterContext(
+export function requesterContext(
   req: Request,
   res: Response,
   next: NextFunction,
-): Promise<void> {
-  const headerValue = req.header("X-Dev-Requester-Id");
+): void {
+  const user = req.currentUser;
 
-  // Missing header
-  if (headerValue === undefined || headerValue === null || headerValue === "") {
-    rejectUnauthorized(res);
-    return;
-  }
-
-  // Non-numeric header
-  const id = Number(headerValue);
-  if (!Number.isInteger(id) || id <= 0) {
-    rejectUnauthorized(res);
-    return;
-  }
-
-  // BR-05: independently re-verify that this Requester exists and is active
-  // on every request. No caching — the spec requires the backend to never
-  // trust a client-supplied selection as still valid.
-  try {
-    const prisma = getPrisma();
-    const requester = await prisma.devRequester.findUnique({
-      where: { id },
-      select: { id: true, fullName: true, email: true, isActive: true },
-    });
-
-    if (!requester || !requester.isActive) {
-      rejectUnauthorized(res);
-      return;
-    }
-
-    // Attach verified requester for downstream route handlers
-    req.currentRequester = {
-      id: requester.id,
-      fullName: requester.fullName,
-      email: requester.email,
-    };
-
-    next();
-  } catch (err) {
-    // Database errors — return safe generic error, never leak internals (BR-26)
-    res.status(500).json({
+  if (!user) {
+    // Defensive: the route should have run requireAuth first.
+    res.status(401).json({
       error: {
-        code: "SERVER_ERROR",
-        message: "Something went wrong. Please try again.",
+        code: "UNAUTHENTICATED",
+        message: "Authentication required.",
       },
     });
+    return;
   }
+
+  req.currentRequester = { id: user.id, fullName: user.name, email: user.email };
+  next();
 }

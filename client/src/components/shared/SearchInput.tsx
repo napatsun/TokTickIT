@@ -38,6 +38,14 @@ export default function SearchInput({
   // Sync from parent when value changes externally (e.g. Clear Filters)
   useEffect(() => {
     if (value !== lastSyncedValue.current) {
+      // Cancel any pending debounce first. Without this, a parent reset that
+      // lands inside the 300ms window is silently undone when the stale timer
+      // fires and re-emits the old term — the field clears and then the old
+      // search reappears a moment later.
+      if (debounceRef.current !== null) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
       setLocalValue(value);
       lastSyncedValue.current = value;
     }

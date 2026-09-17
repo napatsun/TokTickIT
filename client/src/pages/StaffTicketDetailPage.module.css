@@ -1,0 +1,255 @@
+/* ============================================================
+   StaffTicketDetailPage — ui-spec.md §6 (IT Staff Ticket Detail)
+   Zen Green tokens only. No horizontal overflow at 375px.
+   ============================================================ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  max-width: 100%;
+}
+
+.backLink {
+  display: flex;
+}
+
+.title {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.summaryTitle {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .fieldGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ─── Requester signal banner (§6.4) ───────────────────────────────── */
+
+.requesterSignal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-warning-bg);
+  /* Same AA-safe amber accent as the Internal Notes panel (§9). */
+  border: 1px solid var(--color-warning-text);
+  border-radius: var(--field-border-radius);
+  color: var(--color-text);
+}
+
+.requesterSignal p {
+  margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+/* ─── Editable controls ────────────────────────────────────────────── */
+
+.controlBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-bg-page);
+}
+
+.controlHeaderRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.controlLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.ownerValue {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.controlActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.inlineLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  min-width: 0;
+}
+
+.select {
+  min-height: var(--field-height);
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-field-editable-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+}
+
+.select:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.mutedText {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+}
+
+.inlineError {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-error);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  font-size: var(--font-size-md);
+}
+
+.inlineSuccess {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-success);
+}
+
+/* ─── Attachments (read-only) ──────────────────────────────────────── */
+
+.attachmentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.attachmentItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-bg-page);
+}
+
+.attachmentName {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* ─── Page states ──────────────────────────────────────────────────── */
+
+.stateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-5);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  text-align: center;
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  color: var(--color-text);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeletonLine {
+  height: 24px;
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-disabled-bg);
+  animation: detailPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes detailPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-error);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.errorBanner p {
+  margin: 0;
+  font-size: var(--font-size-md);
+}

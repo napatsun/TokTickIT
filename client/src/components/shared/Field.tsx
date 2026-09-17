@@ -15,12 +15,23 @@ interface FieldBaseProps {
   required?: boolean;
   /** Render <textarea> or <select> instead of <input>. */
   type?: FieldType;
+  /**
+   * Native <input type> when `type` is "input" (default "text").
+   * Added in Lab 3 for the password fields on Login / Change Password (§2/§3).
+   */
+  inputType?: "text" | "email" | "password";
   /** Child elements (used for <option> elements when type="select"). */
   children?: ReactNode;
   /** Validation error message — shown directly below the field (§3). */
   errorMessage?: string;
   /** Max character count. When set, a live counter "n/max" is displayed. */
   maxLength?: number;
+  /**
+   * Extra element id(s) to add to `aria-describedby` alongside the validation
+   * message — used for always-visible helper/hint text so the hint is announced
+   * with the field (§9), not just rendered next to it.
+   */
+  describedBy?: string;
   /** Current value (controlled component). Accepts string for input/textarea, string|number for select. */
   value?: string | number;
   /** Textarea rows (default 4). */
@@ -58,8 +69,10 @@ export default function Field({
   label,
   required = false,
   type = "input",
+  inputType = "text",
   errorMessage,
   maxLength,
+  describedBy,
   value,
   rows = 4,
   name,
@@ -89,8 +102,12 @@ export default function Field({
   // §3: aria-invalid for invalid state
   const ariaInvalid = isInvalid ? true : undefined;
 
-  // §3: describedby links to error message when invalid
-  const ariaDescribedBy = isInvalid && errorMessage ? errorId : undefined;
+  // §3/§9: describedby links the error message when invalid, plus any
+  // always-visible hint text the caller passes via `describedBy`.
+  const ariaDescribedBy =
+    [isInvalid && errorMessage ? errorId : null, describedBy ?? null]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   // Character counter
   const currentLength = typeof value === "string" ? value.length : 0;
@@ -181,7 +198,7 @@ export default function Field({
       ) : (
         <input
           className={inputClasses}
-          type="text"
+          type={inputType}
           {...sharedProps}
           {...rest}
         />

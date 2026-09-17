@@ -28,10 +28,12 @@
   color: var(--color-priority-low-text);
 }
 
-/* Medium — amber bg (uses existing Section 1 tokens) */
+/* Medium — amber bg (uses existing Section 1 tokens).
+   Text uses --color-warning-text so the 12px label meets WCAG AA on the amber
+   background (ui-spec.md §9); the hue is the same amber, only darkened. */
 .priorityMedium {
   background-color: var(--color-warning-bg);
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 /* High — red-tinted, NOT full error red (derived from error) */
@@ -40,14 +42,78 @@
   color: var(--color-priority-high-text);
 }
 
+/* Urgent (IT Priority only, BR-14) — same red-tinted treatment as High;
+   the visible text is what distinguishes them (§1 non-color rule). */
+.priorityUrgent {
+  background-color: var(--color-priority-high-bg);
+  color: var(--color-priority-high-text);
+}
+
 /* -----------------------------------------------------------
    Status badges (§8)
    "New (pale-green bg, secondary-green text)"
-   Future values (IN_PROGRESS, RESOLVED, etc.) added here —
-   no component refactor needed, just a new CSS class + mapping.
+   Lab 3 added the remaining TicketStatus values, reusing only the
+   existing Section 1 tokens — no new colors.
    ----------------------------------------------------------- */
 
-.statusNew {
+.statusNew,
+.statusOpen {
   background-color: var(--color-pale-green);   /* #EAF6EF (§1) */
   color: var(--color-secondary-green);          /* #0B7A46 (§1) */
 }
+
+/* In progress / waiting — amber, "needs attention" (AA-safe amber text) */
+.statusInProgress,
+.statusWaiting,
+.statusReopened {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+/* Resolved / closed — success green */
+.statusResolved,
+.statusClosed {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+/* Cancelled — neutral, not an error.
+   §9: --color-disabled-text is far too light to carry a label (2.14:1); the
+   disabled token is reserved for actually-disabled controls (WCAG 1.4.3 makes
+   those exempt from contrast). --color-text-muted reads at 4.74:1 here. */
+.statusCancelled {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-text-muted);
+}
+
+/* Inactive account (§7) — neutral like Cancelled, but with readable text:
+   --color-disabled-text is too low-contrast on its own background to carry a
+   status label, so this uses the muted text token instead. */
+.statusInactive {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-text-muted);
+}
+
+/* -----------------------------------------------------------
+   Role badges — Administrator User Management (§7)
+   Only Section 1 tokens: neutral / pale green / solid secondary green.
+   ----------------------------------------------------------- */
+
+/* Requester — neutral, the baseline role */
+.roleRequester {
+  background-color: var(--color-priority-low-bg);
+  color: var(--color-priority-low-text);
+}
+
+/* IT Staff — pale green, the "operational" tier */
+.roleItStaff {
+  background-color: var(--color-pale-green);
+  color: var(--color-secondary-green);
+}
+
+/* Administrator — solid secondary green, the elevated tier */
+.roleAdministrator {
+  background-color: var(--color-secondary-green);
+  color: var(--color-surface);
+}
+

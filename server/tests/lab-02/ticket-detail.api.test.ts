@@ -3,6 +3,13 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -21,18 +28,17 @@ const prisma = getPrisma();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function get(path: string, requesterId?: number) {
-  const req = request(app).get(path);
-  if (requesterId !== undefined) {
-    req.set("X-Dev-Requester-Id", String(requesterId));
-  }
-  return req;
+function get(path: string, client: SessionClient) {
+  return client.agent.get(path);
 }
 
 // ─── Seed data ───────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3 (BR-03): real Users authenticated through a session cookie.
+let requesterA: TestUser;
+let requesterB: TestUser;
+let clientA: SessionClient;
+let clientB: SessionClient;
 let ticketA: { id: number; ticketNumber: string };
 let ticketB: { id: number; ticketNumber: string };
 let activeAttachmentId: number;
@@ -42,14 +48,10 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
-    orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
-  });
-  expect(requesters.length).toBeGreaterThanOrEqual(2);
-  requesterA = requesters[0];
-  requesterB = requesters[1];
+  requesterA = await createTestUser({ name: "Ticket Detail Requester A" });
+  requesterB = await createTestUser({ name: "Ticket Detail Requester B" });
+  clientA = await loginAs(app, requesterA.email);
+  clientB = await loginAs(app, requesterB.email);
 
   // ── Categories & Related Systems ──────────────────────────────────────
   const category = await prisma.category.findFirst({
@@ -127,13 +129,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Clean up test data (order matters due to FK constraints)
-  await prisma.attachment.deleteMany({
-    where: { ticketId: { in: [ticketA.id, ticketB.id] } },
-  });
-  await prisma.ticket.deleteMany({
-    where: { id: { in: [ticketA.id, ticketB.id] } },
-  });
+  // Clean up fixture users and their tickets/attachments (FK order handled by helper)
+  await cleanupTestUsers([requesterA.id, requesterB.id]);
+  await prisma.$disconnect();
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────
@@ -143,7 +141,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
 
   describe("API-16 — Happy path: own ticket with active + removed attachments", () => {
     it("returns 200 with full ticket fields", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.ticket).toBeDefined();
@@ -153,9 +151,10 @@ describe("GET /api/tickets/:ticketNumber", () => {
       expect(ticket.id).toBe(ticketA.id);
       expect(ticket.ticketNumber).toBe(ticketA.ticketNumber);
       expect(ticket.ticketDate).toBeDefined(); // ISO string
+      // `fullName` is the Lab 2 response contract, backed by User.name in Lab 3.
       expect(ticket.requester).toEqual({
         id: requesterA.id,
-        fullName: requesterA.fullName,
+        fullName: requesterA.name,
       });
       expect(ticket.category).toBeDefined();
       expect(ticket.category.id).toBeDefined();
@@ -166,14 +165,15 @@ describe("GET /api/tickets/:ticketNumber", () => {
       expect(ticket.summary).toBe("Laptop battery drains quickly");
       expect(ticket.description).toContain("laptop battery");
       expect(ticket.requestedPriority).toBe("MEDIUM");
-      expect(ticket.itPriority).toBeNull();
+      // BR-14: IT Priority starts equal to Requested Priority at creation.
+      expect(ticket.itPriority).toBe("MEDIUM");
       expect(ticket.currentStatus).toBe("NEW");
       expect(ticket.ticketOwner).toBeNull();
       expect(ticket.resolutionSummary).toBeNull();
     });
 
     it("returns attachments split into active and removed arrays", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
 
       expect(res.status).toBe(200);
       expect(res.body.attachments).toBeDefined();
@@ -208,7 +208,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("does not include removed attachment fields in active array", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
 
       const activeAtt = res.body.attachments.active.find(
         (a: any) => a.id === activeAttachmentId,
@@ -223,7 +223,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
 
   describe("API-15 — Cross-requester: 404 when accessing another requester's ticket", () => {
     it("returns 404 with TICKET_NOT_FOUND for a different requester's ticket", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterB.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientB);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -232,7 +232,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("returns identical 404 for a non-existent ticketNumber", async () => {
-      const res = await get("/api/tickets/TKT-2026-999999-NONEXISTENT", requesterA.id);
+      const res = await get("/api/tickets/TKT-2026-999999-NONEXISTENT", clientA);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -243,11 +243,11 @@ describe("GET /api/tickets/:ticketNumber", () => {
     it("cross-requester 404 response matches non-existent 404 response (BR-13)", async () => {
       const resCross = await get(
         `/api/tickets/${ticketA.ticketNumber}`,
-        requesterB.id,
+        clientB,
       );
       const resMissing = await get(
         "/api/tickets/TKT-2026-999999-NONEXISTENT",
-        requesterA.id,
+        clientA,
       );
 
       // BR-13: identical response bodies — no information leak
@@ -257,32 +257,35 @@ describe("GET /api/tickets/:ticketNumber", () => {
 
   // ─── Auth ───────────────────────────────────────────────────────────
 
-  describe("Auth — 401 for missing or invalid header", () => {
-    it("returns 401 without X-Dev-Requester-Id header", async () => {
+  describe("Auth — 401 for missing session, 403 for the wrong role", () => {
+    it("returns 401 without a session", async () => {
       const res = await request(app).get(
         `/api/tickets/${ticketA.ticketNumber}`,
       );
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("returns 401 with non-numeric header", async () => {
+    it("returns 401 for the retired X-Dev-Requester-Id header (BR-03)", async () => {
       const res = await request(app)
         .get(`/api/tickets/${ticketA.ticketNumber}`)
-        .set("X-Dev-Requester-Id", "not-a-number");
+        .set("X-Dev-Requester-Id", String(requesterA.id));
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("returns 401 with non-existent requester id", async () => {
-      const res = await request(app)
-        .get(`/api/tickets/${ticketA.ticketNumber}`)
-        .set("X-Dev-Requester-Id", "999999");
+    it("returns 403 for an authenticated non-Requester", async () => {
+      const staff = await createTestUser({ role: "IT_STAFF" });
+      const staffClient = await loginAs(app, staff.email);
 
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      const res = await staffClient.agent.get(`/api/tickets/${ticketA.ticketNumber}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+
+      await cleanupTestUsers([staff.id]);
     });
   });
 
@@ -290,7 +293,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
 
   describe("Response shape validation", () => {
     it("ticket object has all required fields per api-spec §6", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
       const ticket = res.body.ticket;
 
       // All fields from api-spec §6 response shape
@@ -310,7 +313,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("attachments object has active and removed arrays", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
 
       expect(res.body.attachments).toHaveProperty("active");
       expect(res.body.attachments).toHaveProperty("removed");
@@ -319,7 +322,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("active attachment has correct fields", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
       const att = res.body.attachments.active[0];
 
       expect(att).toHaveProperty("id");
@@ -330,7 +333,7 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("removed attachment has correct fields including removal metadata", async () => {
-      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, requesterA.id);
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
       const att = res.body.attachments.removed[0];
 
       expect(att).toHaveProperty("id");
@@ -341,11 +344,53 @@ describe("GET /api/tickets/:ticketNumber", () => {
     });
 
     it("ticket with no attachments returns empty arrays", async () => {
-      const res = await get(`/api/tickets/${ticketB.ticketNumber}`, requesterB.id);
+      const res = await get(`/api/tickets/${ticketB.ticketNumber}`, clientB);
 
       expect(res.status).toBe(200);
       expect(res.body.attachments.active).toEqual([]);
       expect(res.body.attachments.removed).toEqual([]);
+    });
+
+    // SEC-06 regression: the Requester detail endpoint must never return
+    // internal-only data. The InternalNote model does not exist yet on this
+    // branch (it is added in feature/lab3-04-staff-ticketing), so this guards
+    // the JSON shape itself — it keeps failing even after the model/relation
+    // exists if the query ever starts including it.
+    it("SEC-06 — response contains no internalNotes key (top-level, ticket, or nested)", async () => {
+      const res = await get(`/api/tickets/${ticketA.ticketNumber}`, clientA);
+
+      expect(res.status).toBe(200);
+
+      // 1. Explicit key assertions at the known levels.
+      expect(res.body).not.toHaveProperty("internalNotes");
+      expect(res.body).not.toHaveProperty("internalNote");
+      expect(res.body.ticket).not.toHaveProperty("internalNotes");
+      expect(res.body.ticket).not.toHaveProperty("internalNote");
+      expect(res.body.ticket).not.toHaveProperty("notes");
+
+      // 2. Recursive key scan — catches the key even if it moves nesting
+      // after InternalNote is added (e.g. ticket.internalNotes, or a sibling).
+      const collectKeys = (value: unknown, acc: string[] = []): string[] => {
+        if (Array.isArray(value)) {
+          for (const item of value) collectKeys(item, acc);
+        } else if (value !== null && typeof value === "object") {
+          for (const key of Object.keys(value as Record<string, unknown>)) {
+            acc.push(key);
+            collectKeys((value as Record<string, unknown>)[key], acc);
+          }
+        }
+        return acc;
+      };
+      const keys = collectKeys(res.body).map((k) => k.toLowerCase());
+      expect(keys).not.toContain("internalnotes");
+      expect(keys).not.toContain("internalnote");
+      expect(keys).not.toContain("internal_notes");
+
+      // 3. Serialized-payload belt-and-braces: no "internalnote" substring
+      // anywhere in the wire JSON (key or string value smuggling the field).
+      expect(JSON.stringify(res.body).toLowerCase()).not.toContain(
+        "internalnote",
+      );
     });
   });
 });

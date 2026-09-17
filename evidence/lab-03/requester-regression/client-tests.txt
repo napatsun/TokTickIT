@@ -1,0 +1,46 @@
+Lab 3 — feature/lab3-03-requester-regression
+Client suite: Public Comments panel + "Problem Appears Resolved" UI
+
+Command:
+  cd client && npx tsc --noEmit && npx vitest run
+
+Typecheck:
+  $ npx tsc --noEmit
+  (no output — 0 errors)
+
+Test run (per file):
+ ✓ tests/lab-01/App.test.tsx (4 tests) 74ms
+ ✓ tests/lab-02/AttachmentPicker.test.tsx (29 tests) 201ms
+ ✓ tests/lab-02/AttachmentSection.test.tsx (21 tests) 649ms
+ ✓ tests/lab-02/Badge.test.tsx (10 tests) 50ms
+ ✓ tests/lab-02/Button.test.tsx (13 tests) 22ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (34 tests) 3304ms
+ ✓ tests/lab-02/Field.test.tsx (21 tests) 127ms
+ ✓ tests/lab-02/MyTickets.test.tsx (28 tests) 506ms
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (28 tests) 845ms
+ ✓ tests/lab-03/AppShell.test.tsx (6 tests) 134ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (8 tests) 738ms
+ ✓ tests/lab-03/Login.test.tsx (13 tests) 1235ms
+ ✓ tests/lab-03/apiClient.test.ts (9 tests) 21ms
+
+Summary:
+ Test Files  13 passed (13)
+      Tests  224 passed (224)
+
+New coverage this branch (tests/lab-02/RequesterTicketDetail.test.tsx, extended):
+  UI-03  Public Comments panel
+         - oldest-first list with author name, role label, timestamp
+         - empty state
+         - "Post Comment" disabled while empty / whitespace-only
+         - live character counter against the 2,000 char limit (BR-18)
+         - success appends the comment and clears the draft
+         - failure shows a safe banner and PRESERVES the draft
+  FR-15  "Problem Appears Resolved"
+         - action offered only for OPEN / IN_PROGRESS / WAITING_FOR_REQUESTER
+         - action hidden for NEW / RESOLVED / CLOSED / CANCELLED
+         - confirm dialog shows the exact ui-spec §4 copy; Cancel sends nothing
+         - confirm records the marker, hides the action, keeps currentStatus
+         - failure shows a safe banner and leaves the state unchanged
+  Badge  all TicketStatus values render human-readable labels; IT URGENT badge
+         (client/tests/lab-02/Badge.test.tsx updated — the old file asserted
+         IN_PROGRESS/URGENT as "unknown" values, which Lab 3 promotes to real ones)

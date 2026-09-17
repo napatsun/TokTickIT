@@ -1,0 +1,41 @@
+=== npx prisma migrate status (server) ===
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "toktickit", schema "public" at "localhost:5432"
+
+4 migrations found in prisma/migrations
+
+Database schema is up to date!
+
+=== DB state after migration + seed ===
+     role      | isActive | count 
+---------------+----------+-------
+ REQUESTER     | f        |     1
+ REQUESTER     | t        |     4
+ IT_STAFF      | f        |     1
+ IT_STAFF      | t        |     3
+ ADMINISTRATOR | t        |     1
+(5 rows)
+
+        status         | count 
+-----------------------+-------
+ NEW                   |     2
+ OPEN                  |     2
+ IN_PROGRESS           |     1
+ WAITING_FOR_REQUESTER |     1
+ RESOLVED              |     1
+ CLOSED                |     1
+ REOPENED              |     1
+ CANCELLED             |     1
+(8 rows)
+
+ tickets | unassigned 
+---------+------------
+      10 |          3
+(1 row)
+
+ orphan_tickets 
+----------------
+              0
+(1 row)
+

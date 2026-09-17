@@ -1,0 +1,19 @@
+=== npm test (client: Vitest + Testing Library) ===
+ ✓ tests/lab-03/apiClient.test.ts (9 tests) 20ms
+ ✓ tests/lab-02/Field.test.tsx (21 tests) 93ms
+ ✓ tests/lab-02/AttachmentPicker.test.tsx (29 tests) 216ms
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (16 tests) 219ms
+ ✓ tests/lab-02/Button.test.tsx (13 tests) 39ms
+ ✓ tests/lab-02/MyTickets.test.tsx (28 tests) 546ms
+ ✓ tests/lab-02/Badge.test.tsx (8 tests) 42ms
+ ✓ tests/lab-03/AppShell.test.tsx (6 tests) 101ms
+ ✓ tests/lab-02/AttachmentSection.test.tsx (21 tests) 650ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (8 tests) 739ms
+ ✓ tests/lab-01/App.test.tsx (4 tests) 76ms
+ ✓ tests/lab-03/Login.test.tsx (13 tests) 1184ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (34 tests) 3283ms
+   ✓ CreateTicketPage — validation > summary validation (BR-19) > accepts summary at exactly 120 characters 343ms
+   ✓ CreateTicketPage — validation > submit handler — API integration > submit button shows busy state while request is in flight 627ms
+ Test Files  13 passed (13)
+      Tests  210 passed (210)
+   Duration  4.13s (transform 828ms, setup 627ms, collect 2.31s, tests 7.21s, environment 3.79s, prepare 725ms)

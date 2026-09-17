@@ -6,6 +6,13 @@ import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { seed } from "../../prisma/seed.js";
 import { UPLOADS_DIR } from "../../src/services/attachmentStorage.js";
+import {
+  createTestUser,
+  loginAs,
+  cleanupTestUsers,
+  type SessionClient,
+  type TestUser,
+} from "../helpers/session.js";
 
 const prisma = getPrisma();
 
@@ -55,24 +62,28 @@ function fakeFileForDownload(content: string): Buffer {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function get(path: string, requesterId: number) {
-  return request(app)
-    .get(path)
-    .set("X-Dev-Requester-Id", String(requesterId));
+function get(path: string, client: SessionClient) {
+  return client.agent.get(path);
 }
 
-function del(path: string, requesterId: number, body?: Record<string, string>) {
-  const req = request(app)
-    .delete(path)
-    .set("X-Dev-Requester-Id", String(requesterId));
+function del(path: string, client: SessionClient, body?: Record<string, string>) {
+  const req = client.agent.delete(path).set("X-CSRF-Token", client.csrfToken);
   if (body) req.send(body);
   return req;
 }
 
+/** State-changing session request: POST always carries the CSRF token. */
+function post(client: SessionClient, path: string) {
+  return client.agent.post(path).set("X-CSRF-Token", client.csrfToken);
+}
+
 // ─── Seed data ───────────────────────────────────────────────────────────
 
-let requesterA: { id: number; fullName: string };
-let requesterB: { id: number; fullName: string };
+// Lab 3 (BR-03): real Users authenticated through a session cookie.
+let requesterA: TestUser;
+let requesterB: TestUser;
+let clientA: SessionClient;
+let clientB: SessionClient;
 let ticketA: { id: number; ticketNumber: string };
 let ticketB: { id: number; ticketNumber: string };
 let activeAttachmentId: number;
@@ -89,14 +100,10 @@ beforeAll(async () => {
   await seed();
 
   // ── Requesters ────────────────────────────────────────────────────────
-  const requesters = await prisma.devRequester.findMany({
-    where: { isActive: true },
-    orderBy: { id: "asc" },
-    select: { id: true, fullName: true },
-  });
-  expect(requesters.length).toBeGreaterThanOrEqual(2);
-  requesterA = requesters[0];
-  requesterB = requesters[1];
+  requesterA = await createTestUser({ name: "Attachments Requester A" });
+  requesterB = await createTestUser({ name: "Attachments Requester B" });
+  clientA = await loginAs(app, requesterA.email);
+  clientB = await loginAs(app, requesterB.email);
 
   // ── Categories & Related Systems ──────────────────────────────────────
   const category = await prisma.category.findFirst({
@@ -183,13 +190,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Clean up test data
-  await prisma.attachment.deleteMany({
-    where: { ticketId: { in: [ticketA.id, ticketB.id] } },
-  });
-  await prisma.ticket.deleteMany({
-    where: { id: { in: [ticketA.id, ticketB.id] } },
-  });
+  // Clean up fixture users and their tickets/attachments
+  await cleanupTestUsers([requesterA.id, requesterB.id]);
   // Clean up test file from disk
   try {
     await fs.unlink(path.join(UPLOADS_DIR, DOWNLOAD_TEST_STORED));
@@ -207,9 +209,7 @@ describe("Attachment Endpoints", () => {
 
   describe("API-17 — POST add attachment to owned ticket", () => {
     it("returns 201 with attachment metadata on successful upload", async () => {
-      const res = await request(app)
-        .post(`/api/tickets/${existingTicketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterA.id))
+      const res = await post(clientA, `/api/tickets/${existingTicketNumber}/attachments`)
         .attach("attachments", fakePng(), {
           filename: "new_screenshot.png",
           contentType: "image/png",
@@ -235,9 +235,7 @@ describe("Attachment Endpoints", () => {
 
     it("attachment appears in subsequent GET of the ticket", async () => {
       // First add an attachment
-      const addRes = await request(app)
-        .post(`/api/tickets/${existingTicketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterA.id))
+      const addRes = await post(clientA, `/api/tickets/${existingTicketNumber}/attachments`)
         .attach("attachments", fakePdf(), {
           filename: "report.pdf",
           contentType: "application/pdf",
@@ -249,7 +247,7 @@ describe("Attachment Endpoints", () => {
       // Then verify it shows in ticket detail
       const detailRes = await get(
         `/api/tickets/${existingTicketNumber}`,
-        requesterA.id,
+        clientA,
       );
       expect(detailRes.status).toBe(200);
 
@@ -266,9 +264,7 @@ describe("Attachment Endpoints", () => {
 
   describe("API-17 extra — POST on cross-requester ticket", () => {
     it("returns 404 when adding attachment to another requester's ticket", async () => {
-      const res = await request(app)
-        .post(`/api/tickets/${ticketA.ticketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterB.id))
+      const res = await post(clientB, `/api/tickets/${ticketA.ticketNumber}/attachments`)
         .attach("attachments", fakePng(), {
           filename: "sneaky.png",
           contentType: "image/png",
@@ -310,9 +306,7 @@ describe("Attachment Endpoints", () => {
 
       // Add 5 active attachments
       for (let i = 0; i < 5; i++) {
-        const res = await request(app)
-          .post(`/api/tickets/${freshTicket.ticketNumber}/attachments`)
-          .set("X-Dev-Requester-Id", String(requesterA.id))
+        const res = await post(clientA, `/api/tickets/${freshTicket.ticketNumber}/attachments`)
           .attach("attachments", fakePng(), {
             filename: `file${i}.png`,
             contentType: "image/png",
@@ -321,9 +315,7 @@ describe("Attachment Endpoints", () => {
       }
 
       // 6th should fail
-      const res = await request(app)
-        .post(`/api/tickets/${freshTicket.ticketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterA.id))
+      const res = await post(clientA, `/api/tickets/${freshTicket.ticketNumber}/attachments`)
         .attach("attachments", fakePng(), {
           filename: "file6.png",
           contentType: "image/png",
@@ -354,7 +346,7 @@ describe("Attachment Endpoints", () => {
     it("returns 200 with full attachment metadata for owned attachment", async () => {
       const res = await get(
         `/api/attachments/${activeAttachmentId}`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -374,14 +366,14 @@ describe("Attachment Endpoints", () => {
     it("returns 404 for cross-requester attachment", async () => {
       const res = await get(
         `/api/attachments/${activeAttachmentId}`,
-        requesterB.id,
+        clientB,
       );
 
       expect(res.status).toBe(404);
     });
 
     it("returns 404 for non-existent attachment", async () => {
-      const res = await get("/api/attachments/999999", requesterA.id);
+      const res = await get("/api/attachments/999999", clientA);
       expect(res.status).toBe(404);
     });
   });
@@ -394,7 +386,7 @@ describe("Attachment Endpoints", () => {
     it("returns 200 with correct content and Content-Disposition", async () => {
       const res = await get(
         `/api/attachments/${activeAttachmentId}/download`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(200);
@@ -415,7 +407,7 @@ describe("Attachment Endpoints", () => {
     it("returns 404 for a soft-removed attachment", async () => {
       const res = await get(
         `/api/attachments/${removedAttachmentId}/download`,
-        requesterA.id,
+        clientA,
       );
 
       expect(res.status).toBe(404);
@@ -425,14 +417,14 @@ describe("Attachment Endpoints", () => {
     it("returns 404 for cross-requester download", async () => {
       const res = await get(
         `/api/attachments/${activeAttachmentId}/download`,
-        requesterB.id,
+        clientB,
       );
 
       expect(res.status).toBe(404);
     });
 
     it("returns 404 for non-existent attachment", async () => {
-      const res = await get("/api/attachments/999999/download", requesterA.id);
+      const res = await get("/api/attachments/999999/download", clientA);
       expect(res.status).toBe(404);
     });
   });
@@ -467,9 +459,7 @@ describe("Attachment Endpoints", () => {
       });
 
       // Add an attachment
-      const addRes = await request(app)
-        .post(`/api/tickets/${tempTicket.ticketNumber}/attachments`)
-        .set("X-Dev-Requester-Id", String(requesterA.id))
+      const addRes = await post(clientA, `/api/tickets/${tempTicket.ticketNumber}/attachments`)
         .attach("attachments", fakePng(), {
           filename: "to_remove.png",
           contentType: "image/png",
@@ -480,7 +470,7 @@ describe("Attachment Endpoints", () => {
       // Remove it
       const delRes = await del(
         `/api/attachments/${attId}`,
-        requesterA.id,
+        clientA,
         { removalReason: "Uploaded the wrong file by mistake" },
       );
 
@@ -496,7 +486,7 @@ describe("Attachment Endpoints", () => {
       // Verify download now returns 404
       const dlRes = await get(
         `/api/attachments/${attId}/download`,
-        requesterA.id,
+        clientA,
       );
       expect(dlRes.status).toBe(404);
 
@@ -516,7 +506,7 @@ describe("Attachment Endpoints", () => {
     it("returns 400 when removalReason is missing", async () => {
       const res = await del(
         `/api/attachments/${activeAttachmentId}`,
-        requesterA.id,
+        clientA,
         {},
       );
 
@@ -528,7 +518,7 @@ describe("Attachment Endpoints", () => {
     it("returns 400 when removalReason is too short (<3 chars)", async () => {
       const res = await del(
         `/api/attachments/${activeAttachmentId}`,
-        requesterA.id,
+        clientA,
         { removalReason: "ab" },
       );
 
@@ -539,7 +529,7 @@ describe("Attachment Endpoints", () => {
     it("returns 400 when removalReason is too long (>200 chars)", async () => {
       const res = await del(
         `/api/attachments/${activeAttachmentId}`,
-        requesterA.id,
+        clientA,
         { removalReason: "x".repeat(201) },
       );
 
@@ -551,7 +541,7 @@ describe("Attachment Endpoints", () => {
       // Verify the active attachment is still active
       const metaRes = await get(
         `/api/attachments/${activeAttachmentId}`,
-        requesterA.id,
+        clientA,
       );
       expect(metaRes.status).toBe(200);
       expect(metaRes.body.attachment.isRemoved).toBe(false);
@@ -566,7 +556,7 @@ describe("Attachment Endpoints", () => {
     it("returns 404 when removing another requester's attachment", async () => {
       const res = await del(
         `/api/attachments/${activeAttachmentId}`,
-        requesterB.id,
+        clientB,
         { removalReason: "Trying to remove someone else file" },
       );
 
@@ -583,7 +573,7 @@ describe("Attachment Endpoints", () => {
     it("returns 404 when trying to remove an already-removed attachment", async () => {
       const res = await del(
         `/api/attachments/${removedAttachmentId}`,
-        requesterA.id,
+        clientA,
         { removalReason: "Trying to remove again" },
       );
 
@@ -594,11 +584,11 @@ describe("Attachment Endpoints", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════
-  // Auth: 401 for all endpoints without header
+  // Auth: 401 without a session
   // ══════════════════════════════════════════════════════════════════════
 
-  describe("Auth — 401 without X-Dev-Requester-Id header", () => {
-    it("POST returns 401 without header", async () => {
+  describe("Auth — 401 without a session, 403 for the wrong role", () => {
+    it("POST returns 401 without a session", async () => {
       const res = await request(app)
         .post(`/api/tickets/${existingTicketNumber}/attachments`)
         .attach("attachments", fakePng(), {
@@ -607,28 +597,42 @@ describe("Attachment Endpoints", () => {
         });
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INVALID_REQUESTER_CONTEXT");
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("GET metadata returns 401 without header", async () => {
+    it("GET metadata returns 401 without a session", async () => {
       const res = await request(app).get(
         `/api/attachments/${activeAttachmentId}`,
       );
       expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("GET download returns 401 without header", async () => {
+    it("GET download returns 401 without a session", async () => {
       const res = await request(app).get(
         `/api/attachments/${activeAttachmentId}/download`,
       );
       expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
     });
 
-    it("DELETE returns 401 without header", async () => {
+    it("DELETE returns 401 without a session", async () => {
       const res = await request(app)
         .delete(`/api/attachments/${activeAttachmentId}`)
         .send({ removalReason: "test reason" });
       expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHENTICATED");
+    });
+
+    it("GET metadata returns 403 for an IT Staff session", async () => {
+      const staff = await createTestUser({ role: "IT_STAFF" });
+      const staffClient = await loginAs(app, staff.email);
+
+      const res = await staffClient.agent.get(`/api/attachments/${activeAttachmentId}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+
+      await cleanupTestUsers([staff.id]);
     });
   });
 });

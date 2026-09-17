@@ -356,7 +356,8 @@
   border: 1px solid var(--color-warning);
   border-radius: 6px;
   font-size: 13px;
-  color: var(--color-warning);
+  /* §9 contrast: the AA-safe amber (--color-warning is 3.02:1 here). */
+  color: var(--color-warning-text);
 }
 
 .attachmentFailureItem {

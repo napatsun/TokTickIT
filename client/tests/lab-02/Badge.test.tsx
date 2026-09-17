@@ -67,23 +67,56 @@ describe("Badge", () => {
   });
 
   // -----------------------------------------------------------
+  // Lab 3 status/priority values (ui-spec.md §4/§6)
+  // -----------------------------------------------------------
+  describe("Lab 3 values", () => {
+    it("renders every TicketStatus with a human-readable label", () => {
+      const expected: Record<string, string> = {
+        NEW: "New",
+        OPEN: "Open",
+        IN_PROGRESS: "In Progress",
+        WAITING_FOR_REQUESTER: "Waiting for Requester",
+        RESOLVED: "Resolved",
+        CLOSED: "Closed",
+        REOPENED: "Reopened",
+        CANCELLED: "Cancelled",
+      };
+
+      for (const [value, label] of Object.entries(expected)) {
+        const { container, unmount } = render(
+          <Badge variant="status" value={value} />,
+        );
+        expect(container.querySelector("span"), value).toHaveTextContent(label);
+        unmount();
+      }
+    });
+
+    it("renders URGENT as an IT priority with the high-risk styling", () => {
+      const { container } = render(<Badge variant="priority" value="URGENT" />);
+      const span = container.querySelector("span");
+      expect(span).toHaveTextContent("Urgent");
+      expect(span?.className).toMatch(/priorityUrgent/);
+    });
+  });
+
+  // -----------------------------------------------------------
   // Graceful fallback for unknown values
   // -----------------------------------------------------------
   describe("unknown values", () => {
     it("renders unknown priority without crashing", () => {
       const { container } = render(
-        <Badge variant="priority" value="URGENT" />,
+        <Badge variant="priority" value="SOMEDAY" />,
       );
       const span = container.querySelector("span");
-      expect(span).toHaveTextContent("Urgent");
+      expect(span).toHaveTextContent("Someday");
     });
 
     it("renders unknown status without crashing", () => {
       const { container } = render(
-        <Badge variant="status" value="IN_PROGRESS" />,
+        <Badge variant="status" value="SOMEDAY_NEW_STATUS" />,
       );
       const span = container.querySelector("span");
-      expect(span).toHaveTextContent("In_progress");
+      expect(span).toHaveTextContent("Someday New Status");
     });
   });
 });

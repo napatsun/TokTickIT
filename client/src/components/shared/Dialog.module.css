@@ -1,0 +1,87 @@
+/* ============================================================
+   Dialog — shared modal primitive (ui-spec.md §7)
+
+   Same overlay / surface / token treatment as ResolveMarkConfirm and
+   StatusChangeConfirm so every modal in the app looks identical.
+   ============================================================ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(30, 43, 36, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 1050;
+}
+
+.dialog {
+  background-color: var(--color-surface);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-5);
+  max-width: 480px;
+  width: 100%;
+  /* Long forms must scroll rather than push the actions off-screen on a
+     375px-tall viewport. */
+  max-height: calc(100vh - var(--space-6));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dialogWide {
+  max-width: 560px;
+}
+
+/* The container itself is focusable as a fallback when the dialog holds no
+   focusable control, so it needs the Zen Green focus token rather than the
+   browser default ring. */
+.dialog:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-field-gap);
+}
+
+/* Body copy inside a confirmation — same treatment as ResolveMarkConfirm's. */
+.copy {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  /* §2 form rhythm: the action row sits 32px below the last field. */
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-field-editable-border);
+}
+
+.errorBanner {
+  border: 1px solid var(--color-error);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-3);
+}
+
+.errorBanner p {
+  margin: 0;
+  font-size: var(--font-size-md);
+}

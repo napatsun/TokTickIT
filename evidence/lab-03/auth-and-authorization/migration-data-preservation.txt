@@ -1,0 +1,67 @@
+Lab 3 migration — Lab 2 data preservation check (specification.md §7.2)
+======================================================================
+
+Migration applied with:
+  cd server && npx prisma migrate dev
+  -> Applying migration `20260913000000_lab3_auth_and_authorization`
+  -> Your database is now in sync with your schema.
+  -> npx prisma migrate status -> "4 migrations found ... Database schema is up to date!"
+
+Prisma refused to GENERATE this migration (non-interactive run reported):
+  * Step 7 Made the column `itPriority` on table `Ticket` required, but there are 5 existing NULL values.
+  * Warning: you are about to drop the column `currentStatus` on the `Ticket` table,
+    which still contains 5 non-null values.
+so the SQL was hand-written to backfill instead of dropping
+(server/prisma/migrations/20260913000000_lab3_auth_and_authorization/migration.sql).
+
+BEFORE the migration (psql against the local dev database):
+  tickets | attachments | dev_requesters
+  --------+-------------+----------------
+        5 |           0 |              5
+
+  id   | ticketNumber    | requesterId | currentStatus | itPriority
+  -----+-----------------+-------------+---------------+-----------
+  4274 | TKT-2026-000001 |        6954 | NEW           |
+  4275 | TKT-2026-000002 |        6954 | NEW           |
+  4276 | TKT-2026-000003 |        6954 | NEW           |
+  4277 | TKT-2026-000004 |        6954 | NEW           |
+  4278 | TKT-2026-000005 |        6954 | NEW           |
+
+  DevRequester rows (ids 6954-6958): Jennifer Anderson, Sarah Johnson, Michael Brown,
+  David Lee, Robert Wilson (inactive).
+
+AFTER the migration (same rows, re-pointed at the new User table, nothing lost):
+  id   | ticketNumber    |           requesterId            | email                         | itPriority | status | requesterMarkedResolved
+  -----+-----------------+----------------------------------+-------------------------------+------------+--------+-------------------------
+  4274 | TKT-2026-000001 | d708fdb109d46c14d7e74fafc39323a0 | jennifer.anderson@example.com | MEDIUM     | NEW    | f
+  4275 | TKT-2026-000002 | d708fdb109d46c14d7e74fafc39323a0 | jennifer.anderson@example.com | MEDIUM     | NEW    | f
+  4276 | TKT-2026-000003 | d708fdb109d46c14d7e74fafc39323a0 | jennifer.anderson@example.com | MEDIUM     | NEW    | f
+  4277 | TKT-2026-000004 | d708fdb109d46c14d7e74fafc39323a0 | jennifer.anderson@example.com | MEDIUM     | NEW    | f
+  4278 | TKT-2026-000005 | d708fdb109d46c14d7e74fafc39323a0 | jennifer.anderson@example.com | MEDIUM     | NEW    | f
+
+  5 User rows created from the 5 DevRequester rows (name/email/isActive preserved,
+  role = REQUESTER, mustChangePassword = true, passwordHash =
+  '!unhashed-migrated-placeholder' which prisma/seed.ts immediately replaces with a
+  real bcrypt hash).
+
+Conversion performed by the hand-written SQL:
+  1. CREATE TYPE "Role", CREATE TYPE "TicketStatus"; ALTER TYPE "ItPriority" ADD VALUE 'URGENT'.
+  2. CREATE TABLE "User" + unique index on email.
+  3. INSERT Users from DevRequester (one Requester account per distinct dev requester).
+  4. Ticket.requesterId Int(DevRequester) -> TEXT(User): added a temp column, backfilled by
+     joining DevRequester.email = User.email, then dropped the old column and FK and renamed.
+     A DO $$ ... RAISE EXCEPTION guard aborts the migration if ANY ticket would be orphaned.
+  5. itPriority NULL values backfilled from requestedPriority, then SET NOT NULL + DEFAULT 'MEDIUM'
+     (BR-14 semantics: IT Priority starts equal to Requested Priority).
+  6. currentStatus renamed to status and cast to TicketStatus (values carried across, not dropped).
+  7. ticketOwnerId (unused Int column) replaced by ownerId TEXT -> User; new indexes on
+     status / ownerId added and the requesterId indexes recreated.
+  8. Attachment.uploadedByRequesterId / removedByRequesterId converted the same way
+     (0 rows existed, but the migration handles them with the same orphan guard).
+  9. DROP TYPE "CurrentStatus".
+
+Post-migration referential integrity (also asserted by MIG-05 in
+server/tests/lab-03/migration.api.test.ts):
+  orphan_tickets
+  --------------
+               0

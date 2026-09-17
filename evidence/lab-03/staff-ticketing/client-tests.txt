@@ -1,0 +1,58 @@
+Lab 3 — feature/lab3-04-staff-ticketing
+Client suite: IT Staff Ticket Queue (UI-04, UI-05) and IT Staff Ticket Detail
+(UI-06, UI-07), plus the reused PublicCommentsPanel refactor
+
+Command:
+  cd client && npx tsc --noEmit && npx vitest run
+
+Typecheck:
+  $ npx tsc --noEmit
+  (no output — 0 errors)
+
+Test run (per file):
+ ✓ tests/lab-02/Field.test.tsx (21 tests) 84ms
+ ✓ tests/lab-02/AttachmentPicker.test.tsx (29 tests) 165ms
+ ✓ tests/lab-02/MyTickets.test.tsx (28 tests) 518ms
+ ✓ tests/lab-03/apiClient.test.ts (9 tests) 10ms
+ ✓ tests/lab-02/AttachmentSection.test.tsx (21 tests) 667ms
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (28 tests) 656ms
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (14 tests) 846ms
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (28 tests) 852ms
+ ✓ tests/lab-02/Button.test.tsx (13 tests) 21ms
+ ✓ tests/lab-02/Badge.test.tsx (10 tests) 37ms
+ ✓ tests/lab-03/AppShell.test.tsx (6 tests) 103ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (8 tests) 642ms
+ ✓ tests/lab-01/App.test.tsx (4 tests) 77ms
+ ✓ tests/lab-03/Login.test.tsx (13 tests) 1414ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (34 tests) 3623ms
+ Test Files  15 passed (15)
+      Tests  266 passed (266)
+
+New suites this branch:
+  tests/lab-03/StaffTicketQueue.test.tsx     UI-04, UI-05 (14 tests)
+  tests/lab-03/StaffTicketDetail.test.tsx    UI-06, UI-07 (28 tests)
+
+Regression note (no loss from the refactor):
+  PublicCommentsPanel was refactored into a thin wrapper around a shared
+  ContentThread component so the Requester panel and the IT Staff panel cannot
+  drift, keeping every existing test id and label:
+    comment-item · comments-empty · comment-counter · comment-success ·
+    comment-error · "Add a comment" · "Post Comment"
+  tests/lab-02/RequesterTicketDetail.test.tsx (28 tests) — the Lab 2/3 Requester
+  suite that exercises that panel — still passes unchanged.
+
+UI-07 coverage:
+  Parameterized over all 8 TicketStatus values, asserting the rendered
+  "Change Status" options equal the ui-spec.md §6.1 permitted set exactly
+  (the matrix is transcribed independently in the test, so client drift fails
+  loudly), plus: no forbidden option is rendered (Closed/New/Reopened are absent
+  for IN_PROGRESS), CANCELLED disables the control with an explanation, a
+  non-terminal transition applies immediately, and RESOLVED/CLOSED/CANCELLED
+  each require the confirmation dialog before any PATCH is sent.
+
+UI-06 coverage:
+  Asserts the two panels carry different data-variant values and different class
+  names, the Internal Notes panel shows the lock icon and the
+  "Internal Notes (IT Staff & Administrator only)" heading, each panel has its
+  own composer/counter/list and its own endpoint, the requester appears-resolved
+  banner renders separately from the Status badge, and attachments are read-only.

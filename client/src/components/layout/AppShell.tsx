@@ -1,36 +1,57 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useRequester } from "../../hooks/useRequester.js";
-import styles from "./AppShell.module.css";
-
 /**
- * §6 — Application Shell:
- *   Header bar (primary-green bg, white wordmark)
- *   Primary nav: "My Tickets" | "Create Ticket"
- *   Right: current-Requester pill badge + "Change Requester" button
- *   Mobile: hamburger nav, requester badge always visible
+ * AppShell — ui-spec.md §1 (Global Application Shell)
  *
- * §11 — Responsive:
- *   Desktop ≥992px: full nav visible, normal spacing
- *   Tablet 768–991px: full nav visible, reduced spacing
- *   Mobile <768px: hamburger replaces nav, requester badge in dropdown
+ *   Top bar: wordmark, current user's Name + Role badge, Logout
+ *   Nav: only the destinations permitted for the current role are rendered —
+ *        never rendered-but-disabled (FR-08)
+ *     Requester      → My Tickets, Create Ticket
+ *     IT Staff       → Ticket Queue
+ *     Administrator  → User Management
+ *   Mobile (<768px): nav collapses into a hamburger menu; identity + Logout
+ *        stay reachable.
+ *
+ * Lab 2's Development Requester dropdown and "Change Requester" action have
+ * been DELETED entirely (FR-11) — this file no longer knows about
+ * RequesterContext, localStorage, or /select-requester.
  */
 
-const NAV_ITEMS: { to: string; label: string; end?: boolean }[] = [
-  { to: "/tickets", label: "My Tickets", end: true },
-  { to: "/tickets/new", label: "Create Ticket" },
-];
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { ROLE_LABELS, roleHome, type Role } from "../../contexts/AuthContext.js";
+import { useAuth } from "../../hooks/useAuth.js";
+import styles from "./AppShell.module.css";
+
+interface NavItem {
+  to: string;
+  label: string;
+  end?: boolean;
+}
+
+const NAV_BY_ROLE: Record<Role, NavItem[]> = {
+  REQUESTER: [
+    { to: "/tickets", label: "My Tickets", end: true },
+    { to: "/tickets/new", label: "Create Ticket" },
+  ],
+  IT_STAFF: [{ to: "/staff/queue", label: "Ticket Queue" }],
+  ADMINISTRATOR: [{ to: "/admin/users", label: "User Management" }],
+};
 
 export default function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const { requester, clearRequester } = useRequester();
+  const { user, logout } = useAuth();
 
-  const requesterName = requester?.fullName ?? "\u2014"; // em-dash fallback if null
+  // RequireAuth guarantees a user before this shell renders; guard anyway so
+  // the component is safe in isolation (e.g. component tests).
+  if (!user) return null;
 
-  function handleChangeRequester() {
-    clearRequester();
-    navigate("/select-requester", { replace: true });
+  const navItems = NAV_BY_ROLE[user.role];
+  const home = roleHome(user.role);
+
+  async function handleLogout() {
+    setMenuOpen(false);
+    await logout();
+    navigate("/login", { replace: true });
   }
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -42,43 +63,38 @@ export default function AppShell() {
   return (
     <div>
       <header className={`${styles.header} ${menuOpen ? styles.menuOpen : ""}`}>
-        {/* §6: wordmark — white TokTickIT on the left */}
-        <NavLink to="/tickets" className={styles.wordmark}>
+        <NavLink to={home} className={styles.wordmark}>
           TokTickIT
         </NavLink>
 
-        {/* §6: primary nav — desktop only */}
+        {/* §1: only role-permitted destinations are rendered */}
         <nav className={styles.nav} aria-label="Main navigation">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={linkClass}>
               {item.label}
             </NavLink>
           ))}
         </nav>
 
-        {/* §6: right side — requester badge + change button */}
         <div className={styles.headerRight}>
-          {/* §6: rounded pill badge — desktop */}
-          <span className={styles.requesterBadge}>
-            {requesterName}
+          {/* §1: current user's Name + Role badge */}
+          <span className={styles.userName} data-testid="shell-user-name">
+            {user.name}
+          </span>
+          <span className={styles.roleBadge} data-testid="shell-role-badge">
+            {ROLE_LABELS[user.role]}
           </span>
 
-          {/* §6: Change Requester — clears selection, returns to selection screen */}
           <button
             type="button"
-            className={`${styles.changeButton} btn btn-outline-secondary btn-sm`}
-            style={{
-              color: "#FFFFFF",
-              borderColor: "rgba(255,255,255,0.5)",
-              fontSize: "12px",
-            }}
-            onClick={handleChangeRequester}
-            aria-label="Change Requester"
+            className={styles.logoutButton}
+            onClick={handleLogout}
+            aria-label="Log out"
           >
-            Change Requester
+            Logout
           </button>
 
-          {/* §11: hamburger button — mobile */}
+          {/* §11: hamburger — mobile only */}
           <button
             type="button"
             className={`${styles.hamburgerButton} ${menuOpen ? styles.menuOpen : ""}`}
@@ -95,13 +111,13 @@ export default function AppShell() {
         </div>
       </header>
 
-      {/* §6: mobile dropdown menu */}
+      {/* §11: mobile dropdown nav */}
       <div
         className={`${styles.mobileMenu} ${menuOpen ? styles.mobileMenuOpen : ""}`}
         role="navigation"
         aria-label="Mobile navigation"
       >
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -113,28 +129,20 @@ export default function AppShell() {
           </NavLink>
         ))}
 
-        {/* §6: requester badge always visible — shown in mobile menu */}
-        <div className={styles.mobileRequester}>
-          <span className={styles.mobileRequesterBadge}>
-            {requesterName}
-          </span>
-          <button
-            type="button"
-            className="btn btn-outline-secondary btn-sm"
-            style={{
-              color: "rgba(255,255,255,0.8)",
-              borderColor: "rgba(255,255,255,0.4)",
-              fontSize: "11px",
-            }}
-            onClick={handleChangeRequester}
-            aria-label="Change Requester (mobile)"
-          >
-            Change
-          </button>
+        <div className={styles.mobileUser}>
+          <span className={styles.mobileUserName}>{user.name}</span>
+          <span className={styles.roleBadge}>{ROLE_LABELS[user.role]}</span>
         </div>
+        <button
+          type="button"
+          className={styles.mobileLogoutButton}
+          onClick={handleLogout}
+          aria-label="Log out (mobile)"
+        >
+          Logout
+        </button>
       </div>
 
-      {/* Content area — child routes render here */}
       <main className={styles.content}>
         <Outlet />
       </main>

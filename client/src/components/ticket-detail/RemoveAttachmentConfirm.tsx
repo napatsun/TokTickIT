@@ -7,10 +7,17 @@
  *
  * BR-34: removalReason required, trimmed, 3–200 chars
  * BR-36: explicit confirmation step before delete request
+ *
+ * Rendered through the shared Dialog primitive (ui-spec.md §7) so this Lab 2
+ * confirmation uses the same overlay tint, surface, width cap, scroll
+ * behaviour, and keyboard contract (focus trap, Escape to cancel, focus
+ * returned on close — §9) as every Lab 3 confirmation. Only the body differs,
+ * because this one collects a reason.
  */
 
 import { useState, useCallback } from "react";
 import Button from "../shared/Button";
+import Dialog from "../shared/Dialog";
 import styles from "./RemoveAttachmentConfirm.module.css";
 
 const MIN_REASON_LENGTH = 3;
@@ -34,63 +41,62 @@ export default function RemoveAttachmentConfirm({
     trimmedReason.length >= MIN_REASON_LENGTH &&
     trimmedReason.length <= MAX_REASON_LENGTH;
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (isValid) {
-        onConfirm(trimmedReason);
-      }
-    },
-    [isValid, trimmedReason, onConfirm],
-  );
+  const tooShort = reason.length > 0 && trimmedReason.length < MIN_REASON_LENGTH;
+
+  const handleSubmit = useCallback(() => {
+    if (isValid) onConfirm(trimmedReason);
+  }, [isValid, trimmedReason, onConfirm]);
 
   return (
-    <div className={styles.overlay}>
-      <form className={styles.dialog} onSubmit={handleSubmit}>
-        <h3 className={styles.title}>Remove Attachment</h3>
-
-        {error && (
-          <div className={styles.errorBanner} role="alert">
-            <p>{error}</p>
-          </div>
-        )}
-
-        <div className={styles.fieldGroup}>
-          <label htmlFor="removal-reason" className={styles.label}>
-            Removal reason <span className={styles.required}>*</span>
-          </label>
-          <textarea
-            id="removal-reason"
-            className={styles.textarea}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Enter reason for removal (3–200 characters)"
-            rows={3}
-            maxLength={MAX_REASON_LENGTH}
-          />
-          <span className={styles.charCount}>
-            {trimmedReason.length}/{MAX_REASON_LENGTH}
-          </span>
-          {reason.length > 0 && trimmedReason.length < MIN_REASON_LENGTH && (
-            <p className={styles.errorText}>
-              Removal reason must be at least {MIN_REASON_LENGTH} characters.
-            </p>
-          )}
-        </div>
-
-        <div className={styles.actions}>
+    <Dialog
+      title="Remove Attachment"
+      onClose={onCancel}
+      error={error}
+      testId="remove-attachment-dialog"
+      actions={
+        <>
           <Button variant="secondary" type="button" onClick={onCancel}>
             Cancel
           </Button>
           <Button
             variant="destructive-confirm"
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             disabled={!isValid}
           >
             Confirm Removal
           </Button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className={styles.fieldGroup}>
+        <label htmlFor="removal-reason" className={styles.label}>
+          Removal reason <span className={styles.required}>*</span>
+        </label>
+        {/* §9: the counter and the inline error are both associated with the
+            textarea so a screen reader hears them in context. */}
+        <textarea
+          id="removal-reason"
+          className={styles.textarea}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Enter reason for removal (3–200 characters)"
+          rows={3}
+          maxLength={MAX_REASON_LENGTH}
+          aria-invalid={tooShort || undefined}
+          aria-describedby={
+            tooShort ? "removal-reason-error removal-reason-count" : "removal-reason-count"
+          }
+        />
+        <span className={styles.charCount} id="removal-reason-count">
+          {trimmedReason.length}/{MAX_REASON_LENGTH}
+        </span>
+        {tooShort && (
+          <p className={styles.errorText} id="removal-reason-error" role="alert">
+            Removal reason must be at least {MIN_REASON_LENGTH} characters.
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }

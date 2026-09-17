@@ -1,0 +1,186 @@
+/* ============================================================
+   ContentThread — shared by Public Comments (§4/§6.5) and
+   Internal Notes (§6.6).
+   Reuses existing Zen Green tokens only (no new palette values).
+   ============================================================ */
+
+.section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ─── Internal Notes variant (§6.6) ─────────────────────────────────────
+   Different background tint + amber border so private IT-only content can
+   never be mistaken for a Public Comment (FR-23, BR-04). The lock icon and the
+   explicit "(IT Staff & Administrator only)" header carry the same meaning as
+   the colour, so colour is never the sole indicator (§9 accessibility). */
+.internalSection {
+  background-color: var(--color-warning-bg);
+  /* AA-safe amber accent (§9): 4.94:1 against the amber tint, so the panel
+     boundary is well clear of the 3:1 non-text minimum. */
+  border: 2px solid var(--color-warning-text);
+}
+
+.heading {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lockIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-warning-text);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.mutedText {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.comment {
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-3);
+  background-color: var(--color-bg-page);
+}
+
+.internalSection .comment {
+  background-color: var(--color-surface);
+}
+
+.commentMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.author {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+/* Author role badges use the shared Badge component (Badge.module.css) — the
+   same one the App Shell and the Administrator user list use — so a given role
+   never renders in two different colours. */
+
+.timestamp {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.content {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ─── Composer ─────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-field-editable-border);
+  padding-top: var(--space-4);
+}
+
+.internalSection .form {
+  border-top-color: var(--color-warning-text);
+}
+
+.label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.textarea {
+  width: 100%;
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-field-editable-bg);
+  padding: var(--space-2);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+textarea.textarea:disabled {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.charCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ─── Feedback ─────────────────────────────────────────────────────── */
+
+.errorBanner {
+  border: 1px solid var(--color-error);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.errorBanner p {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.successMessage {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-success);
+}
