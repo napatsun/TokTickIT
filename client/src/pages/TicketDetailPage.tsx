@@ -19,6 +19,9 @@ import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import AttachmentSection from "../components/ticket-detail/AttachmentSection";
 import PublicCommentsPanel from "../components/ticket-detail/PublicCommentsPanel";
+import ActionsTakenPanel from "../components/ticket-detail/ActionsTakenPanel";
+import { AuthContext } from "../contexts/AuthContext";
+import { useContext } from "react";
 import ResolveMarkConfirm from "../components/ticket-detail/ResolveMarkConfirm";
 import { apiClient } from "../lib/apiClient";
 import styles from "./TicketDetailPage.module.css";
@@ -96,6 +99,11 @@ const RESOLVE_MARK_ELIGIBLE_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQU
 export default function TicketDetailPage() {
   const { ticketNumber } = useParams<{ ticketNumber: string }>();
   const navigate = useNavigate();
+  // §4: the Actions Taken panel renders read-only for the Requester; the
+  // create/edit/void controls are absent from the DOM entirely (§4.2).
+  // Null-guarded context read (see StaffTicketDetailPage for the rationale).
+  const auth = useContext(AuthContext);
+  const user = auth?.user ?? null;
 
   const [ticket, setTicket] = useState<TicketData | null>(null);
   const [attachments, setAttachments] = useState<{
@@ -352,6 +360,10 @@ export default function TicketDetailPage() {
 
       {/* §4: Public Comments panel (Requester route — own ticket only) */}
       <PublicCommentsPanel commentsPath={`/api/tickets/${ticket.ticketNumber}/comments`} />
+
+      {/* Lab 4 §4: Actions Taken — appended below Public Comments (read-only
+          view for the owning Requester, per FR-06). */}
+      {user && ticket && <ActionsTakenPanel ticketId={ticket.id} currentUser={user} />}
 
       {/* §4: confirmation dialog for the appears-resolved action */}
       {showResolveConfirm && (

@@ -30,6 +30,9 @@ import Button from "../components/shared/Button";
 import Field from "../components/shared/Field";
 import PublicCommentsPanel from "../components/ticket-detail/PublicCommentsPanel";
 import InternalNotesPanel from "../components/ticket-detail/InternalNotesPanel";
+import ActionsTakenPanel from "../components/ticket-detail/ActionsTakenPanel";
+import { AuthContext } from "../contexts/AuthContext";
+import { useContext } from "react";
 import StatusChangeConfirm, {
   STATUS_LABELS,
 } from "../components/ticket-detail/StatusChangeConfirm";
@@ -113,6 +116,14 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export default function StaffTicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // §4: the Actions Taken panel is role-aware; the authenticated user drives
+  // its Requester/IT Staff/Administrator behaviour (BR-15 defence in depth —
+  // hiding controls here is never the authorization check itself).
+  // Read through a null-guarded context (not useAuth, which throws outside a
+  // provider) so the panel simply renders once the session identity exists —
+  // the real app always mounts these routes inside <AuthProvider>.
+  const auth = useContext(AuthContext);
+  const user = auth?.user ?? null;
 
   const [ticket, setTicket] = useState<StaffTicket | null>(null);
   const [attachments, setAttachments] = useState<{
@@ -616,6 +627,10 @@ export default function StaffTicketDetailPage() {
 
       {/* 6. Internal Notes — visually distinct, IT-only (§6.6) */}
       <InternalNotesPanel notesPath={`/api/staff/tickets/${ticket.id}/notes`} />
+
+      {/* Lab 4 §4: Actions Taken — below Public Comments / Internal Notes.
+          Read-only for a Requester session; the panel gates its own controls. */}
+      {user && <ActionsTakenPanel ticketId={ticket.id} currentUser={user} />}
 
       {/* 7. Attachments (read-only continuity) */}
       <section className={styles.section} data-testid="staff-attachments">
