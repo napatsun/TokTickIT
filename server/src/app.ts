@@ -14,6 +14,7 @@ import {
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { staffRouter } from "./routes/staff-tickets.js";
 import { adminRouter } from "./routes/admin-users.js";
+import { actionsTakenRouter } from "./routes/actions-taken.js";
 import { toContentDto, validateContent } from "./lib/content.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
@@ -61,6 +62,17 @@ app.use(
   requireRole(["ADMINISTRATOR"]),
   adminRouter,
 );
+
+// ─── Actions Taken (api-spec.md §1) ───────────────────────────────────
+// The documented paths are POST/GET `/api/tickets/:ticketId/actions` and
+// PATCH `/api/tickets/:ticketId/actions/:actionId`, so the router is mounted at
+// `/api/tickets`. `requireAuth` + `enforcePasswordChange` are attached per route
+// inside it rather than here: §1.2's read path is open to every role while
+// §1.1/§1.3's write paths are IT Staff/Administrator only, and a mount-level
+// guard would also re-run for the Requester `:ticketNumber` routes registered
+// further down (same prefix). Router middleware only runs on a matching route,
+// so unrelated `/api/tickets*` requests fall through untouched.
+app.use("/api/tickets", actionsTakenRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({

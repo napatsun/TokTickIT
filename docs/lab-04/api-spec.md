@@ -8,10 +8,16 @@ session (existing auth middleware), and return the existing Lab 2/3 error envelo
   "error": {
     "code": "STRING_CODE",
     "message": "Human readable message",
-    "details": { }
+    "fieldErrors": { }
   }
 }
 ```
+
+Field-level validation problems are carried in `error.fieldErrors` (field → message), which is the
+name the shipped Lab 2/3 envelope and its clients already use (`server/src/app.ts`,
+`server/src/lib/content.ts`, `server/src/routes/admin-users.ts`; `client/src/pages/CreateTicketPage.tsx`,
+`client/src/pages/AdminUsersPage.tsx`). Earlier drafts of this document called that key `details`;
+see §1's Implementation Note.
 
 Standard status codes used throughout: `200 OK`, `201 Created`, `400 Bad Request`,
 `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict`, `422 Unprocessable Entity`,
@@ -38,7 +44,7 @@ Create a new Actions Taken entry under a Ticket.
 }
 ```
 
-**Validation (422 on failure, `details` maps field → message)**
+**Validation (422 on failure, `error.fieldErrors` maps field → message)**
 - `actionDateTime`: required, valid ISO-8601, must be ≤ server current time (BR-04).
 - `description`: required, string, 5–2000 chars.
 - `result`: required, string, 3–2000 chars.
@@ -67,11 +73,11 @@ List Actions Taken for a Ticket, oldest first.
 **Response `200 OK`**
 ```json
 {
-  "ticketId": "tkt_123",
+  "ticketId": 1234,
   "count": 2,
   "items": [
     {
-      "id": "act_001",
+      "id": "clz8q2h9b0000vbn6act00123",
       "actionDateTime": "2026-09-18T09:00:00.000Z",
       "description": "Initial diagnosis run.",
       "result": "Confirmed swollen battery cell.",
@@ -82,10 +88,11 @@ List Actions Taken for a Ticket, oldest first.
       "createdAt": "2026-09-18T09:01:12.000Z",
       "editedAt": null,
       "editedById": null,
-      "isVoided": false
+      "isVoided": false,
+      "voidReason": null
     },
     {
-      "id": "act_002",
+      "id": "clz8q2h9b0001vbn6act00456",
       "actionDateTime": "2026-09-20T10:15:00.000Z",
       "description": "Replaced failing battery cell and re-seated connector.",
       "result": "Laptop now holds charge for 6+ hours in testing.",
@@ -96,7 +103,8 @@ List Actions Taken for a Ticket, oldest first.
       "createdAt": "2026-09-20T10:16:03.000Z",
       "editedAt": null,
       "editedById": null,
-      "isVoided": false
+      "isVoided": false,
+      "voidReason": null
     }
   ]
 }
@@ -136,6 +144,50 @@ Edit (within window) or void an Actions Taken entry.
 - `404 Not Found` (`ACTION_NOT_FOUND`) if `ticketId` exists but `actionId` does not exist under that Ticket.
 - `409 Conflict` (`ENTRY_VOIDED`) per the voiding rule above.
 - `422 Unprocessable Entity` (`VALIDATION_ERROR`) as above.
+
+**Implementation Note (`feature/lab4-03-actions-taken-api`).** The three endpoints above are
+implemented in `server/src/routes/actions-taken.ts`, mounted at `/api/tickets` with the validation and
+projection rules in `server/src/lib/actionTaken.ts`. The following points fix the contract against the
+shipped codebase; they are the behavior `server/tests/lab-04/actions-taken.api.test.ts` asserts.
+
+1. **Path/identifier types.** `:ticketId` is the internal integer `Ticket.id` (the `:id` convention of
+   the Lab 3 staff routes), and `:actionId` is the `ActionTaken.id` `cuid()` string — matching
+   `specification.md` §7.1's Implementation Note that `ActionTaken.ticketId` is an `Int` FK. The
+   `"tkt_123"` / `"act_001"` values in §1.2's example were illustrative; the example above now shows
+   the real shapes. A `:ticketId` that is not a positive integer can never exist, so it answers with the
+   same generic `404 TICKET_NOT_FOUND`.
+2. **Validation-error key.** 422 bodies carry `error.fieldErrors` (field → message), not
+   `error.details` — see the envelope note at the top of this document.
+3. **`actionDateTime` is required on create**, per §1.1's validation list and FR-04 ("the user must
+   supply: Action Date/Time"). BR-04's "defaults to server time at creation" is realized in the UI as
+   the create form being pre-filled with the server's current time; the API does not invent a value
+   when the field is absent. A present value is validated as ISO-8601 and must not be in the future.
+4. **Idempotency window is 5 seconds**, exposed as the single named constant
+   `IDEMPOTENCY_WINDOW_SECONDS = 5` (`server/src/lib/actionTaken.ts`). The store is in-process
+   (keyed by caller + route + key) because Lab 4 introduces no shared cache/queue infrastructure;
+   a repeated key inside the window replays the stored `201` body byte-for-byte and creates no row.
+5. **Ticket access for IT Staff/Administrator is the shared queue.** Per Lab 3's §3 contract and
+   BR-02 (any active IT Staff/Administrator may author an entry, and `performedById` may differ from
+   the Ticket's `ownerId`), every existing Ticket is accessible to every IT Staff/Administrator, so
+   §1.1's `FORBIDDEN_TICKET_ACCESS` is not reachable for a staff caller against a Ticket that exists.
+   It is reachable as designed on §1.2: a Requester asking for another Requester's Ticket gets
+   `403 FORBIDDEN_TICKET_ACCESS`. Tickets carry no soft-delete column in the shipped schema, so a
+   "soft-deleted" Ticket is simply a non-existent one (`404 TICKET_NOT_FOUND`).
+6. **Voiding is Administrator-only.** An IT Staff caller (even the entry's author) that attempts
+   `{ "isVoided": true }` is rejected with `403 FORBIDDEN_ROLE`, the same role-mismatch code §1.1 uses
+   for a Requester — `isVoided` is the one privileged field reserved to Administrator (BR-11).
+7. **Bounds the §7.1 field table leaves open.** `followUpNote` is trimmed and accepts 3–2000
+   characters when required, and must be empty/omitted otherwise; `voidReason` is trimmed and accepts
+   3–500 characters when `isVoided` is being set to `true`. Both columns are `TEXT`, so these are
+   product bounds, not storage limits.
+8. **List item shape.** Voided entries are excluded unless `includeVoided=true`, and every item carries
+   `voidReason` (null when not voided) so an Administrator reviewing the audit trail can read why an
+   entry was frozen; §1.2's example now shows the field.
+9. **PATCH check order** (§1.3's testing order): role → Ticket existence → Action existence →
+   author/window-or-Administrator permission → `ENTRY_VOIDED` freeze → field validation → update.
+   `performedById` is never read from an edit body. An edit body that names no editable field at all
+   (including one carrying only `voidReason`, which §1.3 says to ignore without `isVoided`) is a
+   `422 VALIDATION_ERROR` rather than a silent audit-stamp-only write.
 
 ---
 
