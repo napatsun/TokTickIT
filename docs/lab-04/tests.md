@@ -23,7 +23,7 @@ transition), `MIGRATION` (migration/regression of existing data), `PERF` (perfor
 | API-05 | API | BR-05 | `followUpRequired=false` with non-empty `followUpNote` | `422` (note must be empty when not required) | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-06 | API | BR-04 | `actionDateTime` in the future | `422 VALIDATION_ERROR` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-07 | API | AC-06 | Requester calls `POST /actions` directly | `403 FORBIDDEN_ROLE` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
-| API-08 | API | BR-15 | IT Staff without Ticket access attempts create | `403 FORBIDDEN_TICKET_ACCESS` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-08 | API | BR-15 | Ticket-access denial on the Actions Taken routes: a Requester requesting another Requester's Ticket, and any caller against a `ticketId` that does not exist (Lab 3's staff queue gives every IT Staff/Administrator access to every *existing* Ticket — see the Implementation Note below) | `403 FORBIDDEN_TICKET_ACCESS` for the Requester-not-owner case; `404 TICKET_NOT_FOUND` for a non-existent `ticketId` — a staff-wide `FORBIDDEN_TICKET_ACCESS` is unreachable by design | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-09 | API | BR-11 | Author edits own entry within 15 min | `200`, fields updated, `editedAt/editedById` set | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-10 | API | BR-11 | Non-author IT Staff edits entry within window | `403 NOT_AUTHOR` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-11 | API | BR-11 | Author edits own entry after 15 min | `403 EDIT_WINDOW_EXPIRED` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
@@ -46,6 +46,33 @@ transition), `MIGRATION` (migration/regression of existing data), `PERF` (perfor
 | UI-03 | UI | §4.5 ui-spec | Failed submit preserves entered form values | All fields retain user input after a simulated 500 error | `client/.../lab-04 tests/ActionsTaken.test.tsx` | Pass |
 | UI-04 | UI | §4.2 ui-spec | Requester view renders no create/edit controls in DOM | `queryByRole('button', {name: /add actions taken/i})` returns null | `client/.../lab-04 tests/ActionsTaken.test.tsx` | Pass |
 | E2E-01 | E2E | AC-01, AC-07 | Full create flow incl. validation error then success | User creates Actions Taken, sees it appear in list | `e2e/lab-04/actions-taken-flow.spec.ts` | Pass |
+
+**Implementation Note (`feature/lab4-03-actions-taken-api`).** The `API-01`…`API-14b`,
+`API-28`…`API-31`, `API-38`…`API-41` and `UNIT-01` rows above are implemented in this branch
+(`server/tests/lab-04/actions-taken.api.test.ts`, `server/tests/lab-04/validators/actionTaken.unit.test.ts`).
+Points where this plan met the shipped codebase, resolved before implementation:
+
+1. **API-08 cannot be a staff-wide `403`.** Lab 3's `/api/staff` router is deliberately a shared queue
+   ("any IT Staff member or Administrator may operate on any Ticket", `api-spec.md` §3 of Lab 3) and
+   BR-02 relies on it ("any active IT Staff/Administrator with access may author an Actions Taken
+   entry; `performedById` may differ from the Ticket's `ownerId`"). No Ticket is therefore unreachable
+   by a staff caller, and the test asserts the two denials that *do* exist: `FORBIDDEN_TICKET_ACCESS`
+   for a Requester reading a Ticket they do not own (§1.2), and `TICKET_NOT_FOUND` for a `ticketId`
+   that does not exist. Tickets have no soft-delete column, so "soft-deleted" is not a distinct case.
+2. **Validation errors are asserted as `error.fieldErrors`**, matching the Lab 2/3 envelope that the
+   existing server routes and clients already emit and read (`api-spec.md` §1.
+   Implementation Note). `API-04`/`API-28` therefore assert `fieldErrors.followUpNote` and
+   `fieldErrors.voidReason` respectively.
+3. **`API-14`/`API-14b` use the 5-second window** (`IDEMPOTENCY_WINDOW_SECONDS = 5`), so `API-14b`
+   waits past 5s before its second submission — that is what makes "treated as a new, independent
+   create" observable rather than assumed.
+4. **`UNIT-01` targets the pure conditional-follow-up validator** exported from
+   `server/src/lib/actionTaken.ts` (`validateFollowUpNote`), exercised as a truth table over
+   (`followUpRequired`, `followUpNote`) including the whitespace-only and 3-character boundaries.
+5. **`UI-01`…`UI-04` and `E2E-01`/`E2E-05` are out of scope for this branch** by instruction — they
+   belong to `feature/lab4-04-actions-taken-ui` and the end-to-end suite. `API-15`…`API-21b`,
+   `API-32`/`API-33`, `AUTH-01` and `WORKFLOW-01` belong to the ticket-workflow branch; this branch
+   never touches `PATCH /status`, `requester-confirmation`, or the dashboards.
 
 ## 2. Ticket Workflow & Resolution
 
