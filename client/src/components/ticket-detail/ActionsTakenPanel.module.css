@@ -1,0 +1,502 @@
+/* ============================================================
+   ActionsTakenPanel — ui-spec.md §4 (Actions Taken on Ticket
+   Detail). Zen Green tokens only (§1: no new palette values).
+   Mobile <768px: the table becomes stacked label:value rows
+   via data-label attributes (§7 — no horizontal scrolling).
+   ============================================================ */
+
+.section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 100%;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+/* §4.1: the "Actions Taken (3)" count badge. Text carries the meaning. */
+.countBadge {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-secondary-green);
+  background-color: var(--color-pale-green);
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.mutedText {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+}
+
+/* ─── Create / edit form (§4.3) ─────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-bg-page);
+}
+
+.formTitle {
+  margin: 0;
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-field-gap);
+}
+
+@media (min-width: 768px) {
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .formGrid > .fieldGroup:nth-of-type(1) {
+    grid-column: 1 / -1;
+  }
+
+  /* Attachment Notes + Performed By share the bottom row. */
+  .formGrid > .fieldGroup:nth-last-of-type(-n + 2) {
+    grid-column: auto;
+  }
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.requiredMark {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-field-editable-bg);
+  padding: var(--space-2);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  min-height: var(--field-height);
+  max-width: 100%;
+}
+
+.textarea {
+  min-height: 0;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.input:disabled,
+.textarea:disabled {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+}
+
+.input[aria-invalid="true"],
+.textarea[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+/* §3: the invalid state is also conveyed by the error text below —
+   never colour alone. */
+.fieldError {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+}
+
+.toggleGroup {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-secondary-green);
+  flex-shrink: 0;
+}
+
+.checkbox:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.performedBy {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background-color: var(--color-field-readonly-bg);
+  border: 1px solid var(--color-field-readonly-border);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-2);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ─── Feedback banners (§4.5 safe failure) ──────────────────────────── */
+
+.errorBanner {
+  border: 1px solid var(--color-error);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.errorBanner p {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+/* ─── Void box (§4.4) ───────────────────────────────────────────────── */
+
+.voidBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-error);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-error-bg);
+}
+
+.voidedToggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ─── Table (§4.2) ──────────────────────────────────────────────────── */
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+  table-layout: fixed;
+}
+
+.table th {
+  text-align: left;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-field-editable-border);
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-field-editable-border);
+  vertical-align: top;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rowHighlighted {
+  /* §4.3: brief highlight animation for the freshly created row. */
+  animation: actionHighlight 2s ease-out 1;
+  background-color: var(--color-success-bg);
+}
+
+@keyframes actionHighlight {
+  0% {
+    background-color: var(--color-success-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.rowVoided td {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-disabled-text);
+}
+
+/* §4.4: voided rows remain readable under "Show voided" — keep the
+   strike-through decorative only so the audit data stays legible. */
+.rowVoided td:first-child,
+.rowVoided td:last-child {
+  text-decoration: none;
+}
+
+.cellDateTime {
+  white-space: nowrap;
+}
+
+.cellDescription,
+.cellResult {
+  min-width: 0;
+}
+
+.descriptionText {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.descriptionText:not(.clamp) {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.linkButton {
+  display: inline-block;
+  margin-top: var(--space-1);
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-secondary-green);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.linkButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+/* §4.2: follow-up badge conveys status via text, not colour alone. */
+.badgeFollowUp,
+.badgeNoFollowUp {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.badgeFollowUp {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.badgeNoFollowUp {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-text-muted);
+}
+
+.cellActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.detailsRow > td {
+  background-color: var(--color-bg-page);
+}
+
+.detailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-md);
+}
+
+.detailsBody p {
+  margin: 0;
+}
+
+.detailsLabel {
+  font-weight: var(--font-weight-semibold);
+}
+
+.editedCaption {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.voidCaption {
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+}
+
+/* ─── Loading skeleton (§4.5) ───────────────────────────────────────── */
+
+.skeletonBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeletonRow {
+  display: grid;
+  grid-template-columns: 1.2fr 2.5fr 2fr 1.2fr 0.9fr;
+  gap: var(--space-2);
+}
+
+.skeletonLine {
+  height: 20px;
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-disabled-bg);
+  animation: actionPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes actionPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ─── Empty state (§4.5) ────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ─── Mobile <768px: stacked label:value rows (§7) ──────────────────── */
+
+@media (max-width: 767px) {
+  .table thead {
+    /* Visually hidden but still announced for AT. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    border: 1px solid var(--color-field-editable-border);
+    border-radius: var(--field-border-radius);
+    padding: var(--space-2);
+    margin-bottom: var(--space-3);
+    background-color: var(--color-surface);
+  }
+
+  .table td {
+    display: flex;
+    flex-direction: column;
+    border-bottom: none;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  /* The label:value pairing comes from each td's data-label attribute. */
+  .table td::before {
+    content: attr(data-label);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .cellDateTime,
+  .badgeFollowUp,
+  .badgeNoFollowUp {
+    white-space: normal;
+  }
+
+  .cellActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ─── Screen-reader-only helper ─────────────────────────────────────── */
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
