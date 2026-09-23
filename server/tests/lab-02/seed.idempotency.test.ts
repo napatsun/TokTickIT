@@ -16,10 +16,16 @@ const prisma = getPrisma();
  * ON DELETE RESTRICT foreign key to "Ticket", so this teardown must clear it
  * before "Ticket" (same as "PublicComment") — otherwise the raw DELETE is
  * rejected and the suite fails for a harness reason, not a product one.
+ *
+ * feature/lab4-02-db-migration-actions: the same applies to the two Lab 4
+ * tables — "ActionTaken" and "TicketStatusHistory" both reference "Ticket"
+ * with ON DELETE RESTRICT — so they are cleared here too.
  */
 describe("Seed idempotency", () => {
   beforeAll(async () => {
     // Clear reference tables so the first seed() creates from scratch
+    await prisma.$executeRawUnsafe('DELETE FROM "ActionTaken"');
+    await prisma.$executeRawUnsafe('DELETE FROM "TicketStatusHistory"');
     await prisma.$executeRawUnsafe('DELETE FROM "PublicComment"');
     await prisma.$executeRawUnsafe('DELETE FROM "InternalNote"');
     await prisma.$executeRawUnsafe('DELETE FROM "Attachment"');
@@ -43,6 +49,8 @@ describe("Seed idempotency", () => {
       tickets: await prisma.ticket.count(),
       publicComments: await prisma.publicComment.count(),
       internalNotes: await prisma.internalNote.count(),
+      actionsTaken: await prisma.actionTaken.count(),
+      statusHistory: await prisma.ticketStatusHistory.count(),
     };
 
     // --- Second seed run ---
@@ -55,6 +63,8 @@ describe("Seed idempotency", () => {
       tickets: await prisma.ticket.count(),
       publicComments: await prisma.publicComment.count(),
       internalNotes: await prisma.internalNote.count(),
+      actionsTaken: await prisma.actionTaken.count(),
+      statusHistory: await prisma.ticketStatusHistory.count(),
     };
 
     // Every table must have the same count after both runs

@@ -50,7 +50,7 @@ Staff that link out to the existing detailed screens rather than duplicating the
 
 **Terminology convention (applies to this entire document):** "**owns / owned by**" refers
 exclusively to the `requesterId` relationship (the Requester who submitted the Ticket). "**assigned
-to**" or "**Ticket Owner**" refers exclusively to the `assigneeId` relationship (the IT Staff member
+to**" or "**Ticket Owner**" refers exclusively to the `ownerId` relationship (the IT Staff member
 coordinating the Ticket, per BR-02). The two are never used interchangeably below.
 
 | ID | Requirement |
@@ -64,7 +64,7 @@ coordinating the Ticket, per BR-02). The two are never used interchangeably belo
 | FR-07 | The Ticket status control exposes only the transitions permitted from the current status and the current user's role (§5). |
 | FR-08 | A Requester can submit a "looks resolved" acknowledgement on their own Ticket; this is stored as advisory feedback and does NOT change Ticket status. |
 | FR-09 | Only IT Staff/Administrator can transition a Ticket into `Resolved`, and only after at least one Actions Taken entry with `Result` populated exists on that Ticket. |
-| FR-10 | The IT Staff Dashboard returns: New count, Open count, In Progress count, Waiting for Requester count, "My Assigned" count (Tickets whose `assigneeId` = current user, i.e. Tickets *assigned to* the current IT Staff member, not Tickets they submitted as a Requester), and a "My Recent Tickets" list (last 5 by `updatedAt` across Tickets assigned to the current user or unassigned). |
+| FR-10 | The IT Staff Dashboard returns: New count, Open count, In Progress count, Waiting for Requester count, "My Assigned" count (Tickets whose `ownerId` = current user, i.e. Tickets *assigned to* the current IT Staff member, not Tickets they submitted as a Requester), and a "My Recent Tickets" list (last 5 by `updatedAt` across Tickets assigned to the current user or unassigned). |
 | FR-11 | The Requester Dashboard returns: My Open Tickets, In Progress, Resolved, Closed counts (scoped to Tickets whose `requesterId` = the authenticated Requester only) and a "My Recent Tickets" list (last 5 by `updatedAt`). |
 | FR-12 | Every dashboard metric card and list row is a clickable drill-down that opens the correctly filtered Ticket Queue/List or the Ticket Detail screen. |
 | FR-13 | Dashboard endpoints never return full Ticket collections; they return only the aggregated counts and the small "recent" list required by the UI. |
@@ -77,7 +77,7 @@ coordinating the Ticket, per BR-02). The two are never used interchangeably belo
 | ID | Rule |
 |---|---|
 | BR-01 | An Actions Taken entry belongs to exactly one Ticket (`ticketId` is required and immutable after creation). |
-| BR-02 | The Ticket Owner (`assigneeId` on Ticket) coordinates the Ticket as a whole, but any active IT Staff/Administrator with access may author an Actions Taken entry; `performedById` on the entry may differ from the Ticket's `assigneeId`. |
+| BR-02 | The Ticket Owner (`ownerId` on Ticket) coordinates the Ticket as a whole, but any active IT Staff/Administrator with access may author an Actions Taken entry; `performedById` on the entry may differ from the Ticket's `ownerId`. |
 | BR-03 | `performedById` is always set automatically from the authenticated session; it is never a client-supplied, editable field. |
 | BR-04 | `actionDateTime` defaults to server time at creation but may be backdated by IT Staff/Administrator to reflect when work actually occurred, and must not be a future timestamp. |
 | BR-05 | If `followUpRequired = true`, `followUpNote` must be a non-empty string (min 3 characters); otherwise `followUpNote` must be null/empty. |
@@ -170,6 +170,14 @@ are rare (same-Ticket entries created at the exact same millisecond) and the tie
 only there to make the result order deterministic across repeated identical queries, not to serve as
 an additional query filter.
 
+**Implementation Note (`feature/lab4-02-db-migration-actions`).** `ActionTaken.ticketId` is typed
+**`Int`**, not `String` as the field table above writes it: `Ticket.id` is `@default(autoincrement())`
+— an integer — throughout Labs 1–3, and a foreign key must match the type of the column it references
+exactly for referential integrity to hold. `User.id` *is* a `cuid()` string, so `performedById`,
+`editedById`, and every `changedById` in §7.3 remain `String`. The same integer typing applies to
+`TicketStatusHistory.ticketId` in §7.3, which is not repeated there. `api-spec.md` is unaffected:
+the identifier Lab 2/3 clients already send and receive is unchanged.
+
 ### 7.2 `Ticket` Model Additions
 
 | Field | Type | Notes |
@@ -178,6 +186,16 @@ an additional query filter.
 | `requesterConfirmedResolvedAt` | `DateTime?` | |
 | `resolvedAt` | `DateTime?` | Set when status → `Resolved` (drives BR-10 reopen window). Persists unchanged through a subsequent `Resolved → Closed` transition, and is overwritten with a fresh timestamp the next time the Ticket enters `Resolved` again (e.g., after `Reopened → InProgress → Resolved`). |
 | `version` | `Int @default(0)` | Optimistic concurrency token (BR-12). Incremented **only** on a successful Ticket **status transition** (`PATCH /tickets/:id/status`). It is explicitly *not* incremented by `requester-confirmation` (FR-08, `api-spec.md` §2.2) or by writes that do not change `status`, since those cannot race with a concurrent status change. |
+
+**Implementation Note (`feature/lab4-02-db-migration-actions`).** The Ticket column that identifies
+the IT Staff member coordinating a Ticket is stored — and referenced in code — as **`ownerId`**, not
+`assigneeId` as this document originally wrote it. Labs 1–3 already ship `ownerId` in
+`server/prisma/schema.prisma`, and the name is used in 18 places across `server/src`, `server/tests`,
+and `client/src`; renaming it would be a breaking change to existing data and code, which §7.5 item 1's
+"additive migration only" rule forbids on this branch. Every `assigneeId` mention in this document,
+`api-spec.md`, and `tests.md` has therefore been rewritten to `ownerId` so the two names cannot be
+confused, and the rename itself is deferred to `feature/lab4-03-actions-taken-api`, where the
+Ticket API/serialization layer can absorb it against clients in one place.
 
 ### 7.3 New Model — `TicketStatusHistory` (audit trail; backs `api-spec.md` §2.1's `note` field and §3.1/§3.2 deltas)
 
@@ -205,7 +223,7 @@ without needing a cached counter, per Decision C).
 ### 7.5 Migration & Backfill Decisions
 1. **Additive migration only.** All new fields are nullable or have defaults (`followUpRequired` defaults `false`, `version` defaults `0`, `requesterConfirmedResolved` defaults `false`), so the migration is backward-compatible and requires no destructive column changes to `Ticket`.
 2. **Legacy Tickets with zero Actions Taken** are valid and expected: dashboard counts and the Actions Taken list simply render the documented empty state (`ui-spec.md`); BR-09's resolution gate applies going forward only — Tickets already `Resolved`/`Closed` before this migration are grandfathered and not reverted.
-3. **Rollback plan:** migration is a single additive Prisma migration (`prisma migrate deploy`) that adds the `ActionTaken` and `TicketStatusHistory` tables plus the four new `Ticket` columns; rollback is `prisma migrate resolve --rolled-back <name>` plus a compensating migration dropping the two new tables/columns, tested against a copy of the seeded database before being run against any shared environment.
+3. **Rollback plan:** migration is a single additive Prisma migration (`prisma migrate deploy`) that adds the `ActionTaken` and `TicketStatusHistory` tables plus the four new `Ticket` columns; rollback is `prisma migrate resolve --rolled-back <name>` plus a compensating migration dropping the two new tables/columns, tested against a copy of the seeded database before being run against any shared environment. Concretely, this sprint's migration is `20260923015713_add_action_taken_and_ticket_workflow_fields` (`server/prisma/migrations/`), whose `migration.sql` header carries the exact rollback statements and the data-loss note for the two new tables (`prisma migrate resolve --rolled-back 20260923015713_add_action_taken_and_ticket_workflow_fields`). The migration's additive-only property — every new `Ticket` column nullable or defaulted, both new tables created empty, no `DROP`/`ALTER COLUMN`/`SET NOT NULL` on any Lab 1–3 column — is asserted by `MIGRATION-01` in `server/tests/lab-04/migration.test.ts`.
 4. Design decisions justified:
    - **Decision A:** `ActionTaken` is append-only with soft-delete (`isVoided`) instead of hard delete, to preserve an auditable work history required by BR-11 and by the stakeholder's request for a "reliable way to plan and track the actual work."
    - **Decision B:** Optimistic concurrency via an integer `version` column — instead of `updatedAt` timestamp comparison — was chosen because integer comparison is unambiguous across client clock skew and simpler to test deterministically (BR-12, FR-16). `version` increments only on status transitions (not on every field write anywhere on the Ticket), so it detects exactly the one race condition this sprint cares about (two concurrent status changes) without forcing unrelated concurrent edits (e.g., a Requester's advisory confirmation) to conflict with each other.
