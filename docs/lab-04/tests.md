@@ -75,7 +75,7 @@ transition), `MIGRATION` (migration/regression of existing data), `PERF` (perfor
 | API-22 | API | FR-11, AC-02 | Requester A's dashboard never includes Requester B's Tickets | Response counts/list scoped strictly to caller | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
 | API-23 | API | FR-11 | Requester dashboard calculation correctness | Counts match direct DB query for seeded fixture | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
 | API-24 | API | FR-10, BR-14 | Staff dashboard counts exclude Cancelled Tickets | `counts.*` match DB query excluding `Cancelled` | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
-| API-25 | API | FR-10 | `myAssigned` scoped to `assigneeId = current user`, excludes Closed/Cancelled | Matches expected fixture count | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-25 | API | FR-10 | `myAssigned` scoped to `ownerId = current user`, excludes Closed/Cancelled | Matches expected fixture count | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | API-26 | API | §6.2 handout | Dashboard response payload size/shape | Response contains only `counts`, `deltas`, `recentTickets` (≤5 items) — never a full Ticket array | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | API-34 | API | BR-14 | Seed a `Reopened` Ticket assigned to current user; fetch staff dashboard | Counted in `counts.inProgress` and `counts.myAssigned`, not in a separate bucket | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | API-35 | API | BR-14 | Seed a `Reopened` Ticket owned by current Requester; fetch requester dashboard | Counted in `counts.myOpen` | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
