@@ -15,7 +15,9 @@ import { generateTicketNumber } from "./services/ticket-number.js";
 import { staffRouter } from "./routes/staff-tickets.js";
 import { adminRouter } from "./routes/admin-users.js";
 import { actionsTakenRouter } from "./routes/actions-taken.js";
+import { ticketWorkflowRouter } from "./routes/ticket-workflow.js";
 import { toContentDto, validateContent } from "./lib/content.js";
+import { allowedTransitionsFor, hasResolvableAction } from "./lib/ticketWorkflow.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
 import { findOwnedTicket, findOwnedAttachment } from "./lib/ownership.js";
@@ -73,6 +75,16 @@ app.use(
 // further down (same prefix). Router middleware only runs on a matching route,
 // so unrelated `/api/tickets*` requests fall through untouched.
 app.use("/api/tickets", actionsTakenRouter);
+
+// ─── Ticket Workflow (api-spec.md §2) ─────────────────────────────────
+// `PATCH /api/tickets/:ticketId/status` and
+// `POST /api/tickets/:ticketId/requester-confirmation`. Deliberately NOT behind
+// a mount-level role guard: the status transition is reachable by every role
+// (a Requester cancels/reopens their own Ticket per §5.1) and the workflow
+// library authorizes each request against the role matrix server-side (BR-15).
+// Those paths share the `/api/tickets` prefix with the Actions Taken router
+// above, so requests that match no route there fall through to this one.
+app.use("/api/tickets", ticketWorkflowRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -731,6 +743,11 @@ app.get(
         removedReason: a.removedReason,
       }));
 
+    // Lab 4 §5.1/ui-spec §5: the Requester's own workflow inputs. The role-aware
+    // list already has BR-10's reopen window applied, so the control can render
+    // "hidden, not disabled" for anything the Requester may not do right now.
+    const hasActionsWithResult = await hasResolvableAction(ticket.id);
+
     // Success — return 200 per api-spec §6
     res.status(200).json({
       ticket: {
@@ -750,6 +767,18 @@ app.get(
         // FR-15 / BR-05: separate from `currentStatus` on purpose.
         requesterMarkedResolved: ticket.requesterMarkedResolved,
         requesterMarkedResolvedAt: ticket.requesterMarkedResolvedAt?.toISOString() ?? null,
+        // Lab 4 §7.2 / §5.1 — the Requester workflow control's inputs.
+        version: ticket.version,
+        resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
+        requesterConfirmedResolved: ticket.requesterConfirmedResolved,
+        requesterConfirmedResolvedAt:
+          ticket.requesterConfirmedResolvedAt?.toISOString() ?? null,
+        hasActionsWithResult,
+        allowedStatusTransitions: allowedTransitionsFor(
+          "REQUESTER",
+          ticket.status,
+          ticket.resolvedAt,
+        ),
       },
       attachments: { active, removed },
     });
