@@ -3,7 +3,41 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import StaffTicketDetailPage from "../../src/pages/StaffTicketDetailPage";
+import { AuthContext, type AuthUser } from "../../src/contexts/AuthContext";
 import { expectNoA11yViolations } from "../support/a11y";
+
+// Lab 4: the Status section is now the shared TicketWorkflowControls, which is
+// rendered only once a session identity exists (the real app always mounts
+// these routes inside <AuthProvider>).
+const STAFF_USER: AuthUser = {
+  id: "staff-1",
+  name: "Alice Chen",
+  email: "alice.chen@toktickit.example.com",
+  role: "IT_STAFF",
+  isActive: true,
+  mustChangePassword: false,
+};
+
+const authValue = {
+  user: STAFF_USER,
+  status: "authenticated" as const,
+  login: vi.fn(async () => ({ ok: true as const })),
+  logout: vi.fn(async () => {}),
+  changePassword: vi.fn(async () => ({ ok: true as const })),
+  refresh: vi.fn(async () => {}),
+};
+
+/** Every Ticket status value — used to assert forbidden options are absent. */
+const ALL_STATUSES = [
+  "NEW",
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING_FOR_REQUESTER",
+  "RESOLVED",
+  "CLOSED",
+  "REOPENED",
+  "CANCELLED",
+];
 
 /**
  * IT Staff Ticket Detail — tests.md §5 (ui-spec.md §6)
@@ -69,6 +103,12 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
     requesterMarkedResolved: false,
     requesterMarkedResolvedAt: null,
     resolutionSummary: null,
+    // Lab 4 §7.2/§5.1 workflow inputs.
+    version: 0,
+    resolvedAt: null,
+    requesterConfirmedResolved: false,
+    requesterConfirmedResolvedAt: null,
+    hasActionsWithResult: true,
     allowedStatusTransitions: SPEC_MATRIX[status] ?? [],
     ...overrides,
   };
@@ -132,12 +172,31 @@ function routeApi(options: {
       return ok({ ticket: options.priorityTicket ?? { ...ticket, itPriority: "HIGH" } });
     }
 
+    // The Actions Taken panel renders alongside the workflow control once a user
+    // is present; return the documented empty list shape.
+    if (url.includes("/actions")) {
+      return ok({ ticketId: 42, count: 0, items: [] });
+    }
+
+    // Lab 4 §2.1: the shared control PATCHes `/api/tickets/:id/status` with
+    // `{ targetStatus, version }` and expects the server-confirmed Ticket back.
     if (url.includes("/status")) {
-      const body = JSON.parse(String(init?.body ?? "{}")) as { status?: string };
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        targetStatus?: string;
+        version?: number;
+      };
+      const nextStatus = body.targetStatus ?? String(ticket.status);
       return ok({
         ticket:
           options.statusTicket ??
-          { ...ticket, status: body.status, allowedStatusTransitions: SPEC_MATRIX[body.status ?? ""] ?? [] },
+          {
+            ...ticket,
+            status: nextStatus,
+            version: (body.version ?? 0) + 1,
+            resolvedAt:
+              nextStatus === "RESOLVED" ? "2026-09-10T09:00:00.000Z" : ticket.resolvedAt,
+            allowedStatusTransitions: SPEC_MATRIX[nextStatus] ?? [],
+          },
       });
     }
 
@@ -177,12 +236,14 @@ function routeApi(options: {
 
 function renderPage(id = 42) {
   return render(
-    <MemoryRouter initialEntries={[`/staff/tickets/${id}`]}>
-      <Routes>
-        <Route path="/staff/tickets/:id" element={<StaffTicketDetailPage />} />
-        <Route path="/staff/queue" element={<div>Queue Landing</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthContext.Provider value={authValue}>
+      <MemoryRouter initialEntries={[`/staff/tickets/${id}`]}>
+        <Routes>
+          <Route path="/staff/tickets/:id" element={<StaffTicketDetailPage />} />
+          <Route path="/staff/queue" element={<div>Queue Landing</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   );
 }
 
@@ -387,20 +448,23 @@ describe("UI-06 — ownership, IT Priority, and page states", () => {
   });
 });
 
-// ─── UI-07 ──────────────────────────────────────────────────────────────
+// ─── UI-07 — shared role-aware Status control (ui-spec §5) ──────────────
 
-describe("UI-07 — Status control offers only permitted next states (ui-spec §6.1)", () => {
+describe("UI-07 — Status control offers only permitted next states (ui-spec §5/§6.1)", () => {
   for (const status of Object.keys(SPEC_MATRIX)) {
-    it(`offers exactly the §6.1 next states for ${status}`, async () => {
+    it(`offers exactly the permitted next states for ${status}`, async () => {
       routeApi({ ticket: makeTicket({ status }) });
       await renderLoaded();
 
-      const select = screen.getByLabelText(/change status/i);
-      const optionValues = Array.from(select.querySelectorAll("option"))
-        .map((option) => option.getAttribute("value"))
-        .filter((value): value is string => value !== "");
-
-      expect(optionValues).toEqual(SPEC_MATRIX[status]);
+      const permitted = SPEC_MATRIX[status];
+      for (const target of ALL_STATUSES) {
+        const button = screen.queryByTestId(`workflow-transition-${target}`);
+        if (permitted.includes(target)) {
+          expect(button, `${status} should offer ${target}`).toBeInTheDocument();
+        } else {
+          expect(button, `${status} must not offer ${target}`).not.toBeInTheDocument();
+        }
+      }
     });
   }
 
@@ -408,23 +472,21 @@ describe("UI-07 — Status control offers only permitted next states (ui-spec §
     routeApi({ ticket: makeTicket({ status: "IN_PROGRESS" }) });
     await renderLoaded();
 
-    const select = screen.getByLabelText(/change status/i);
-    const rendered = Array.from(select.querySelectorAll("option")).map((option) => option.textContent);
-
-    expect(rendered).not.toContain("Closed");
-    expect(rendered).not.toContain("New");
-    expect(rendered).not.toContain("Reopened");
-    expect(rendered).toContain("Resolved");
+    expect(screen.queryByTestId("workflow-transition-CLOSED")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workflow-transition-REOPENED")).not.toBeInTheDocument();
+    expect(screen.getByTestId("workflow-transition-RESOLVED")).toBeInTheDocument();
   });
 
-  it("disables the control and explains why for the terminal CANCELLED status", async () => {
+  it("explains the terminal CANCELLED status instead of offering controls", async () => {
     routeApi({ ticket: makeTicket({ status: "CANCELLED" }) });
     await renderLoaded();
 
-    expect(screen.getByLabelText(/change status/i)).toBeDisabled();
     expect(
-      screen.getByText(/terminal status and cannot be moved/i),
-    ).toBeInTheDocument();
+      screen.queryByRole("group", { name: /available status changes/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("workflow-no-transitions")).toHaveTextContent(
+      /No status changes are available/i,
+    );
   });
 
   it("applies a non-terminal transition immediately (no dialog)", async () => {
@@ -432,20 +494,20 @@ describe("UI-07 — Status control offers only permitted next states (ui-spec §
     routeApi({ ticket: makeTicket({ status: "IN_PROGRESS" }) });
     await renderLoaded();
 
-    await user.selectOptions(screen.getByLabelText(/change status/i), "WAITING_FOR_REQUESTER");
-    await user.click(screen.getByRole("button", { name: /^change status$/i }));
+    await user.click(screen.getByTestId("workflow-transition-WAITING_FOR_REQUESTER"));
 
     expect(screen.queryByTestId("status-confirm-dialog")).not.toBeInTheDocument();
     await waitFor(() => {
       const call = mockApiClient.mock.calls.find((c) =>
-        String(c[0]).includes("/api/staff/tickets/42/status"),
+        String(c[0]).includes("/api/tickets/42/status"),
       );
       expect(call).toBeDefined();
       expect(JSON.parse(String((call?.[1] as RequestInit)?.body))).toEqual({
-        status: "WAITING_FOR_REQUESTER",
+        targetStatus: "WAITING_FOR_REQUESTER",
+        version: 0,
       });
     });
-    expect(await screen.findByTestId("status-success")).toBeInTheDocument();
+    expect(await screen.findByTestId("workflow-success")).toBeInTheDocument();
   });
 
   for (const target of ["RESOLVED", "CLOSED", "CANCELLED"]) {
@@ -456,24 +518,26 @@ describe("UI-07 — Status control offers only permitted next states (ui-spec §
       routeApi({ ticket: makeTicket({ status: from }) });
       await renderLoaded();
 
-      await user.selectOptions(screen.getByLabelText(/change status/i), target);
-      await user.click(screen.getByRole("button", { name: /^change status$/i }));
+      await user.click(screen.getByTestId(`workflow-transition-${target}`));
 
       const dialog = await screen.findByTestId("status-confirm-dialog");
       expect(dialog).toHaveAttribute("role", "dialog");
 
       // Nothing has been sent until the user confirms.
       expect(
-        mockApiClient.mock.calls.some((c) => String(c[0]).includes("/api/staff/tickets/42/status")),
+        mockApiClient.mock.calls.some((c) => String(c[0]).includes("/api/tickets/42/status")),
       ).toBe(false);
 
       await user.click(within(dialog).getByRole("button", { name: /^continue$/i }));
 
       await waitFor(() => {
         const call = mockApiClient.mock.calls.find((c) =>
-          String(c[0]).includes("/api/staff/tickets/42/status"),
+          String(c[0]).includes("/api/tickets/42/status"),
         );
-        expect(JSON.parse(String((call?.[1] as RequestInit)?.body))).toEqual({ status: target });
+        expect(JSON.parse(String((call?.[1] as RequestInit)?.body))).toEqual({
+          targetStatus: target,
+          version: 0,
+        });
       });
     });
   }
@@ -518,8 +582,7 @@ describe("UI-10 — Ticket Detail automated accessibility (ui-spec §9)", () => 
     routeApi({ ticket: makeTicket({ status: "IN_PROGRESS" }) });
     await renderLoaded();
 
-    await user.selectOptions(screen.getByLabelText(/change status/i), "CANCELLED");
-    await user.click(screen.getByRole("button", { name: /^change status$/i }));
+    await user.click(screen.getByTestId("workflow-transition-CANCELLED"));
 
     const dialog = await screen.findByTestId("status-confirm-dialog");
     // The shared Dialog primitive: named by its own heading and modal to AT.
@@ -557,7 +620,7 @@ describe("UI-10 — Ticket Detail automated accessibility (ui-spec §9)", () => 
           ok: false,
           status: 409,
           json: async () => ({
-            error: { code: "INVALID_TRANSITION", message: "That change is not allowed." },
+            error: { code: "INVALID_STATUS_TRANSITION", message: "That change is not allowed." },
           }),
         };
       }
@@ -567,17 +630,11 @@ describe("UI-10 — Ticket Detail automated accessibility (ui-spec §9)", () => 
     const user = userEvent.setup();
     await renderLoaded();
 
-    const select = screen.getByLabelText(/change status/i);
-    await user.selectOptions(select, "WAITING_FOR_REQUESTER");
-    await user.click(screen.getByRole("button", { name: /^change status$/i }));
+    await user.click(screen.getByTestId("workflow-transition-WAITING_FOR_REQUESTER"));
 
-    await screen.findByTestId("status-error");
-
-    // §9: the failure is announced AND associated with its own select, and it
-    // carries the server's safe message rather than an internal detail.
-    expect(select).toHaveAttribute("aria-invalid", "true");
-    expect(select).toHaveAttribute("aria-describedby", "status-error");
-    const errorNode = document.getElementById("status-error");
+    // §9: the failure is announced and carries the server's safe message rather
+    // than an internal detail.
+    const errorNode = await screen.findByTestId("workflow-error");
     expect(errorNode).toHaveAttribute("role", "alert");
     expect(errorNode).toHaveTextContent(/not allowed/i);
 

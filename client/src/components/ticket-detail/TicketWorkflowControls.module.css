@@ -1,0 +1,75 @@
+/* TicketWorkflowControls — ui-spec.md §5. Zen Green tokens only (no new colours). */
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.statusLabel {
+  font-weight: 600;
+  color: var(--color-text, #1e2b24);
+}
+
+.buttonGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Non-blocking reconciliation banner (409 STALE_VERSION / 403 race). */
+.banner {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background-color: var(--color-warning-bg, #fff6e0);
+  color: var(--color-warning-text, #8a6508);
+  font-size: 0.9rem;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-warning-text, #8a6508);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted, #5b6b62);
+  font-size: 0.9rem;
+}
+
+.error {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background-color: var(--color-error-bg, #fbeae9);
+  color: var(--color-error, #b3261e);
+  font-size: 0.9rem;
+}
+
+.success {
+  margin: 0;
+  color: var(--color-success, #0b7a46);
+  font-size: 0.9rem;
+}
+
+/* The Requester's advisory acknowledgement: visually distinct and secondary. */
+.requesterConfirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-field-readonly-border, #c7d3cc);
+}
+
+.helper {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #5b6b62);
+}
