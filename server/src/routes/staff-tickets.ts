@@ -33,8 +33,8 @@ import { toContentDto, validateContent } from "../lib/content.js";
 import {
   allowedStatusTransitions,
   isTicketStatus,
-  isTransitionAllowed,
 } from "../lib/statusTransitions.js";
+import { hasResolvableAction, performStatusTransition } from "../lib/ticketWorkflow.js";
 
 export const staffRouter = Router();
 
@@ -97,14 +97,27 @@ interface StaffTicketRow {
   requesterMarkedResolved: boolean;
   requesterMarkedResolvedAt: Date | null;
   resolutionSummary: string | null;
+  // Lab 4 §7.2 workflow fields (additive) — the Ticket Detail workflow control
+  // needs the concurrency token and BR-10's resolution timestamp.
+  version: number;
+  resolvedAt: Date | null;
+  requesterConfirmedResolved: boolean;
+  requesterConfirmedResolvedAt: Date | null;
   requester: { id: string; name: string; email: string };
   owner: { id: string; name: string; email: string } | null;
   category: { id: number; name: string };
   relatedSystem: { id: number; name: string };
 }
 
-/** The single Ticket projection returned by every §3 endpoint. */
-function toStaffTicketDto(ticket: StaffTicketRow) {
+/**
+ * The single Ticket projection returned by every §3 endpoint.
+ *
+ * `hasActionsWithResult` is BR-09's live precondition flag. It is passed in
+ * (rather than derived here) because it needs a second query; each handler that
+ * builds this DTO supplies the authoritative value so a client never sees a
+ * stale `false` after claiming/reassigning a Ticket that already has actions.
+ */
+function toStaffTicketDto(ticket: StaffTicketRow, hasActionsWithResult = false) {
   return {
     id: ticket.id,
     ticketNumber: ticket.ticketNumber,
@@ -123,7 +136,15 @@ function toStaffTicketDto(ticket: StaffTicketRow) {
     requesterMarkedResolved: ticket.requesterMarkedResolved,
     requesterMarkedResolvedAt: ticket.requesterMarkedResolvedAt?.toISOString() ?? null,
     resolutionSummary: ticket.resolutionSummary,
-    // BR-19: the UI renders only these, straight from the matrix in §6.1.
+    // Lab 4 §7.2 / §5.1: the workflow control's inputs.
+    version: ticket.version,
+    resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
+    requesterConfirmedResolved: ticket.requesterConfirmedResolved,
+    requesterConfirmedResolvedAt: ticket.requesterConfirmedResolvedAt?.toISOString() ?? null,
+    hasActionsWithResult,
+    // BR-19 / Lab 4 §5.1: the UI renders only these. For IT Staff/Administrator
+    // the role-aware list equals the full matrix, so this stays the same set the
+    // Lab 3 control used.
     allowedStatusTransitions: allowedStatusTransitions(ticket.status),
   };
 }
@@ -374,10 +395,13 @@ staffRouter.get("/tickets/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const attachments = await loadAttachments(id);
+    const [attachments, hasActionsWithResult] = await Promise.all([
+      loadAttachments(id),
+      hasResolvableAction(id),
+    ]);
 
     res.status(200).json({
-      ticket: toStaffTicketDto(ticket as StaffTicketRow),
+      ticket: toStaffTicketDto(ticket as StaffTicketRow, hasActionsWithResult),
       attachments,
     });
   } catch {
@@ -422,7 +446,9 @@ staffRouter.post("/tickets/:id/claim", async (req: Request, res: Response) => {
       include: TICKET_INCLUDE,
     });
 
-    res.status(200).json({ ticket: toStaffTicketDto(updated as StaffTicketRow) });
+    res.status(200).json({
+      ticket: toStaffTicketDto(updated as StaffTicketRow, await hasResolvableAction(id)),
+    });
   } catch {
     serverError(res);
   }
@@ -492,7 +518,9 @@ staffRouter.post("/tickets/:id/assign", async (req: Request, res: Response) => {
       include: TICKET_INCLUDE,
     });
 
-    res.status(200).json({ ticket: toStaffTicketDto(updated as StaffTicketRow) });
+    res.status(200).json({
+      ticket: toStaffTicketDto(updated as StaffTicketRow, await hasResolvableAction(id)),
+    });
   } catch {
     serverError(res);
   }
@@ -540,80 +568,52 @@ staffRouter.patch("/tickets/:id/priority", async (req: Request, res: Response) =
       include: TICKET_INCLUDE,
     });
 
-    res.status(200).json({ ticket: toStaffTicketDto(updated as StaffTicketRow) });
+    res.status(200).json({
+      ticket: toStaffTicketDto(updated as StaffTicketRow, await hasResolvableAction(id)),
+    });
   } catch {
     serverError(res);
   }
 });
 
-// ─── PATCH /api/staff/tickets/:id/status (BR-19, AC-10) ─────────────────
+// ─── PATCH /api/staff/tickets/:id/status (BR-07, BR-09, BR-10, BR-12) ───
+//
+// Lab 4 re-points the Lab 3 staff status route at the ONE shared transition
+// implementation (`lib/ticketWorkflow.ts`), so this path and
+// `PATCH /api/tickets/:ticketId/status` cannot drift: both enforce the full §5.1
+// role matrix, BR-09's resolution gate, BR-10's reopen window, BR-12's
+// optimistic `version` check, and write the §7.3 audit row. The contract is the
+// hardened one — the body carries `targetStatus` + the required `version`
+// (api-spec.md §2.1's body shape; the Lab 3 `{ status }` shape and the
+// `INVALID_TRANSITION` code are superseded by BR-07/BR-12, and the Lab 3 tests
+// are updated to the new contract accordingly).
+//
+// The router-level `requireRole(["IT_STAFF", "ADMINISTRATOR"])` still applies,
+// so a Requester cannot reach this path at all; the library re-checks the rest.
 
 staffRouter.patch("/tickets/:id/status", async (req: Request, res: Response) => {
+  const id = parseTicketId(req.params.id);
+  if (id === null) {
+    ticketNotFound(res);
+    return;
+  }
+
   try {
-    const id = parseTicketId(req.params.id);
-    if (id === null) {
-      ticketNotFound(res);
-      return;
-    }
+    const actor = req.currentUser!;
+    const header = req.header("Idempotency-Key");
+    const key = typeof header === "string" && header.trim().length > 0 ? header.trim() : null;
 
-    const body = (req.body ?? {}) as { status?: unknown };
-    const status = typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
-
-    // Not a member of the enum at all → field-level 422 (distinct from a
-    // well-formed but non-permitted transition, which is a 409).
-    if (!isTicketStatus(status)) {
-      res.status(422).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "status must be a valid ticket status.",
-          fieldErrors: { status: "status must be a valid ticket status." },
-        },
-      });
-      return;
-    }
-
-    const existing = await getPrisma().ticket.findUnique({
-      where: { id },
-      select: { id: true, status: true },
-    });
-    if (!existing) {
-      ticketNotFound(res);
-      return;
-    }
-
-    const from = existing.status as string;
-    const allowed = allowedStatusTransitions(from);
-
-    // BR-19: every blank cell in the §6.1 matrix lands here. This covers
-    // self-transitions (e.g. OPEN → OPEN) too, because the matrix has no
-    // diagonal entries.
-    if (!isTransitionAllowed(from, status)) {
-      // `from`/`to`/`allowed` are echoed inside the standard error envelope and
-      // mirrored at the top level so either reading of api-spec.md §3's
-      // "{ from, to, allowed }" resolves without a client-side guess.
-      res.status(409).json({
-        error: {
-          code: "INVALID_TRANSITION",
-          message: `A ticket in ${from} cannot move to ${status}.`,
-          from,
-          to: status,
-          allowed,
-        },
-        from,
-        to: status,
-        allowed,
-      });
-      return;
-    }
-
-    const updated = await getPrisma().ticket.update({
-      where: { id },
-      data: { status },
-      include: TICKET_INCLUDE,
+    const outcome = await performStatusTransition({
+      ticketId: id,
+      actor: { id: actor.id, role: actor.role },
+      body: req.body,
+      idempotencyKey: key ? `${actor.id}:PATCH /api/staff/tickets/${id}/status:${key}` : null,
     });
 
-    res.status(200).json({ ticket: toStaffTicketDto(updated as StaffTicketRow) });
+    res.status(outcome.status).json(outcome.body);
   } catch {
+    // SEC-10: an unexpected ORM failure (e.g. an int4 overflow probe) stays a
+    // generic 500 with no internal detail.
     serverError(res);
   }
 });
