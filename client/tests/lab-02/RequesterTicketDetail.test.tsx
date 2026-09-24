@@ -11,7 +11,28 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TicketDetailPage from "../../src/pages/TicketDetailPage";
+import { AuthContext, type AuthUser } from "../../src/contexts/AuthContext";
 import { expectNoA11yViolations } from "../support/a11y";
+
+// Lab 4: the Status & Resolution section (the shared TicketWorkflowControls) is
+// rendered only once a session identity exists.
+const REQUESTER_USER: AuthUser = {
+  id: "user-1",
+  name: "Jennifer Anderson",
+  email: "jennifer.anderson@example.com",
+  role: "REQUESTER",
+  isActive: true,
+  mustChangePassword: false,
+};
+
+const authValue = {
+  user: REQUESTER_USER,
+  status: "authenticated" as const,
+  login: vi.fn(async () => ({ ok: true as const })),
+  logout: vi.fn(async () => {}),
+  changePassword: vi.fn(async () => ({ ok: true as const })),
+  refresh: vi.fn(async () => {}),
+};
 
 // ─── Mock apiClient ─────────────────────────────────────────────────────
 
@@ -58,6 +79,15 @@ const mockTicket = {
   currentStatus: "NEW",
   ticketOwner: null,
   resolutionSummary: null,
+  requesterMarkedResolved: false,
+  requesterMarkedResolvedAt: null,
+  // Lab 4 §7.2/§5.1 workflow inputs.
+  version: 0,
+  resolvedAt: null,
+  requesterConfirmedResolved: false,
+  requesterConfirmedResolvedAt: null,
+  hasActionsWithResult: true,
+  allowedStatusTransitions: [],
 };
 
 const mockAttachments = {
@@ -87,12 +117,14 @@ function createMockResponse(data: any) {
 
 function renderPage(ticketNumber = "TKT-2026-000501") {
   return render(
-    <MemoryRouter initialEntries={[`/tickets/${ticketNumber}`]}>
-      <Routes>
-        <Route path="/tickets/:ticketNumber" element={<TicketDetailPage />} />
-        <Route path="/tickets" element={<div>My Tickets</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthContext.Provider value={authValue}>
+      <MemoryRouter initialEntries={[`/tickets/${ticketNumber}`]}>
+        <Routes>
+          <Route path="/tickets/:ticketNumber" element={<TicketDetailPage />} />
+          <Route path="/tickets" element={<div>My Tickets</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   );
 }
 
@@ -370,6 +402,13 @@ const openTicket = {
   currentStatus: "OPEN",
   requesterMarkedResolved: false,
   requesterMarkedResolvedAt: null,
+  // §5.1: an owning Requester may cancel an OPEN Ticket; nothing else.
+  version: 0,
+  resolvedAt: null,
+  requesterConfirmedResolved: false,
+  requesterConfirmedResolvedAt: null,
+  hasActionsWithResult: true,
+  allowedStatusTransitions: ["CANCELLED"],
 };
 
 const existingComments = [
@@ -393,12 +432,12 @@ const existingComments = [
   },
 ];
 
-/** Route the mocked apiClient by URL so ticket / comments / resolve-mark can differ. */
+/** Route the mocked apiClient by URL so ticket / comments / confirmation can differ. */
 function routeApi(options: {
   ticket: Record<string, unknown>;
   comments?: typeof existingComments;
   postComment?: { _ok: boolean; status?: number; body?: unknown };
-  resolveMark?: { _ok: boolean; status?: number };
+  confirm?: { _ok: boolean; status?: number };
 }) {
   mockApiResponse.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url.includes("/comments")) {
@@ -419,12 +458,19 @@ function routeApi(options: {
       return { items: options.comments ?? [] };
     }
 
-    if (url.includes("/resolve-mark")) {
-      const mark = options.resolveMark ?? { _ok: true };
-      if (!mark._ok) return { _ok: false, status: mark.status ?? 500 };
+    // The Actions Taken panel (read-only for a Requester) fetches its list.
+    if (url.includes("/actions")) {
+      return { ticketId: 501, count: 0, items: [] };
+    }
+
+    // Lab 4 §2.2: the advisory confirmation endpoint.
+    if (url.includes("/requester-confirmation")) {
+      const confirm = options.confirm ?? { _ok: true };
+      if (!confirm._ok) return { _ok: false, status: confirm.status ?? 500 };
       return {
-        requesterMarkedResolved: true,
-        requesterMarkedResolvedAt: "2026-09-10T10:00:00.000Z",
+        ticketId: 501,
+        requesterConfirmedResolved: true,
+        requesterConfirmedResolvedAt: "2026-09-10T10:00:00.000Z",
       };
     }
 
@@ -524,117 +570,75 @@ describe("UI-03 — Public Comments panel (ui-spec §4)", () => {
   });
 });
 
-describe('FR-15 — "Problem Appears Resolved" (ui-spec §4, AC-11)', () => {
-  it("shows the action for an eligible status", async () => {
+describe('FR-08/BR-08 — "This looks resolved to me" advisory confirmation (ui-spec §5)', () => {
+  it("shows the advisory button with its helper text, separate from the status control", async () => {
     vi.clearAllMocks();
     routeApi({ ticket: openTicket });
     renderPage();
 
-    expect(
-      await screen.findByRole("button", { name: /problem appears resolved/i }),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("requester-resolved-badge")).not.toBeInTheDocument();
+    const button = await screen.findByTestId("requester-confirmation-button");
+    expect(button).toHaveTextContent(/this looks resolved to me/i);
+    expect(screen.getByTestId("requester-confirmation-helper")).toHaveTextContent(
+      "Your IT Staff will review and confirm.",
+    );
   });
 
-  it("hides the action for statuses that are not eligible", async () => {
-    for (const status of ["NEW", "RESOLVED", "CLOSED", "CANCELLED"]) {
-      vi.clearAllMocks();
-      routeApi({ ticket: { ...mockTicket, currentStatus: status, requesterMarkedResolved: false } });
-      const { unmount } = renderPage();
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue("TKT-2026-000501")).toBeInTheDocument();
-      });
-
-      expect(
-        screen.queryByRole("button", { name: /problem appears resolved/i }),
-        `${status} should not offer the action`,
-      ).not.toBeInTheDocument();
-      unmount();
-    }
-  });
-
-  it("shows the marker badge and hides the action once already marked", async () => {
-    vi.clearAllMocks();
-    routeApi({
-      ticket: {
-        ...mockTicket,
-        currentStatus: "OPEN",
-        requesterMarkedResolved: true,
-        requesterMarkedResolvedAt: "2026-09-05T10:00:00.000Z",
-      },
-    });
-    renderPage();
-
-    const badge = await screen.findByTestId("requester-resolved-badge");
-    expect(badge).toHaveTextContent(/You marked this as resolved on/i);
-    expect(
-      screen.queryByRole("button", { name: /problem appears resolved/i }),
-    ).not.toBeInTheDocument();
-    // The formal Status badge is unchanged and separate from the marker.
-    expect(screen.getByText("Open")).toBeInTheDocument();
-  });
-
-  it("asks for confirmation with the exact spec copy before sending", async () => {
+  it("records the confirmation, keeps the formal status untouched, and swaps in the note", async () => {
     vi.clearAllMocks();
     routeApi({ ticket: openTicket });
     renderPage();
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    await userEvent.click(await screen.findByTestId("requester-confirmation-button"));
+
+    expect(await screen.findByTestId("requester-confirmation-done")).toHaveTextContent(
+      /You told IT Staff this looks resolved/i,
     );
-
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      "This tells IT Staff the issue seems fixed. IT Staff will still need to formally close the ticket. Continue?",
-    );
-
-    // Cancel closes the dialog without sending anything.
-    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /problem appears resolved/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("confirms, records the marker, keeps currentStatus untouched, and hides the action", async () => {
-    vi.clearAllMocks();
-    routeApi({ ticket: openTicket });
-    renderPage();
-
-    await userEvent.click(
-      await screen.findByRole("button", { name: /problem appears resolved/i }),
-    );
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
-
-    expect(await screen.findByTestId("requester-resolved-badge")).toHaveTextContent(
-      /You marked this as resolved on/i,
-    );
-    expect(
-      screen.queryByRole("button", { name: /problem appears resolved/i }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    // Status badge still shows the formal status (BR-20).
+    expect(screen.queryByTestId("requester-confirmation-button")).not.toBeInTheDocument();
+    // BR-08: the formal status is unchanged and still shown.
     expect(screen.getByText("Open")).toBeInTheDocument();
     expect(screen.queryByText("Resolved")).not.toBeInTheDocument();
   });
 
-  it("shows a safe banner and leaves the state unchanged when the request fails", async () => {
+  it("shows the confirmed note instead of the button once already confirmed", async () => {
     vi.clearAllMocks();
-    routeApi({ ticket: openTicket, resolveMark: { _ok: false, status: 500 } });
+    routeApi({
+      ticket: {
+        ...openTicket,
+        requesterConfirmedResolved: true,
+        requesterConfirmedResolvedAt: "2026-09-05T10:00:00.000Z",
+      },
+    });
     renderPage();
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: /problem appears resolved/i }),
+    expect(await screen.findByTestId("requester-confirmation-done")).toHaveTextContent(
+      /5 Sep.*2026/,
     );
-    await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+    expect(screen.queryByTestId("requester-confirmation-button")).not.toBeInTheDocument();
+  });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /couldn't record your response/i,
-    );
-    // Dialog stays open and the action is still offered.
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.queryByTestId("requester-resolved-badge")).not.toBeInTheDocument();
+  it("shows a safe inline error and keeps the button when the request fails", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket, confirm: { _ok: false, status: 500 } });
+    renderPage();
+
+    await userEvent.click(await screen.findByTestId("requester-confirmation-button"));
+
+    const error = await screen.findByTestId("workflow-error");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(screen.getByTestId("requester-confirmation-button")).toBeInTheDocument();
     expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+
+  it("renders only the transitions the Requester's role permits (hidden, not disabled)", async () => {
+    vi.clearAllMocks();
+    routeApi({ ticket: openTicket });
+    renderPage();
+
+    expect(await screen.findByTestId("workflow-transition-CANCELLED")).toBeInTheDocument();
+    expect(screen.queryByTestId("workflow-transition-RESOLVED")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workflow-transition-IN_PROGRESS")).not.toBeInTheDocument();
+    // The advisory confirmation is never a status transition.
+    expect(screen.getByTestId("requester-confirmation-button")).toBeInTheDocument();
   });
 });
 
@@ -656,32 +660,30 @@ describe("UI-10 — Requester Ticket Detail automated accessibility (ui-spec §9
     await expectNoA11yViolations(document.body, "Requester Ticket Detail (populated)");
   });
 
-  it("has no axe violations with the resolve-mark confirmation open", async () => {
+  it("has no axe violations with the status confirmation dialog open", async () => {
     vi.clearAllMocks();
     routeApi({ ticket: openTicket });
     renderPage();
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: /problem appears resolved/i }),
-    );
+    await userEvent.click(await screen.findByTestId("workflow-transition-CANCELLED"));
     await screen.findByRole("dialog");
 
-    await expectNoA11yViolations(document.body, "Requester Ticket Detail (resolve confirm)");
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (status confirm)");
   });
 
-  it("has no axe violations once the resolved marker is shown", async () => {
+  it("has no axe violations once the advisory confirmation is shown", async () => {
     vi.clearAllMocks();
     routeApi({
       ticket: {
         ...openTicket,
-        requesterMarkedResolved: true,
-        requesterMarkedResolvedAt: "2026-09-05T10:00:00.000Z",
+        requesterConfirmedResolved: true,
+        requesterConfirmedResolvedAt: "2026-09-05T10:00:00.000Z",
       },
     });
     renderPage();
-    await screen.findByTestId("requester-resolved-badge");
+    await screen.findByTestId("requester-confirmation-done");
 
-    await expectNoA11yViolations(document.body, "Requester Ticket Detail (marked resolved)");
+    await expectNoA11yViolations(document.body, "Requester Ticket Detail (confirmed)");
   });
 
   it("has no axe violations with the remove-attachment dialog open", async () => {
