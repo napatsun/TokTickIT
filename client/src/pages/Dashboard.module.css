@@ -1,0 +1,374 @@
+/* ============================================================
+   Dashboards — ui-spec.md §2/§3 (IT Staff + Requester)
+   Zen Green tokens only (ui-spec.md §1: no new colors in Lab 4).
+   Shared by StaffDashboard.tsx and RequesterDashboard.tsx.
+
+   Responsive (§2.5/§3.5, matching §7's breakpoints):
+     Desktop ≥1024px : 5 (or 4) cards in one row; content row 2:1.
+     Tablet 768–1023px: cards wrap (3+2 / 2×2); content row stacks.
+     Mobile <768px   : cards stack; no horizontal scrolling anywhere.
+   ============================================================ */
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ─── Welcome row ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+/* ─── Metric card row ─────────────────────────────────────────── */
+
+.metricRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* The Requester row has 4 cards (§3.5: one row on desktop). */
+.metricRow4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metricSkeleton {
+  height: 110px;
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-pale-green);
+  opacity: 0.7;
+}
+
+/* Card wrapper for the Requester layout: card + its own View all link. */
+.metricCardStatic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* A metric card is a real button — keyboard reachable with a visible
+   focus ring (§8), and its accessible name carries label + value. */
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.metricCard:hover {
+  border-color: var(--color-secondary-green);
+  box-shadow: 0 2px 8px rgba(0, 107, 60, 0.12);
+}
+
+.metricCard:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.metricValue {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.metricLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+/* Delta chip — icon AND text (never colour alone, §8). The colour classes
+   below are supplementary only. */
+.deltaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.deltaUp {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.deltaDown {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.deltaFlat {
+  background-color: var(--color-disabled-bg);
+  color: var(--color-text-muted);
+}
+
+/* The Requester card's explicit per-card drill-down link (§3.1). */
+.cardViewAll {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-secondary-green);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cardViewAll:hover {
+  color: var(--color-primary-green);
+}
+
+.cardViewAll:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ─── Two-column content row (§2.1: recent list : quick actions ≈ 2:1) ── */
+
+.contentRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.recentPanel,
+.quickPanel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-field-editable-border);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-4);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.viewAll {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-secondary-green);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.viewAll:hover {
+  color: var(--color-primary-green);
+}
+
+.viewAll:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Recent list rows — a list of real buttons so keyboard users can open any
+   row (§8: every actionable element reachable, named). */
+.recentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.recentList li + li {
+  border-top: 1px solid var(--color-disabled-bg);
+}
+
+.recentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recentRow:hover {
+  background-color: var(--color-pale-green);
+}
+
+.recentRow:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: -2px;
+  border-radius: 2px;
+}
+
+.rowCode {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-green);
+  white-space: nowrap;
+}
+
+.rowTitle {
+  flex: 1 1 200px;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  /* One-line title per §2.1; mobile lets it wrap to a second line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.rowUpdated {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.rowSkeleton {
+  height: 44px;
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-pale-green);
+  opacity: 0.7;
+  margin-bottom: var(--space-2);
+}
+
+/* Empty state — same visual language as the Lab 2/3 page-level empty states. */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.emptyState p {
+  margin: 0;
+}
+
+/* Quick actions panel. */
+.quickActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ─── Per-group safe failure (§2.4) ───────────────────────────── */
+
+.groupError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+  border-radius: var(--field-border-radius);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-error);
+}
+
+.groupError p {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ─── Responsive (§7) ─────────────────────────────────────────── */
+
+/* Tablet 768–1023px: cards wrap 3+2 (staff) / 2×2 (requester); the content
+   row stacks with the recent list above quick actions (§2.5). */
+@media (max-width: 1023px) {
+  .metricRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .metricRow4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contentRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile <768px: single-column stacking everywhere (§7). */
+@media (max-width: 767px) {
+  .page {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metricRow,
+  .metricRow4 {
+    grid-template-columns: 1fr;
+  }
+
+  /* §2.5: the timestamp collapses under the title on a second line. */
+  .rowTitle {
+    flex-basis: 100%;
+    order: 3;
+    white-space: normal;
+  }
+
+  .rowMeta {
+    margin-left: 0;
+  }
+}
