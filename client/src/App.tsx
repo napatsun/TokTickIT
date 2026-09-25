@@ -12,6 +12,7 @@ import TicketDetailPage from "./pages/TicketDetailPage.js";
 import StaffQueuePage from "./pages/StaffQueuePage.js";
 import StaffTicketDetailPage from "./pages/StaffTicketDetailPage.js";
 import AdminUsersPage from "./pages/AdminUsersPage.js";
+import DashboardPage from "./pages/DashboardPage.js";
 
 /**
  * Root component — routing + Application Shell (ui-spec.md §1).
@@ -65,6 +66,20 @@ export default function App() {
               </RequireAuth>
             }
           >
+            {/* Role dashboards (ui-spec.md §2/§3): one route, one of two
+                components by session role — Requester → Requester Dashboard,
+                IT Staff/Administrator → Staff Dashboard (Administrator reuses
+                the IT Staff dashboard per the sprint handout). All roles are
+                listed so the role guard never bounces a legitimate session. */}
+            <Route
+              path="/dashboard"
+              element={
+                <RequireRole roles={["REQUESTER", "IT_STAFF", "ADMINISTRATOR"]}>
+                  <DashboardPage />
+                </RequireRole>
+              }
+            />
+
             <Route
               path="/tickets"
               element={

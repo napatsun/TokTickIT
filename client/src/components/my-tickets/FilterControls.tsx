@@ -124,6 +124,24 @@ export default function FilterControls({
           }
         >
           <option value="">All Statuses</option>
+          {/* Lab 4 (ui-spec.md §3.3): the OPTIONS still come from the API's
+              filterOptions.currentStatuses (BR-15). A dashboard card drill-down
+              can arrive with a value the API does not list yet (the requester has
+              no such ticket) or with a comma-separated multi-value set, which has
+              no single canonical option — so the active value is rendered
+              explicitly, keeping the control showing the filter that is applied. */}
+          {currentStatus.includes(",") ? (
+            <option value={currentStatus}>
+              {`${currentStatus.split(",").length} statuses (from dashboard)`}
+            </option>
+          ) : (
+            currentStatus !== "" &&
+            !currentStatuses.includes(currentStatus) && (
+              <option value={currentStatus}>
+                {currentStatus.charAt(0) + currentStatus.slice(1).toLowerCase()}
+              </option>
+            )
+          )}
           {currentStatuses.map((s) => (
             <option key={s} value={s}>
               {s.charAt(0) + s.slice(1).toLowerCase()}

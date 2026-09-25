@@ -16,11 +16,13 @@ import { staffRouter } from "./routes/staff-tickets.js";
 import { adminRouter } from "./routes/admin-users.js";
 import { actionsTakenRouter } from "./routes/actions-taken.js";
 import { ticketWorkflowRouter } from "./routes/ticket-workflow.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 import { toContentDto, validateContent } from "./lib/content.js";
 import { allowedTransitionsFor, hasResolvableAction } from "./lib/ticketWorkflow.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
 import { findOwnedTicket, findOwnedAttachment } from "./lib/ownership.js";
+import { isTicketStatus } from "./lib/statusTransitions.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
@@ -85,6 +87,15 @@ app.use("/api/tickets", actionsTakenRouter);
 // Those paths share the `/api/tickets` prefix with the Actions Taken router
 // above, so requests that match no route there fall through to this one.
 app.use("/api/tickets", ticketWorkflowRouter);
+
+// ─── Dashboards (api-spec.md §3) ────────────────────────────────────────
+// `GET /api/dashboard/staff` (IT Staff/Administrator) and
+// `GET /api/dashboard/requester` (Requester). Read-only aggregates, so there is
+// no CSRF surface; the two audiences differ, so the role guard lives per route
+// inside the router and answers with §3's documented `FORBIDDEN_ROLE` code
+// (AUTH-03) rather than a mount-level `requireRole` — which would emit Lab 3's
+// generic `FORBIDDEN` before the handler could.
+app.use("/api/dashboard", dashboardRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -490,18 +501,36 @@ app.get(
       }
     }
 
-    // currentStatus: optional, one of NEW (Lab 2)
+    // currentStatus: optional status filter.
+    //
+    // Lab 2 shipped it restricted to NEW (the only status a Requester's ticket
+    // could hold). Lab 4 (ui-spec.md §3.3) widens the SAME parameter to the
+    // full TicketStatus enum — plus comma-separated multi-value lists and the
+    // `open-work` alias — so the Requester Dashboard's cards can drill down to
+    // exactly the status set each card counts (FR-12). Single-value behavior
+    // and validation errors are unchanged in shape.
     let currentStatus: string | null = null;
+    let currentStatusList: string[] | null = null;
     if (req.query.currentStatus != null && req.query.currentStatus !== "") {
-      const raw = String(req.query.currentStatus).trim().toUpperCase();
-      if (raw !== "NEW") {
-        fieldErrors.currentStatus = "currentStatus must be NEW.";
+      const raw = String(req.query.currentStatus).trim();
+      if (raw.toLowerCase() === "open-work") {
+        // BR-14's open-work set — same alias the staff queue accepts (ui-spec.md §1).
+        currentStatusList = ["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "REOPENED"];
       } else {
-        currentStatus = raw;
+        const values = raw
+          .split(",")
+          .map((entry) => entry.trim().toUpperCase())
+          .filter((entry) => entry.length > 0);
+        const unique = [...new Set(values)];
+        if (unique.length === 0 || !unique.every((entry) => isTicketStatus(entry))) {
+          fieldErrors.currentStatus = "currentStatus must be a valid ticket status.";
+        } else if (unique.length === 1) {
+          currentStatus = unique[0];
+        } else {
+          currentStatusList = unique;
+        }
       }
     }
-
-    // sortBy: default createdAt
     let sortBy: string = "createdAt";
     if (req.query.sortBy != null && req.query.sortBy !== "") {
       const raw = String(req.query.sortBy).trim();
@@ -566,7 +595,9 @@ app.get(
     if (requestedPriority != null) {
       where.requestedPriority = requestedPriority;
     }
-    if (currentStatus != null) {
+    if (currentStatusList) {
+      where.status = { in: currentStatusList };
+    } else if (currentStatus != null) {
       where.status = currentStatus;
     }
 

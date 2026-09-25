@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import Pagination from "../components/shared/Pagination";
@@ -96,6 +96,7 @@ function formatDate(isoString: string): string {
 
 export default function StaffQueuePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [items, setItems] = useState<QueueItem[]>([]);
   const [status, setStatus] = useState<QueueStatus>("loading");
@@ -103,11 +104,18 @@ export default function StaffQueuePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
 
-  // Filters / sort
+  // Filters / sort. Lab 4 (ui-spec.md §2.3): the initial values are seeded from
+  // the URL query params the Dashboard drill-downs arrive with (status —
+  // including its comma-separated multi-value form and the open-work alias —
+  // and owner=me). React Router's read-only initial parse is fine here: the
+  // user can still change every control freely afterwards.
+  const initialStatus = searchParams.get("status") ?? "";
+  const initialOwner = searchParams.get("owner") ?? "";
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [priorityFilter, setPriorityFilter] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState(initialOwner);
   const [sortBy, setSortBy] = useState<SortableField>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filtersOpen, setFiltersOpen] = useState(false);

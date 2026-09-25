@@ -227,13 +227,32 @@ staffRouter.get("/tickets", async (req: Request, res: Response) => {
     const search = rawSearch.length >= SEARCH_MIN_LENGTH ? rawSearch : "";
 
     // `status` — TicketStatus enum.
+    //
+    // Lab 4 (ui-spec.md §1/§2.3): the value may also be a comma-separated
+    // multi-value list (e.g. `status=IN_PROGRESS,REOPENED`) or the documented
+    // `open-work` alias, which expands to BR-14's full open-work set
+    // {NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED}. The alias is
+    // ONLY a route-level filter convenience for the dashboards' drill-downs —
+    // it is not a status value and must never be persisted or returned.
     let status: string | null = null;
+    let statusList: string[] | null = null;
     if (req.query.status != null && req.query.status !== "") {
-      const raw = String(req.query.status).trim().toUpperCase();
-      if (!isTicketStatus(raw)) {
-        fieldErrors.status = "status must be a valid ticket status.";
+      const raw = String(req.query.status).trim();
+      if (raw.toLowerCase() === "open-work") {
+        statusList = ["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "REOPENED"];
       } else {
-        status = raw;
+        const values = raw
+          .split(",")
+          .map((entry) => entry.trim().toUpperCase())
+          .filter((entry) => entry.length > 0);
+        const unique = [...new Set(values)];
+        if (unique.length === 0 || !unique.every((entry) => isTicketStatus(entry))) {
+          fieldErrors.status = "status must be a valid ticket status.";
+        } else if (unique.length === 1) {
+          status = unique[0];
+        } else {
+          statusList = unique;
+        }
       }
     }
 
@@ -322,6 +341,7 @@ staffRouter.get("/tickets", async (req: Request, res: Response) => {
       ];
     }
     if (status) where.status = status;
+    if (statusList) where.status = { in: statusList };
     if (priority) where.itPriority = priority;
     if (owner === "unassigned") {
       where.ownerId = null;
