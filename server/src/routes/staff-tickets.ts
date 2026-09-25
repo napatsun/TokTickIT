@@ -243,7 +243,7 @@ staffRouter.get("/tickets", async (req: Request, res: Response) => {
       } else {
         const values = raw
           .split(",")
-          .map((entry) => entry.toUpperCase())
+          .map((entry) => entry.trim().toUpperCase())
           .filter((entry) => entry.length > 0);
         const unique = [...new Set(values)];
         if (unique.length === 0 || !unique.every((entry) => isTicketStatus(entry))) {
