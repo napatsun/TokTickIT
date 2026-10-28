@@ -107,14 +107,16 @@ export default function StaffQueuePage() {
   // Filters / sort. Lab 4 (ui-spec.md §2.3): the initial values are seeded from
   // the URL query params the Dashboard drill-downs arrive with (status —
   // including its comma-separated multi-value form and the open-work alias —
-  // and owner=me). React Router's read-only initial parse is fine here: the
-  // user can still change every control freely afterwards.
+  // owner=me, and priority for the Urgent Tickets panel's "View all urgent"
+  // link, FR-18). React Router's read-only initial parse is fine here: the user
+  // can still change every control freely afterwards.
   const initialStatus = searchParams.get("status") ?? "";
   const initialOwner = searchParams.get("owner") ?? "";
+  const initialPriority = searchParams.get("priority") ?? "";
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [priorityFilter, setPriorityFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState(initialPriority);
   const [ownerFilter, setOwnerFilter] = useState(initialOwner);
   const [sortBy, setSortBy] = useState<SortableField>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

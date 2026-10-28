@@ -20,6 +20,13 @@
  *     shipped app — IT Staff cannot create Tickets — so the affordance is
  *     omitted rather than shipped as a dead end; confirmed with the course
  *     staff during implementation.)
+ *   - Second content row (FR-17/FR-18, added 2026-10-28): My Actions Taken
+ *     (the CURRENT user's 5 newest non-voided entries + "My follow-ups
+ *     needed" count) and Urgent Tickets (the 5 longest-waiting IT Priority =
+ *     URGENT open-work Tickets across the whole queue, with a "View all
+ *     urgent" link). Both are the assignment's "current-user actions taken"
+ *     and "recent or urgent tickets" requirements, which the Feature 7
+ *     dashboard was missing.
  *
  * Drill-downs (§2.3) filter on EXACTLY the status set each card counts
  * (§1's rule): the In Progress card carries the multi-value
@@ -35,9 +42,10 @@
  *     data"). The endpoint is one resource, so each group issues its own
  *     request for the same URL and keeps its own loading/error state: a
  *     failure (or a Retry) in one group never blanks or blocks the other.
- *     The cost is a second GET per view — accepted because the per-group
- *     partial-failure behaviour is a documented, graded requirement.
- *   - Refresh re-fetches both groups.
+ *     The cost is one GET per section (four per view) — accepted because the
+ *     per-section partial-failure behaviour is a documented, graded
+ *     requirement (`specification.md` §11 decision 9).
+ *   - Refresh re-fetches all four sections.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -58,6 +66,24 @@ interface RecentTicket {
   updatedAt: string;
 }
 
+interface MyActionItem {
+  id: string;
+  ticketId: number;
+  ticketNumber: string;
+  description: string;
+  actionDateTime: string;
+  followUpRequired: boolean;
+}
+
+interface UrgentTicket {
+  id: number;
+  ticketNumber: string;
+  title: string;
+  status: string;
+  itPriority: string;
+  ownerName: string | null;
+}
+
 interface StaffDashboardPayload {
   generatedAt: string;
   timezone: string;
@@ -75,6 +101,13 @@ interface StaffDashboardPayload {
     waitingForRequester: number;
   };
   recentTickets: RecentTicket[];
+  /** FR-17: the current user's newest non-voided Actions Taken. */
+  myActions: {
+    followUpCount: number;
+    items: MyActionItem[];
+  };
+  /** FR-18: the whole queue's oldest active URGENT Tickets. */
+  urgentTickets: UrgentTicket[];
 }
 
 type GroupState = "loading" | "ready" | "error";
@@ -137,9 +170,13 @@ export default function StaffDashboard() {
   // Per-group state — the partial-failure unit (§2.4 / UI-08).
   const [metricsState, setMetricsState] = useState<GroupState>("loading");
   const [recentState, setRecentState] = useState<GroupState>("loading");
+  const [myActionsState, setMyActionsState] = useState<GroupState>("loading");
+  const [urgentState, setUrgentState] = useState<GroupState>("loading");
   const [counts, setCounts] = useState<StaffDashboardPayload["counts"] | null>(null);
   const [deltas, setDeltas] = useState<StaffDashboardPayload["deltas"] | null>(null);
   const [recent, setRecent] = useState<RecentTicket[] | null>(null);
+  const [myActions, setMyActions] = useState<StaffDashboardPayload["myActions"] | null>(null);
+  const [urgent, setUrgent] = useState<UrgentTicket[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchMetrics = useCallback(async () => {
@@ -165,11 +202,33 @@ export default function StaffDashboard() {
     }
   }, []);
 
+  const fetchMyActions = useCallback(async () => {
+    setMyActionsState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setMyActions(payload.myActions);
+      setMyActionsState("ready");
+    } else {
+      setMyActionsState("error");
+    }
+  }, []);
+
+  const fetchUrgent = useCallback(async () => {
+    setUrgentState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setUrgent(payload.urgentTickets);
+      setUrgentState("ready");
+    } else {
+      setUrgentState("error");
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchMetrics(), fetchRecent()]);
+    await Promise.all([fetchMetrics(), fetchRecent(), fetchMyActions(), fetchUrgent()]);
     setRefreshing(false);
-  }, [fetchMetrics, fetchRecent]);
+  }, [fetchMetrics, fetchRecent, fetchMyActions, fetchUrgent]);
 
   useEffect(() => {
     void refreshAll();
@@ -375,6 +434,154 @@ export default function StaffDashboard() {
             </Button>
           </div>
         </aside>
+      </div>
+
+      {/* ─── Second content row: My Actions Taken + Urgent Tickets ─────── */}
+      <div className={styles.contentRow2}>
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="my-actions-heading"
+          data-testid="my-actions-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="my-actions-heading" className={styles.panelTitle}>
+              My Actions Taken
+            </h2>
+            {/* FR-17: the count is the current user's still-open follow-ups.
+                It is not rendered as a premature "0" while loading. */}
+            <span className={styles.panelCount} data-testid="my-followups-count">
+              My follow-ups needed: {myActions ? myActions.followUpCount : "–"}
+            </span>
+          </div>
+
+          {myActionsState === "loading" && (
+            <div aria-busy="true" aria-label="Loading your Actions Taken">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className={styles.rowSkeleton} data-testid="my-actions-skeleton" />
+              ))}
+            </div>
+          )}
+
+          {myActionsState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="my-actions-error">
+              <p>Couldn&apos;t load your Actions Taken.</p>
+              <Button variant="secondary" onClick={() => void fetchMyActions()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {myActionsState === "ready" && myActions && myActions.items.length === 0 && (
+            <div className={styles.emptyState} data-testid="my-actions-empty">
+              <p>No Actions Taken recorded yet.</p>
+            </div>
+          )}
+
+          {myActionsState === "ready" && myActions && myActions.items.length > 0 && (
+            <ul className={styles.recentList} data-testid="my-actions-list">
+              {myActions.items.map((action) => (
+                <li key={action.id}>
+                  <button
+                    type="button"
+                    className={styles.actionRow}
+                    data-testid="my-actions-row"
+                    onClick={() => navigate(`/staff/tickets/${action.ticketId}`)}
+                    aria-label={`${action.ticketNumber}: ${action.description}, open ticket detail`}
+                  >
+                    <span className={styles.rowCode}>{action.ticketNumber}</span>
+                    {/* §2.1: one line, ellipsis; `title` keeps the full text. */}
+                    <span className={styles.rowTitle} title={action.description}>
+                      {action.description}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      {action.followUpRequired && (
+                        <span className={styles.followUpBadge}>Follow-up</span>
+                      )}
+                      <span className={styles.rowUpdated}>
+                        {formatRelative(action.actionDateTime)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="urgent-heading"
+          data-testid="urgent-tickets-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="urgent-heading" className={styles.panelTitle}>
+              Urgent Tickets
+            </h2>
+            <button
+              type="button"
+              className={styles.viewAll}
+              data-testid="urgent-view-all-link"
+              onClick={() => navigate("/staff/queue?priority=URGENT")}
+            >
+              View all urgent
+            </button>
+          </div>
+
+          {urgentState === "loading" && (
+            <div aria-busy="true" aria-label="Loading urgent tickets">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div
+                  key={index}
+                  className={styles.rowSkeleton}
+                  data-testid="urgent-tickets-skeleton"
+                />
+              ))}
+            </div>
+          )}
+
+          {urgentState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="urgent-tickets-error">
+              <p>Couldn&apos;t load urgent tickets.</p>
+              <Button variant="secondary" onClick={() => void fetchUrgent()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {urgentState === "ready" && urgent && urgent.length === 0 && (
+            <div className={styles.emptyState} data-testid="urgent-tickets-empty">
+              <p>No urgent Tickets right now.</p>
+            </div>
+          )}
+
+          {urgentState === "ready" && urgent && urgent.length > 0 && (
+            <ul className={styles.recentList} data-testid="urgent-tickets-list">
+              {urgent.map((ticket) => (
+                <li key={ticket.id}>
+                  <button
+                    type="button"
+                    className={styles.urgentRow}
+                    data-testid="urgent-ticket-row"
+                    onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
+                    aria-label={`${ticket.ticketNumber}: ${ticket.title}, open ticket detail`}
+                  >
+                    <span className={styles.rowCode}>{ticket.ticketNumber}</span>
+                    <span className={styles.rowTitle} title={ticket.title}>
+                      {ticket.title}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      <Badge variant="status" value={ticket.status} />
+                      <Badge variant="priority" value={ticket.itPriority} />
+                      <span className={styles.rowUpdated}>
+                        {ticket.ownerName ?? "Unassigned"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

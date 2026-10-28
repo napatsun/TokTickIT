@@ -326,6 +326,70 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* ─── Second content row: My Actions Taken : Urgent Tickets ──────
+   specification.md FR-17/FR-18 (added 2026-10-28). Two equal panels,
+   minmax(0, 1fr) so a long Ticket title can never widen the column and
+   force horizontal scrolling at 390px (AC-19). */
+
+.contentRow2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* "My follow-ups needed: N" — a count in the panel header, not a control. */
+.panelCount {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Both new lists reuse .recentList / .rowCode / .rowTitle / .rowMeta; only the
+   row itself is authored here. Wrapping flex + min-width: 0 keeps long
+   descriptions and multi-badge metadata inside the column. */
+.actionRow,
+.urgentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3) var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.actionRow:hover,
+.urgentRow:hover {
+  background-color: var(--color-pale-green);
+}
+
+.actionRow:focus-visible,
+.urgentRow:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: -2px;
+  border-radius: 2px;
+}
+
+/* Follow-up badge — text + amber tint, never colour alone (ui-spec §8). */
+.followUpBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-warning);
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
 /* ─── Responsive (§7) ─────────────────────────────────────────── */
 
 /* Tablet 768–1023px: cards wrap 3+2 (staff) / 2×2 (requester); the content
@@ -340,6 +404,11 @@
   }
 
   .contentRow {
+    grid-template-columns: 1fr;
+  }
+
+  /* FR-17/FR-18 panels stack: My Actions Taken above Urgent Tickets. */
+  .contentRow2 {
     grid-template-columns: 1fr;
   }
 }
@@ -370,5 +439,11 @@
 
   .rowMeta {
     margin-left: 0;
+  }
+
+  /* §2.5: the header count wraps under the panel title instead of truncating. */
+  .panelHeader {
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
   }
 }
