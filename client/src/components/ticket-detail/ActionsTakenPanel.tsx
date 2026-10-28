@@ -86,6 +86,14 @@ export interface ActionsTakenPanelProps {
   ticketId: number;
   /** The authenticated session user — drives every role gate in this panel. */
   currentUser: AuthUser;
+  /**
+   * Optional callback fired after any successful mutation that can change the
+   * Ticket's derived `hasActionsWithResult` flag (create, edit, void). The
+   * parent refreshes its ticket state so the workflow control's Resolved
+   * button re-enables (or disables, after a void) without a page reload
+   * (BR-09 gating; the server-side check is always authoritative).
+   */
+  onActionsChanged?: () => void;
 }
 
 interface DraftState {
@@ -208,7 +216,11 @@ function hasEdits(base: DraftState, current: DraftState): boolean {
 
 // ─── Component ──────────────────────────────────────────────────────────
 
-export default function ActionsTakenPanel({ ticketId, currentUser }: ActionsTakenPanelProps) {
+export default function ActionsTakenPanel({
+  ticketId,
+  currentUser,
+  onActionsChanged,
+}: ActionsTakenPanelProps) {
   const isRequester = currentUser.role === "REQUESTER";
   const isAdministrator = currentUser.role === "ADMINISTRATOR";
   // FR-01/FR-06: only IT Staff/Administrator author or edit; Requesters view.
@@ -461,6 +473,11 @@ export default function ActionsTakenPanel({ ticketId, currentUser }: ActionsTake
         // Re-fetch keeps §1.2's server order authoritative (a backdated
         // actionDateTime may not belong at the bottom).
         await fetchEntries();
+        // A result-bearing create/edit can flip the Ticket's
+        // hasActionsWithResult flag server-side; let the parent refresh it so
+        // the workflow control's Resolved button reflects the new state
+        // immediately (BR-09 UI gating).
+        onActionsChanged?.();
 
         if (formMode === "create") {
           // §4.3: the new row appears with a brief highlight animation.
@@ -478,7 +495,7 @@ export default function ActionsTakenPanel({ ticketId, currentUser }: ActionsTake
         setSubmitting(false);
       }
     },
-    [draft, entries, editingId, entryPath, fetchEntries, formMode, submitting, ticketId, currentUser.id],
+    [draft, entries, editingId, entryPath, fetchEntries, formMode, onActionsChanged, submitting, ticketId, currentUser.id],
   );
 
   const dismissFormError = useCallback(() => setFormError(null), []);
@@ -526,6 +543,9 @@ export default function ActionsTakenPanel({ ticketId, currentUser }: ActionsTake
       // BR-11: voided rows vanish from the default view; under "Show voided"
       // they reappear with their reason and timestamp.
       await fetchEntries();
+      // Voiding a result-bearing entry can clear hasActionsWithResult; let the
+      // parent refresh it (BR-09 UI gating).
+      onActionsChanged?.();
       setVoidingId(null);
       setVoidReason("");
     } catch {
@@ -533,7 +553,7 @@ export default function ActionsTakenPanel({ ticketId, currentUser }: ActionsTake
     } finally {
       setVoiding(false);
     }
-  }, [entryPath, fetchEntries, voidReason, voidingId]);
+  }, [entryPath, fetchEntries, onActionsChanged, voidReason, voidingId]);
 
   // ─── Derived ────────────────────────────────────────────────────────────
 

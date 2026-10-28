@@ -64,6 +64,8 @@ export default function MyTicketsPage() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [requestedPriority, setRequestedPriority] = useState("");
+  /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
+  const [searchResetSignal, setSearchResetSignal] = useState(0);
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDir, setSortDir] = useState("desc");
@@ -164,6 +166,7 @@ export default function MyTicketsPage() {
     setCurrentStatus("");
     setSortBy("createdAt");
     setSortDir("desc");
+    setSearchResetSignal((n) => n + 1);
     setPage(1);
   }, []);
 
@@ -207,6 +210,7 @@ export default function MyTicketsPage() {
           <SearchInput
             value={search}
             onSearch={handleSearch}
+            resetSignal={searchResetSignal}
             id="ticket-search"
           />
           <FilterControls

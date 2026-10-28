@@ -188,6 +188,31 @@ export default function StaffTicketDetailPage() {
     void fetchDetail();
   }, [fetchDetail]);
 
+  /**
+   * Quiet refresh of the ticket state after an Actions Taken mutation: same
+   * endpoint as `fetchDetail` but without the skeleton reset, so the page
+   * doesn't flash while the user is working. Keeps the workflow control's
+   * BR-09 flag (`hasActionsWithResult`) in sync with the panel's writes —
+   * the Resolved button re-enables (or disables after a void) without a
+   * page reload.
+   */
+  const refreshTicketState = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await apiClient(`/api/staff/tickets/${id}`);
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        ticket: StaffTicket;
+        attachments: { active: AttachmentItem[]; removed: RemovedAttachmentItem[] };
+      };
+      setTicket(data.ticket);
+      setAttachments(data.attachments ?? { active: [], removed: [] });
+    } catch {
+      // Best-effort refresh: the server re-validates BR-09 on the actual
+      // transition request, so a failed refresh must not surface an error.
+    }
+  }, [id]);
+
   // Owner picker for Reassign (BR-12: active IT Staff/Administrator only).
   useEffect(() => {
     let cancelled = false;
@@ -566,7 +591,13 @@ export default function StaffTicketDetailPage() {
 
       {/* Lab 4 §4: Actions Taken — below Public Comments / Internal Notes.
           Read-only for a Requester session; the panel gates its own controls. */}
-      {user && <ActionsTakenPanel ticketId={ticket.id} currentUser={user} />}
+      {user && (
+        <ActionsTakenPanel
+          ticketId={ticket.id}
+          currentUser={user}
+          onActionsChanged={() => void refreshTicketState()}
+        />
+      )}
 
       {/* 7. Attachments (read-only continuity) */}
       <section className={styles.section} data-testid="staff-attachments">
