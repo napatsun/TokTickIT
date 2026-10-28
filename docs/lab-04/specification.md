@@ -100,34 +100,43 @@ column is UI-only text and must never be used in code, JSON, or query strings.
 
 | Canonical enum value (code/API/DB) | Display Label (UI text only) |
 |---|---|
-| `New` | New |
-| `Open` | Open |
-| `InProgress` | In Progress |
-| `WaitingForRequester` | Waiting for Requester |
-| `Resolved` | Resolved |
-| `Closed` | Closed |
-| `Reopened` | Reopened |
-| `Cancelled` | Cancelled |
+| `NEW` | New |
+| `OPEN` | Open |
+| `IN_PROGRESS` | In Progress |
+| `WAITING_FOR_REQUESTER` | Waiting for Requester |
+| `RESOLVED` | Resolved |
+| `CLOSED` | Closed |
+| `REOPENED` | Reopened |
+| `CANCELLED` | Cancelled |
+
+**Implementation Note (`feature/lab4-07-final-hardening-regression`).** The shipped system stores,
+serialises, and queries the UPPER_SNAKE_CASE values in the table above — the `TicketStatus` Prisma
+enum in `server/prisma/schema.prisma` (`NEW | OPEN | IN_PROGRESS | WAITING_FOR_REQUESTER |
+RESOLVED | CLOSED | REOPENED | CANCELLED`) and `TICKET_STATUSES` in
+`server/src/lib/statusTransitions.ts`. Earlier revisions of this section wrote the values in
+camelCase, which disagreed with every line of shipped code; this section now matches the system it
+documents. Where surrounding prose or the dashboard/matrix notes use the human-readable names
+("In Progress", "Resolved", etc.), those are the **Display Label** column only.
 
 `ui-spec.md` and `api-spec.md` must reference statuses using the canonical enum column above; the
 Display Label is applied only at render time by the badge component.
 
-| From \ To | `Open` | `InProgress` | `WaitingForRequester` | `Resolved` | `Closed` | `Reopened` | `Cancelled` |
+| From \ To | `OPEN` | `IN_PROGRESS` | `WAITING_FOR_REQUESTER` | `RESOLVED` | `CLOSED` | `REOPENED` | `CANCELLED` |
 |---|---|---|---|---|---|---|---|
-| **`New`** | IT Staff/Admin | IT Staff/Admin | — | — | — | — | IT Staff/Admin, Requester (own Ticket) |
-| **`Open`** | — | IT Staff/Admin | IT Staff/Admin | — | — | — | IT Staff/Admin, Requester (own Ticket) |
-| **`InProgress`** | — | — | IT Staff/Admin | IT Staff/Admin (BR-09) | — | — | IT Staff/Admin |
-| **`WaitingForRequester`** | — | IT Staff/Admin | — | IT Staff/Admin (BR-09) | — | — | IT Staff/Admin |
-| **`Resolved`** | — | — | — | — | IT Staff/Admin (manual action) | IT Staff/Admin, Requester (own, BR-10) | — |
-| **`Closed`** | — | — | — | — | — | IT Staff/Admin, Requester (own, within BR-10 window) | — |
-| **`Reopened`** | — | IT Staff/Admin | IT Staff/Admin | — | — | — | IT Staff/Admin |
-| **`Cancelled`** | — | — | — | — | — | — | *(no outbound transitions)* |
+| **`NEW`** | IT Staff/Admin | IT Staff/Admin | — | — | — | — | IT Staff/Admin, Requester (own Ticket) |
+| **`OPEN`** | — | IT Staff/Admin | IT Staff/Admin | — | — | — | IT Staff/Admin, Requester (own Ticket) |
+| **`IN_PROGRESS`** | — | — | IT Staff/Admin | IT Staff/Admin (BR-09) | — | — | IT Staff/Admin |
+| **`WAITING_FOR_REQUESTER`** | — | IT Staff/Admin | — | IT Staff/Admin (BR-09) | — | — | IT Staff/Admin |
+| **`RESOLVED`** | — | — | — | — | IT Staff/Admin (manual action) | IT Staff/Admin, Requester (own, BR-10) | — |
+| **`CLOSED`** | — | — | — | — | — | IT Staff/Admin, Requester (own, within BR-10 window) | — |
+| **`REOPENED`** | — | IT Staff/Admin | IT Staff/Admin | — | — | — | IT Staff/Admin |
+| **`CANCELLED`** | — | — | — | — | — | — | *(no outbound transitions)* |
 
 Notes:
 - `—` means the transition is not permitted and must be rejected by the API with `409 Conflict` and an explicit error code `INVALID_STATUS_TRANSITION`.
-- `Cancelled` is the only fully terminal status (no outbound transition of any kind). `Closed` is *not* fully terminal: it permits exactly one outbound path, `Closed → Reopened`, under BR-10.
-- Lab 4 has **no automatic/idle-triggered transitions of any kind** (per §4.2 exclusions — no SLA clocks or background jobs). `Resolved → Closed` is always a manual IT Staff/Administrator action taken through the UI; there is no `CLOSE_GRACE_DAYS` constant and no auto-close path in this or any future column of this matrix within Lab 4's scope.
-- `Reopened` Tickets are treated as active open work: for dashboard purposes a `Reopened` Ticket is included in the **IT Staff Dashboard's "In Progress" count** and in the **Requester Dashboard's "My Open Tickets" count** (see `api-spec.md` §3.1/§3.2 calculation rules and BR-14's open-work set).
+- `CANCELLED` is the only fully terminal status (no outbound transition of any kind). `CLOSED` is *not* fully terminal: it permits exactly one outbound path, `CLOSED → REOPENED`, under BR-10.
+- Lab 4 has **no automatic/idle-triggered transitions of any kind** (per §4.2 exclusions — no SLA clocks or background jobs). `RESOLVED → CLOSED` is always a manual IT Staff/Administrator action taken through the UI; there is no `CLOSE_GRACE_DAYS` constant and no auto-close path in this or any future column of this matrix within Lab 4's scope.
+- `REOPENED` Tickets are treated as active open work: for dashboard purposes a `REOPENED` Ticket is included in the **IT Staff Dashboard's "In Progress" count** and in the **Requester Dashboard's "My Open Tickets" count** (see `api-spec.md` §3.1/§3.2 calculation rules and BR-14's open-work set).
 
 ## 6. UI Specification Summary
 
@@ -271,20 +280,20 @@ All endpoints require authentication; authorization is re-checked per handout §
 
 ## 10. Definition of Done (Product Completion Checklist)
 
-- [ ] All FR-01…FR-16 implemented and demonstrable.
-- [ ] All BR-01…BR-15 enforced server-side (verified with direct API calls bypassing the UI).
-- [ ] Full status transition matrix (§5.1) implemented and covered by automated tests.
-- [ ] Migration applies cleanly to a copy of the Lab 3 production-like database with zero data loss; rollback tested.
-- [ ] Seed data satisfies §7.6 and is idempotent (`npm run seed` runnable twice with no errors/duplication).
-- [ ] All endpoints in §8/`api-spec.md` implemented, documented, and authorization-tested for all three roles.
-- [ ] IT Staff Dashboard and Requester Dashboard implemented per `ui-spec.md`, including loading/empty/forbidden/safe-failure states.
-- [ ] Actions Taken panel implemented on Ticket Detail (list + create + edit-within-window) with role-correct visibility.
-- [ ] All Acceptance Criteria AC-01…AC-14 pass via automated tests listed in `tests.md`, plus manual E2E verification.
-- [ ] Full Lab 1–3 regression suite passes (AC-12).
-- [ ] Responsive (desktop/tablet/mobile) and accessibility checklist in `ui-spec.md` completed with screenshot evidence.
-- [ ] No console errors, broken links, placeholder text, or unfinished controls remain.
-- [ ] README updated with current setup, seed, migrate, test, and demo instructions.
-- [ ] `reviewer.md` and `ai-use.md` completed with PR links, review comments/approvals, and LLM usage reflection.
+- [x] All FR-01…FR-16 implemented and demonstrable.
+- [x] All BR-01…BR-15 enforced server-side (verified with direct API calls bypassing the UI).
+- [x] Full status transition matrix (§5.1) implemented and covered by automated tests.
+- [x] Migration applies cleanly to a copy of the Lab 3 production-like database with zero data loss; rollback tested.
+- [x] Seed data satisfies §7.6 and is idempotent (`npm run seed` runnable twice with no errors/duplication).
+- [x] All endpoints in §8/`api-spec.md` implemented, documented, and authorization-tested for all three roles.
+- [x] IT Staff Dashboard and Requester Dashboard implemented per `ui-spec.md`, including loading/empty/forbidden/safe-failure states.
+- [x] Actions Taken panel implemented on Ticket Detail (list + create + edit-within-window) with role-correct visibility.
+- [x] All Acceptance Criteria AC-01…AC-14 pass via automated tests listed in `tests.md`, plus manual E2E verification.
+- [x] Full Lab 1–3 regression suite passes (AC-12).
+- [x] Responsive (desktop/tablet/mobile) and accessibility checklist in `ui-spec.md` completed with screenshot evidence.
+- [x] No console errors, broken links, placeholder text, or unfinished controls remain.
+- [x] README updated with current setup, seed, migrate, test, and demo instructions.
+- [x] `reviewer.md` and `ai-use.md` completed with PR links, review comments/approvals, and LLM usage reflection.
 
 ## 11. Assumptions and Decisions
 

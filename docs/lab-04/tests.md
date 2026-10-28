@@ -79,11 +79,11 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
 | API-15 | API | BR-09, AC-04 | Resolve attempt with zero Actions Taken | `409 ACTIONS_REQUIRED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
-| API-16 | API | BR-09, AC-03 | Resolve attempt with ≥1 Actions Taken (result set) | `200`, status=`Resolved`, `resolvedAt` set | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-16 | API | BR-09, AC-03 | Resolve attempt with ≥1 Actions Taken (result set) | `200`, status=`RESOLVED`, `resolvedAt` set | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | WORKFLOW-01 | WORKFLOW | BR-07, BR-15 | Exhaustive matrix sweep of `specification.md` §5.1: for every (fromStatus × targetStatus) cell, attempt the transition once per role. Two distinct rejection reasons are asserted separately — this test must **not** collapse them into a single expected code: (a) if the cell is `—` (no role can make that transition from that status), every role's attempt → `409 INVALID_STATUS_TRANSITION`; (b) if the cell lists specific permitted roles, any role **not** in that list attempting the same transition → `403 FORBIDDEN_ROLE` (this is the general case that AUTH-01 below spot-checks for one specific combination) | Case (a): `409 INVALID_STATUS_TRANSITION` for every role. Case (b): `200` for a listed role, `403 FORBIDDEN_ROLE` for every other role. No cell/role combination is ever expected to return `409` for a pure role mismatch, or `403` for a genuinely unreachable target status | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-17 | API | BR-12, AC-08 | Two clients submit status change; second uses stale `version` | First `200`; second `409 STALE_VERSION` with `currentState` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-18 | API | BR-10, AC-09 | Requester reopens own Ticket 10 days after `resolvedAt` | `403 REOPEN_WINDOW_EXPIRED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
-| API-19 | API | BR-10 | Requester reopens own Ticket 2 days after `resolvedAt` | `200`, status=`Reopened` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-19 | API | BR-10 | Requester reopens own Ticket 2 days after `resolvedAt` | `200`, status=`REOPENED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-20 | API | BR-10 | IT Staff reopens Ticket at any time | `200`, regardless of window | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-21 | API | FR-08, BR-08, AC-05 | Requester submits "looks resolved" confirmation | `200`; `requesterConfirmedResolved=true`; Ticket `status` unchanged | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-21b | API | FR-08, §7.2 spec | Requester confirmation is followed immediately by an IT Staff status transition using the pre-confirmation `version` | `200` — status transition succeeds; confirms the two writes never conflict on `version` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
@@ -111,7 +111,7 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | AUTH-03 | AUTH | AC-02 | Requester calls `/api/dashboard/staff` | `403 FORBIDDEN_ROLE` | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | UI-07 | UI | AC-10 | Staff Dashboard renders zero-value card correctly (not error) | Card shows `0` with label, no error banner | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | UI-08 | UI | §2.4 ui-spec | Dashboard partial-failure: one card group fails, rest render | Only failed section shows retry; others show data | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
-| UI-09 | UI | §3.4 ui-spec | Requester Dashboard empty "recent tickets" state | Renders empty-state component with CTA | `client/.../lab-04 tests/RequesterDashboard.test.tsx` | Pass |
+| UI-09 | UI | §3.4 ui-spec | Requester Dashboard empty "recent tickets" state | Renders empty-state component with CTA | `client/.../lab-04 tests/StaffDashboard.test.tsx` — the Requester Dashboard suites live inside the shared dashboard test file (`describe("UI-09 …")`); there is no separate `RequesterDashboard.test.tsx` | Pass |
 | RESP-01 | RESP | §2.5, §3.5 ui-spec | Dashboard card grid reflow at 1024/768/375px widths | Cards wrap/stack per spec; no horizontal scroll | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | E2E-03 | E2E | AC-02, FR-12 | Drill-down from every dashboard card/row to correct filtered destination | URL/query params match §2.3/§3.3 ui-spec mapping | `e2e/lab-04/dashboards.spec.ts` | Pass |
 
@@ -126,16 +126,16 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | REGRESSION-02 | API | AC-12 | Public Comments, Internal Notes, Attachments endpoints re-run | All pass unchanged | `server/tests/lab-02/*`, `server/tests/lab-03/*` | Pass |
 | REGRESSION-03 | API | AC-12 | Administrator user-management endpoints re-run | All pass unchanged | `server/tests/lab-02/admin-users.api.test.ts` | Pass |
 | REGRESSION-04 | UI | AC-12 | My Tickets / Ticket Detail component suites re-run | All pass unchanged | `client/.../lab-02 tests/*`, `client/.../lab-03 tests/*` | Pass |
-| E2E-04 | E2E | AC-12 | Representative end-to-end regression: login → create Ticket → comment → attach file → note → view as each role | Full flow completes without error across all three roles | `e2e/lab-04/regression-smoke.spec.ts` | Pass |
+| E2E-04 | E2E | AC-12 | Representative end-to-end regression across all three roles on the merged Lab 4 codebase — `e2e/lab-03/` (25 tests: authentication + forced password change, Requester create/comment/My-Tickets flow, IT Staff queue/claim/priority/status/comment/note flow, Administrator user management incl. both guard rules, responsive + screenshot pass) plus the scripted three-role walkthrough (`e2e/walkthrough/regression-walkthrough.spec.ts` via `playwright.walkthrough.config.ts`), which additionally drives the Lab 4 dashboards, Actions Taken, and the §5.1 status control in the same flows. Attachment **upload** is exercised at the API level (`server/tests/lab-02/attachments-*.api.test.ts`) and UI level (lab-02 component suites) rather than by an e2e step | Full flow completes without error across all three roles | `e2e/lab-03/*.spec.ts`, `e2e/walkthrough/regression-walkthrough.spec.ts` (no separate `regression-smoke.spec.ts` exists — the citation originally named a file that was never created) | Pass |
 
 ## 5. Cross-Cutting: Auth, Concurrency, Safe Failure, Performance
 
 | Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
 |---|---|---|---|---|---|---|
-| AUTH-04 | AUTH | handout §4.3, BR-15 | Full role × endpoint matrix for all new endpoints (Requester/IT Staff/Admin × 7 new endpoints) | Every disallowed combination returns `401`/`403`, never `200` | `server/tests/lab-04/authorization-matrix.api.test.ts` | Pass |
-| API-27 | API | BR-15 | Direct API call bypassing UI for every write endpoint | Server-side checks still enforced identically to UI-mediated calls | `server/tests/lab-04/authorization-matrix.api.test.ts` | Pass |
+| AUTH-04 | AUTH | handout §4.3, BR-15 | Role × endpoint coverage for all new endpoints (Requester/IT Staff/Administrator), implemented **distributed across suites** rather than as one matrix file — there is no `server/tests/lab-04/authorization-matrix.api.test.ts`: the §2.1 transition matrix is swept exhaustively per (fromStatus × role × targetStatus) by WORKFLOW-01; Actions Taken role denials (Requester create/read-voided/edit, non-author edit, void-un-void) by API-07/API-31/API-38/API-40/API-41; dashboard role denials by AUTH-03 and the requester suite's IT-Staff 403; §2.2's `NOT_TICKET_OWNER` denials in the workflow suite | Every disallowed combination returns `401`/`403`, never `200` | `server/tests/lab-04/ticket-workflow.api.test.ts` (WORKFLOW-01, AUTH-01, §2.2 denials), `server/tests/lab-04/actions-taken.api.test.ts` (API-07/31/38/40/41), `server/tests/lab-04/staff-dashboard.api.test.ts` (AUTH-03), `server/tests/lab-04/requester-dashboard.api.test.ts` (403 FORBIDDEN_ROLE for IT Staff) | Pass |
+| API-27 | API | BR-15 | Direct API call bypassing UI for every write endpoint — by construction every Lab 4 API suite is a direct Supertest call with no UI in the loop, so BR-15's "the server decides" guarantee is what each role-denial assertion exercises (e.g. API-07/API-38: Requester `POST`/`PATCH` straight against the API; AUTH-01: Requester `PATCH /status` to `RESOLVED`) | Server-side checks still enforced identically to UI-mediated calls | `server/tests/lab-04/actions-taken.api.test.ts`, `server/tests/lab-04/ticket-workflow.api.test.ts` (no separate authorization-matrix file — see AUTH-04) | Pass |
 | PERF-01 | PERF | §6.2 handout | Dashboard endpoints respond under load-free baseline | `GET /api/dashboard/staff` and `/requester` respond in <300ms against seeded dataset (smoke, not load test) | `server/tests/lab-04/perf-smoke.test.ts` | Pass |
-| E2E-05 | E2E | FR-15, AC-11, AC-14 | Rapid double-click on Actions Taken submit and on status-transition button in the real browser | Only one record/transition results in each case | `e2e/lab-04/actions-taken-flow.spec.ts` | Pass |
+| E2E-05 | E2E | FR-15, AC-11, AC-14 | Rapid double-click on Actions Taken submit and on the status-transition button in the real browser | Only one record/transition results in each case | — **not implemented**: no e2e spec exercises double-submit; `e2e/lab-04/actions-taken-flow.spec.ts` covers E2E-01 (create flow + read-only Requester view) only. FR-15/AC-11/AC-14 are instead verified at the unit/UI/API layers: UI-02 (submit disabled while in flight), API-14/API-14b (create idempotency incl. window expiry), API-32 (status-transition idempotency). A future branch should add the real-browser double-click pass | Not run |
 
 ---
 
@@ -153,16 +153,54 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | AC-08 | API-17 |
 | AC-09 | API-18, API-19, API-20 |
 | AC-10 | UI-07 |
-| AC-11 | API-14, API-14b, UI-02, E2E-05 |
+| AC-11 | API-14, API-14b, UI-02 (E2E-05 not implemented — see §5) |
 | AC-12 | REGRESSION-01…04, E2E-04, MIGRATION-01…03 |
-| AC-13 | (Accessibility checklist, `ui-spec.md` §8 — manual verification with screenshot/axe-core scan, logged in `reviewer.md`) |
-| AC-14 | API-32, E2E-05 |
+| AC-13 | (Accessibility checklist, `ui-spec.md` §8 — axe scans in the component suites plus the scripted keyboard/responsive walkthrough in `e2e/walkthrough/regression-walkthrough.spec.ts`, with contrast ratios and screenshot evidence recorded inline in §8) |
+| AC-14 | API-32 (E2E-05 not implemented — see §5) |
 
 ---
 
 ## 7. Execution Notes
 
-- All `API`/`UNIT`/`MIGRATION` tests run against an isolated test database (`.env.test`), reset/reseeded per suite run.
+- All `API`/`UNIT`/`MIGRATION` tests run against the shared development PostgreSQL database named by `DATABASE_URL` in `server/.env`. Every suite re-runs the idempotent `seed()` in `beforeAll` and all suites share one lazy `PrismaClient` singleton under Vitest's single-fork pool (`server/vitest.config.ts`). There is deliberately **no per-suite database isolation today** — see §8 (KL-01) for the flakiness this harness design can produce under back-to-back file execution and its remediation plan.
 - `UI` tests use React Testing Library with mocked API responses (no live network).
-- `E2E` tests run against a locally built + seeded staging instance via Playwright, executed in CI on every PR into `lab4-staging` and again before merge to `main`.
+- `E2E` tests run against the local dev stack via Playwright: `playwright.global-setup.ts` resets the database (`prisma migrate reset --force --skip-seed`) and re-seeds it before every run, then starts the API (3000) + Vite (5173) dev servers, executed in CI on every PR into `lab4-staging` and again before merge to `main`.
 - Final "Pass/Fail" column and CI run links are updated in this file as the last step before submission, alongside the console/log output referenced in Part 3 of the submission PDF.
+
+---
+
+## 8. Known Limitations (documented, not fixed)
+
+### KL-01 — Intermittent server-suite flakiness under the shared-database harness
+
+**Status:** Documented and accepted for this submission (`feature/lab4-07-final-hardening-regression`).
+This is a pre-existing harness design issue, not a defect in application code: it is reproducible on a
+clean `lab4-staging` tip and appears in no single suite when that suite is run on its own.
+
+**Design in place:** all server suites share one PostgreSQL database (`DATABASE_URL` in `server/.env`),
+every suite re-runs the idempotent `seed()` in `beforeAll`, all suites share one lazy `PrismaClient`
+singleton and call `prisma.$disconnect()` in `afterAll`, and Vitest runs everything in a single fork
+(`server/vitest.config.ts` → `poolOptions.forks.singleFork`). (This corrects §7's earlier claim of an
+isolated `.env.test` database reset per suite — no such isolation exists today.)
+
+**Observed evidence (`feature/lab4-07`, ~15 consecutive full-suite runs, 7 failures ≈ 25–40%):**
+- `lab-03/users-admin.api.test.ts` — a `PATCH` with `role: 7` returned `404` instead of `422`; a
+  concurrent-demotion test returned `[200, 403]` instead of `[200, 409]`.
+- `lab-03/authorization.api.test.ts` — `beforeAll` fixture got `404 {"error":"not found"}`, a
+  route-not-found-shaped body that does not exist anywhere in `server/src`.
+- `lab-02/create-ticket.api.test.ts` — the "returns 401 without a session" test and a validation test
+  failed together.
+
+**Ruled out:** forcing sequential file execution (`fileParallelism: false`) did not change the rate
+(still 2/8 failed), so this is not file-level parallelism; `seed()` is purely additive `upsert` (no
+deletes), so leftover seeded rows do not explain it.
+
+**Characterisation:** the failures only appear when files run back-to-back against the shared database
+and shared in-process app/module state; symptoms differ run to run (false `404`s, a `401` fixture
+failing, >5 s test timeouts under bcrypt-heavy fixtures). No single deterministic cause was isolated
+within the time budget.
+
+**Recommended remediation (for a future branch):** give each test file database isolation — e.g. a
+fresh Postgres schema per file, or wrap each file in a transaction that is rolled back — and/or remove
+the shared-client `$disconnect()` coupling; additionally raise `testTimeout` above the default 5 s.
+Until then, treat a single red server run as **retry-first**: re-run once before investigating.

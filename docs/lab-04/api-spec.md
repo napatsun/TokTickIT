@@ -23,6 +23,20 @@ Standard status codes used throughout: `200 OK`, `201 Created`, `400 Bad Request
 `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict`, `422 Unprocessable Entity`,
 `500 Internal Server Error` (never leaks stack traces to the client — safe failure).
 
+**Implementation Note (`feature/lab4-07-final-hardening-regression`) — status value casing.**
+The canonical wire values for every Ticket status are the UPPER_SNAKE_CASE enum values defined in
+`specification.md` §5.1 (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`,
+`CLOSED`, `REOPENED`, `CANCELLED`) — the `TicketStatus` Prisma enum in
+`server/prisma/schema.prisma`. The API stores, filters on, and returns exactly those strings:
+`ticket.status` (§2.1) and `recentTickets[].status` (§3.1/§3.2) carry the raw enum. Inbound values
+are normalized, not echoed: the staff queue's `status` filter, the requester list's `currentStatus`
+filter, and §2.1's `targetStatus` are each trimmed and upper-cased server-side
+(`server/src/routes/staff-tickets.ts`, `server/src/app.ts`, `server/src/lib/ticketWorkflow.ts`), so
+a client that sends `InProgress` still matches `IN_PROGRESS` — but the canonical spelling used
+throughout this document, and of every status the API emits, is UPPER_SNAKE_CASE. Do not confuse
+these status *values* with camelCase response *field names* such as `counts.inProgress` or
+`deltas.waitingForRequester` — those are JSON keys, not statuses.
+
 ---
 
 ## 1. Actions Taken
@@ -201,7 +215,7 @@ Transition a Ticket's status. Replaces the Lab 3 status-update endpoint (same pa
 **Request body**
 ```json
 {
-  "targetStatus": "Resolved",
+  "targetStatus": "RESOLVED",
   "version": 4,
   "note": "optional short note stored on the status-change audit log"
 }
@@ -219,8 +233,8 @@ re-applying the transition or incrementing `version` a second time.
 **Validation / business rules enforced server-side**
 - `targetStatus` must be a permitted transition from the Ticket's *current* stored status for the caller's role (BR-07) → else `409 Conflict` (`INVALID_STATUS_TRANSITION`).
 - `version` must match the Ticket's current `version` (BR-12, FR-16) → else `409 Conflict` (`STALE_VERSION`) and the response includes the current authoritative Ticket state so the client can refresh.
-- Transition to `Resolved` requires ≥1 non-voided Actions Taken with non-empty `result` (BR-09) → else `409 Conflict` (`ACTIONS_REQUIRED`).
-- Transition to `Reopened` from `Resolved`/`Closed` by the owning Requester is only permitted within `REOPEN_WINDOW_DAYS` (7) of `resolvedAt` (BR-10) → else `403 Forbidden` (`REOPEN_WINDOW_EXPIRED`).
+- Transition to `RESOLVED` requires ≥1 non-voided Actions Taken with non-empty `result` (BR-09) → else `409 Conflict` (`ACTIONS_REQUIRED`).
+- Transition to `REOPENED` from `RESOLVED`/`CLOSED` by the owning Requester is only permitted within `REOPEN_WINDOW_DAYS` (7) of `resolvedAt` (BR-10) → else `403 Forbidden` (`REOPEN_WINDOW_EXPIRED`).
 
 **Responses**
 - `200 OK` → `{ "ticket": { ...updated Ticket incl. new "status", "version", "resolvedAt" } }`
@@ -242,7 +256,7 @@ with, or be blocked by, a concurrent `PATCH /status` call — the two are indepe
 different columns by design, not merely "not visible" to each other's checks.
 
 **Responses**
-- `200 OK` → `{ "ticketId": "...", "requesterConfirmedResolved": true, "requesterConfirmedResolvedAt": "..." }`
+- `200 OK` → `{ "ticketId": 1234, "requesterConfirmedResolved": true, "requesterConfirmedResolvedAt": "2026-09-20T10:15:00.000Z" }` (the implementation returns exactly these three keys; `ticketId` is the numeric internal id)
 - `403 Forbidden` (`NOT_TICKET_OWNER`) if caller does not own the Ticket.
 - `404 Not Found` if Ticket doesn't exist.
 
@@ -276,10 +290,10 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
   },
   "recentTickets": [
     {
-      "id": "tkt_1234",
+      "id": 1234,
       "code": "TKT-2026-01234",
       "title": "Laptop battery drains quickly",
-      "status": "InProgress",
+      "status": "IN_PROGRESS",
       "updatedAt": "2026-09-20T09:14:00.000Z"
     }
   ]
@@ -287,15 +301,15 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
 ```
 
 **Calculation rules:**
-- `counts.new` = count of Tickets where `status = 'New'`.
-- `counts.open` = count of Tickets where `status = 'Open'`.
-- `counts.inProgress` = count of Tickets where `status IN ('InProgress', 'Reopened')` — `Reopened` Tickets are folded into this card (BR-14) rather than given a separate card, since both represent active work in progress.
-- `counts.waitingForRequester` = count of Tickets where `status = 'WaitingForRequester'`.
-- All four counts above are across the whole queue visible to IT Staff (not scoped to one assignee); `Cancelled` and `Closed` Tickets are never included in any of them (BR-14).
-- `counts.myAssigned` = count of Tickets where `ownerId = current user` and `status` is in the open-work set `{New, Open, InProgress, WaitingForRequester, Reopened}` (BR-14) — i.e., `Closed` and `Cancelled` Tickets assigned to the user do not count toward "My Assigned".
+- `counts.new` = count of Tickets where `status = 'NEW'`.
+- `counts.open` = count of Tickets where `status = 'OPEN'`.
+- `counts.inProgress` = count of Tickets where `status IN ('IN_PROGRESS', 'REOPENED')` — `REOPENED` Tickets are folded into this card (BR-14) rather than given a separate card, since both represent active work in progress.
+- `counts.waitingForRequester` = count of Tickets where `status = 'WAITING_FOR_REQUESTER'`.
+- All four counts above are across the whole queue visible to IT Staff (not scoped to one assignee); `CANCELLED` and `CLOSED` Tickets are never included in any of them (BR-14).
+- `counts.myAssigned` = count of Tickets where `ownerId = current user` and `status` is in the open-work set `{NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED}` (BR-14) — i.e., `CLOSED` and `CANCELLED` Tickets assigned to the user do not count toward "My Assigned".
 - `deltas.*` applies only to the first four status keys — `new`, `open`, `inProgress`, `waitingForRequester`. There is no `deltas.myAssigned` key at all (omitted from the response entirely, not present as `0` or `null`), since reassignment is not a status transition and is out of scope for Lab 4's delta indicator; the UI simply renders no delta chip on the "My Assigned" card.
-- For each of those four keys: `deltas.<key> = (# TicketStatusHistory rows where toStatus IN <that status/group> AND changedAt >= now − 24h) − (# TicketStatusHistory rows where fromStatus IN <that status/group> AND changedAt >= now − 24h)`, **plus**, for `new` only, `+ (# Tickets where createdAt >= now − 24h)`. The extra term for `new` exists because Ticket *creation* does not write a `TicketStatusHistory` row (there is no `fromStatus` to record) — without it, newly submitted Tickets would silently vanish from the "New" delta even though they visibly raise `counts.new`. (In practice `toStatus = 'New'` never appears in `TicketStatusHistory` at all, since no transition in §5.1's matrix targets `New`; the formula is written generally so it still holds if that ever changes.) All terms are computed **live** against `Ticket`/`TicketStatusHistory` at request time (`specification.md` §7.1–§7.3) — never a cached/pre-aggregated counter, satisfying BR-13. Because every term is a live event-count query rather than a snapshot comparison, `deltas.<key>` is always a well-defined integer (including `0` when nothing happened in the last 24 hours) — there is no `null` case.
-- `recentTickets` = the 5 most recently `updatedAt` Tickets where `ownerId = current user` **or** `ownerId IS NULL`, excluding `Cancelled`, newest first. (`ownerId` is the Lab 1–3 column name for the Ticket Owner relationship — see `specification.md` §7.2's Implementation Note.)
+- For each of those four keys: `deltas.<key> = (# TicketStatusHistory rows where toStatus IN <that status/group> AND changedAt >= now − 24h) − (# TicketStatusHistory rows where fromStatus IN <that status/group> AND changedAt >= now − 24h)`, **plus**, for `new` only, `+ (# Tickets where createdAt >= now − 24h)`. The extra term for `new` exists because Ticket *creation* does not write a `TicketStatusHistory` row (there is no `fromStatus` to record) — without it, newly submitted Tickets would silently vanish from the "New" delta even though they visibly raise `counts.new`. (In practice `toStatus = 'NEW'` never appears in `TicketStatusHistory` at all, since no transition in §5.1's matrix targets `NEW`; the formula is written generally so it still holds if that ever changes.) All terms are computed **live** against `Ticket`/`TicketStatusHistory` at request time (`specification.md` §7.1–§7.3) — never a cached/pre-aggregated counter, satisfying BR-13. Because every term is a live event-count query rather than a snapshot comparison, `deltas.<key>` is always a well-defined integer (including `0` when nothing happened in the last 24 hours) — there is no `null` case.
+- `recentTickets` = the 5 most recently `updatedAt` Tickets where `ownerId = current user` **or** `ownerId IS NULL`, excluding `CANCELLED`, newest first. (`ownerId` is the Lab 1–3 column name for the Ticket Owner relationship — see `specification.md` §7.2's Implementation Note.)
 - **Empty behavior:** any zero count or zero delta is returned as `0` (not omitted, not `null`); `recentTickets` may be an empty array `[]`.
 
 ### 3.2 `GET /api/dashboard/requester`
@@ -314,10 +328,10 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
   },
   "recentTickets": [
     {
-      "id": "tkt_5678",
+      "id": 5678,
       "code": "TKT-2026-05678",
       "title": "Need new monitor",
-      "status": "InProgress",
+      "status": "IN_PROGRESS",
       "updatedAt": "2026-09-09T11:05:00.000Z"
     }
   ]
@@ -325,10 +339,10 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
 ```
 
 **Calculation rules:**
-- `counts.myOpen` = Tickets owned (`requesterId = current user`) with `status IN ('New', 'Open', 'WaitingForRequester', 'Reopened')` — `Reopened` is included here (BR-14) so a Requester's reopened Ticket is not invisible on their own dashboard. Note this set deliberately **excludes `InProgress`**, which has its own separate card immediately below; `ui-spec.md` §3.3's drill-down for this card must filter on exactly this four-status list, not the broader `open-work` alias (see `ui-spec.md` §1).
-- `counts.inProgress` = Tickets owned by current user with `status = 'InProgress'`.
+- `counts.myOpen` = Tickets owned (`requesterId = current user`) with `status IN ('NEW', 'OPEN', 'WAITING_FOR_REQUESTER', 'REOPENED')` — `REOPENED` is included here (BR-14) so a Requester's reopened Ticket is not invisible on their own dashboard. Note this set deliberately **excludes `IN_PROGRESS`**, which has its own separate card immediately below; `ui-spec.md` §3.3's drill-down for this card must filter on exactly this four-status list, not the broader `open-work` alias (see `ui-spec.md` §1).
+- `counts.inProgress` = Tickets owned by current user with `status = 'IN_PROGRESS'`.
 - `counts.resolved`, `counts.closed` = Tickets owned by current user in exactly that status.
-- `recentTickets` = 5 most recently `updatedAt` Tickets where `requesterId = current user`, any non-`Cancelled` status, newest first.
+- `recentTickets` = 5 most recently `updatedAt` Tickets where `requesterId = current user`, any non-`CANCELLED` status, newest first.
 - Scope is enforced at the database query layer (`WHERE requesterId = :sessionUserId`), never filtered after fetching all Tickets (AC-02, AC-06).
 - **Empty behavior:** identical to §3.1 — zero counts render as `0`; empty `recentTickets` renders `[]` and the UI shows its empty state. The Requester Dashboard does not show delta indicators (only the IT Staff Dashboard does, per `ui-spec.md` §3.1), so there is no `deltas` key in this response.
 
