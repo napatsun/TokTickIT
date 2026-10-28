@@ -1,7 +1,7 @@
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,10 @@ import type { AuthUser } from "../../src/contexts/AuthContext";
  *
  *   UI-07    a zero-value staff card renders "0" with its label, no error (AC-10)
  *   UI-08    partial failure: one group shows retry, the other still renders
+ *   UI-11    "My Actions Taken" panel: rows, follow-up badge, count, states
+ *   UI-12    "Urgent Tickets" panel: rows, badges, owner, view-all, states
  *   RESP-01  the card grid reflow rules exist for 1024/768/375px breakpoints
+ *   RESP-02  the new sections' responsive rules carry no fixed widths
  *   plus     delta chips (icon + text, only when present), drill-down
  *            destinations per ui-spec §2.3/§3.3, the recent list / empty
  *            states, and axe checks.
@@ -71,8 +74,67 @@ function staffPayload(overrides: Record<string, unknown> = {}) {
         updatedAt: "2026-09-20T09:14:00.000Z",
       },
     ],
+    // FR-17: the current user's newest non-voided Actions Taken entries.
+    myActions: {
+      followUpCount: 2,
+      items: [
+        {
+          id: "act-2",
+          ticketId: 7,
+          ticketNumber: "TKT-2026-000007",
+          description: "Replaced the battery and ran a full charge cycle to confirm the fix.",
+          actionDateTime: "2026-09-21T03:20:00.000Z",
+          followUpRequired: true,
+        },
+        {
+          id: "act-1",
+          ticketId: 7,
+          ticketNumber: "TKT-2026-000007",
+          description: "Re-seated the Wi-Fi driver and re-joined the campus network.",
+          actionDateTime: "2026-09-20T02:05:00.000Z",
+          followUpRequired: false,
+        },
+      ],
+    },
+    // FR-18: the whole queue's oldest active URGENT Tickets.
+    urgentTickets: [
+      {
+        id: 9,
+        ticketNumber: "TKT-2026-000009",
+        title: "Projector in Room 4-201 will not power on",
+        status: "OPEN",
+        itPriority: "URGENT",
+        ownerName: null,
+      },
+      {
+        id: 11,
+        ticketNumber: "TKT-2026-000011",
+        title: "Payment gateway integration keeps timing out",
+        status: "IN_PROGRESS",
+        itPriority: "URGENT",
+        ownerName: "Ben Carter",
+      },
+    ],
     ...overrides,
   };
+}
+
+/**
+ * The dashboard issues one GET per section, in this fixed order (ui-spec §2.4
+ * partial failure). Tests that need to fail ONE section key off this order.
+ */
+const SECTION_ORDER = ["metrics", "recent", "myActions", "urgent"] as const;
+
+function routeSections(payload: unknown, fail: Partial<Record<(typeof SECTION_ORDER)[number], boolean>> = {}) {
+  let call = 0;
+  mockApiClient.mockImplementation(async () => {
+    const section = SECTION_ORDER[Math.min(call, SECTION_ORDER.length - 1)];
+    call += 1;
+    // Only the section's INITIAL request fails, so the Retry assertion later in
+    // a test observes a successful re-fetch.
+    if (call <= SECTION_ORDER.length && fail[section]) throw new TypeError("network down");
+    return ok(payload);
+  });
 }
 
 function requesterPayload(overrides: Record<string, unknown> = {}) {
@@ -140,6 +202,27 @@ function renderRequester() {
     <MemoryRouter>
       <AuthProvider>
         <RequesterDashboard />
+      </AuthProvider>
+    </MemoryRouter>,
+  );
+}
+
+/**
+ * Render the staff dashboard inside real routes so drill-downs can be clicked
+ * and their destination asserted (FR-12), instead of only grepping the source.
+ */
+function renderStaffWithRoutes() {
+  return render(
+    <MemoryRouter initialEntries={["/dashboard"]}>
+      <AuthProvider>
+        <Routes>
+          <Route path="/dashboard" element={<StaffDashboard />} />
+          <Route
+            path="/staff/tickets/:id"
+            element={<div data-testid="staff-detail-destination" />}
+          />
+          <Route path="/staff/queue" element={<div data-testid="queue-destination" />} />
+        </Routes>
       </AuthProvider>
     </MemoryRouter>,
   );
@@ -366,6 +449,198 @@ describe("drill-down destinations match ui-spec §2.3 / §3.3 exactly (FR-12)", 
   });
 });
 
+// ─── UI-11 — "My Actions Taken" panel (FR-17, AC-15, AC-17) ──────────
+
+describe("UI-11 — My Actions Taken panel (FR-17, AC-15)", () => {
+  it("renders the caller's entries with the follow-up badge and the header count", async () => {
+    routeSections(staffPayload());
+    renderStaff();
+
+    const section = await screen.findByTestId("my-actions-section");
+    expect(within(section).getByRole("heading", { name: /my actions taken/i })).toBeInTheDocument();
+
+    const count = screen.getByTestId("my-followups-count");
+    expect(count).toHaveTextContent(/my follow-ups needed/i);
+    expect(count).toHaveTextContent("2");
+
+    const rows = screen.getAllByTestId("my-actions-row");
+    expect(rows).toHaveLength(2);
+
+    // Newest first, as the API returns them (FR-17): ticket number, truncated
+    // description carrying the full text, and a follow-up badge only when needed.
+    expect(rows[0]).toHaveTextContent("TKT-2026-000007");
+    const description = within(rows[0]).getByText(/replaced the battery/i);
+    expect(description).toHaveAttribute(
+      "title",
+      "Replaced the battery and ran a full charge cycle to confirm the fix.",
+    );
+    expect(within(rows[0]).getByText("Follow-up")).toBeInTheDocument();
+    expect(within(rows[0]).getByText(/21 Sep/)).toBeInTheDocument();
+
+    expect(within(rows[1]).queryByText("Follow-up")).not.toBeInTheDocument();
+  });
+
+  it("opens the staff Ticket Detail for the row's Ticket (FR-12)", async () => {
+    routeSections(staffPayload());
+    renderStaffWithRoutes();
+
+    const rows = await screen.findAllByTestId("my-actions-row");
+    const user = userEvent.setup();
+    await user.click(rows[0]);
+
+    expect(await screen.findByTestId("staff-detail-destination")).toBeInTheDocument();
+  });
+
+  it("renders 5 skeleton rows while loading, with aria-busy", async () => {
+    mockApiClient.mockImplementation(() => new Promise(() => {}));
+    renderStaff();
+
+    expect(screen.getAllByTestId("my-actions-skeleton")).toHaveLength(5);
+    expect(screen.getByLabelText(/loading your actions taken/i)).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+  });
+
+  it("renders the empty state and a 0 count when the user has no entries", async () => {
+    routeSections(
+      staffPayload({ myActions: { followUpCount: 0, items: [] } }),
+    );
+    renderStaff();
+
+    expect(await screen.findByTestId("my-actions-empty")).toHaveTextContent(
+      /no actions taken recorded yet/i,
+    );
+    expect(screen.getByTestId("my-followups-count")).toHaveTextContent("0");
+    expect(screen.queryByTestId("my-actions-row")).not.toBeInTheDocument();
+  });
+
+  it("fails alone: friendly retry here, every other section still renders", async () => {
+    routeSections(staffPayload(), { myActions: true });
+    renderStaff();
+
+    const error = await screen.findByTestId("my-actions-error");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(error).toHaveTextContent(/couldn't load your actions taken/i);
+    // No internals leak into the message (§5 safe failure).
+    expect(error.textContent ?? "").not.toMatch(/TypeError|stack|at \//i);
+
+    // The other three sections keep their own data.
+    expect(screen.getByTestId("metric-cards")).toBeInTheDocument();
+    expect(screen.getByTestId("recent-list")).toBeInTheDocument();
+    expect(screen.getByTestId("urgent-tickets-list")).toBeInTheDocument();
+
+    // Retry recovers only this section.
+    const user = userEvent.setup();
+    await user.click(within(error).getByRole("button", { name: /retry/i }));
+    expect(await screen.findByTestId("my-actions-list")).toBeInTheDocument();
+    expect(screen.queryByTestId("my-actions-error")).not.toBeInTheDocument();
+  });
+});
+
+// ─── UI-12 — "Urgent Tickets" panel (FR-18, AC-16, AC-17) ──────────────
+
+describe("UI-12 — Urgent Tickets panel (FR-18, AC-16)", () => {
+  it("renders urgent rows with status/priority badges and the owner or Unassigned", async () => {
+    routeSections(staffPayload());
+    renderStaff();
+
+    const section = await screen.findByTestId("urgent-tickets-section");
+    expect(within(section).getByRole("heading", { name: /urgent tickets/i })).toBeInTheDocument();
+
+    const rows = screen.getAllByTestId("urgent-ticket-row");
+    expect(rows).toHaveLength(2);
+
+    const badge = { selector: "span[role='status']" } as const;
+    expect(rows[0]).toHaveTextContent("TKT-2026-000009");
+    expect(within(rows[0]).getByText("Projector in Room 4-201 will not power on")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Open", badge)).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Urgent", badge)).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Unassigned")).toBeInTheDocument();
+
+    expect(within(rows[1]).getByText("In Progress", badge)).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Ben Carter")).toBeInTheDocument();
+  });
+
+  it("sends View all urgent to the URGENT-filtered queue (FR-12, AC-16)", async () => {
+    routeSections(staffPayload());
+    renderStaffWithRoutes();
+
+    const link = await screen.findByTestId("urgent-view-all-link");
+    expect(link).toHaveTextContent(/view all urgent/i);
+
+    const user = userEvent.setup();
+    await user.click(link);
+
+    expect(await screen.findByTestId("queue-destination")).toBeInTheDocument();
+  });
+
+  it("pins the View all urgent destination to the documented query (ui-spec §2.3)", () => {
+    const source = fs.readFileSync(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "..",
+        "src",
+        "pages",
+        "StaffDashboard.tsx",
+      ),
+      "utf8",
+    );
+    expect(source).toContain('/staff/queue?priority=URGENT');
+  });
+
+  it("renders 5 skeleton rows while loading, with aria-busy", async () => {
+    mockApiClient.mockImplementation(() => new Promise(() => {}));
+    renderStaff();
+
+    expect(screen.getAllByTestId("urgent-tickets-skeleton")).toHaveLength(5);
+    expect(screen.getByLabelText(/loading urgent tickets/i)).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+  });
+
+  it("renders its own empty state when nothing is urgent", async () => {
+    routeSections(staffPayload({ urgentTickets: [] }));
+    renderStaff();
+
+    expect(await screen.findByTestId("urgent-tickets-empty")).toHaveTextContent(
+      /no urgent tickets right now/i,
+    );
+    expect(screen.queryByTestId("urgent-ticket-row")).not.toBeInTheDocument();
+  });
+
+  it("fails alone: friendly retry here, every other section still renders", async () => {
+    routeSections(staffPayload(), { urgent: true });
+    renderStaff();
+
+    const error = await screen.findByTestId("urgent-tickets-error");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(error).toHaveTextContent(/couldn't load urgent tickets/i);
+    expect(error.textContent ?? "").not.toMatch(/TypeError|stack|at \//i);
+
+    expect(screen.getByTestId("my-actions-list")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-cards")).toBeInTheDocument();
+    expect(screen.getByTestId("recent-list")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(within(error).getByRole("button", { name: /retry/i }));
+    expect(await screen.findByTestId("urgent-tickets-list")).toBeInTheDocument();
+  });
+
+  it("opens the staff Ticket Detail for an urgent row (FR-12)", async () => {
+    routeSections(staffPayload());
+    renderStaffWithRoutes();
+
+    const rows = await screen.findAllByTestId("urgent-ticket-row");
+    const user = userEvent.setup();
+    await user.click(rows[0]);
+
+    expect(await screen.findByTestId("staff-detail-destination")).toBeInTheDocument();
+  });
+});
+
 // ─── RESP-01 — card grid reflow rules (ui-spec §2.5/§3.5) ───────────────
 
 describe("RESP-01 — dashboard card grid reflow rules for 1024/768/375px", () => {
@@ -393,6 +668,50 @@ describe("RESP-01 — dashboard card grid reflow rules for 1024/768/375px", () =
     const requester = renderRequester();
     await screen.findByTestId("requester-dashboard");
     expect(within(requester.getByTestId("metric-cards")).getAllByTestId(/^metric-card-/)).toHaveLength(4);
+  });
+});
+
+// ─── RESP-02 — the new sections' responsive rules (AC-19) ──────────────
+
+/** Every declaration block the stylesheet authors for a selector. */
+function cssRuleBodies(css: string, selector: string): string[] {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // `[^{}]*` keeps the match inside one selector list, so grouped rules such as
+  // ".actionRow,\n.urgentRow {" still resolve for each selector.
+  const pattern = new RegExp(`${escaped}[^{}]*\\{([^}]*)\\}`, "g");
+  return [...css.matchAll(pattern)].map((match) => match[1]);
+}
+
+describe("RESP-02 — new sections stack on tablet/mobile and use no fixed widths (AC-19)", () => {
+  it("stacks the second content row to one column at ≤1023px", () => {
+    const css = stylesheetText();
+
+    expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
+    expect(css).toMatch(
+      /@media \(max-width: 1023px\)[\s\S]*\.contentRow2\s*\{[^}]*grid-template-columns: 1fr/,
+    );
+  });
+
+  it("declares no fixed pixel width on any new section class", () => {
+    const css = stylesheetText();
+
+    for (const selector of [
+      ".contentRow2",
+      ".actionRow",
+      ".urgentRow",
+      ".followUpBadge",
+      ".panelCount",
+    ]) {
+      const bodies = cssRuleBodies(css, selector);
+      expect(bodies.length, `${selector} must be authored`).toBeGreaterThan(0);
+      for (const body of bodies) {
+        // A px width on a row/panel is exactly what forces horizontal scroll at
+        // 390px; the layout must rely on the grid and on min-width: 0 instead.
+        expect(body, `${selector} must not fix a pixel width`).not.toMatch(
+          /(^|[^-])width:\s*\d+(\.\d+)?px/,
+        );
+      }
+    }
   });
 });
 

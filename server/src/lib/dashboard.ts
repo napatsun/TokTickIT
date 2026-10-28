@@ -30,6 +30,16 @@
  *
  * FR-13: the recent lists are bounded (5 rows) and project only the columns
  * the UI renders — never a full Ticket collection.
+ *
+ * FR-17 / FR-18 (added 2026-10-28, `fix/lab4-dashboard-gap-fix`): the staff
+ * aggregate also carries the assignment's two extra dashboard sections —
+ * `myActions` (the CURRENT user's newest non-voided Actions Taken, plus the
+ * "My follow-ups needed" count) and `urgentTickets` (the oldest active
+ * IT Priority = URGENT Tickets across the whole staff-visible queue). Both are
+ * bounded, live, queue-scoped projections just like `recentTickets`; neither
+ * exposes Actions Taken content fields (`result`, `followUpNote`,
+ * `attachmentNotes`) or any Internal Note/comment text, so the dashboard can
+ * never become a second Ticket-detail surface.
  */
 
 import { getPrisma } from "../prisma.js";
@@ -61,6 +71,9 @@ const DELTA_GROUPS: Record<string, readonly string[]> = {
 };
 
 const RECENT_LIMIT = 5;
+/** FR-17 / FR-18: both new dashboard sections are capped at 5 rows too. */
+const ACTION_LIMIT = 5;
+const URGENT_LIMIT = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ─── Shared projections ──────────────────────────────────────────────────
@@ -92,6 +105,49 @@ function toRecentDto(row: RecentRow) {
   };
 }
 
+/** `myActions.items` projection (api-spec.md §3.1) — no content fields. */
+interface MyActionRow {
+  id: string;
+  ticketId: number;
+  actionDateTime: Date;
+  description: string;
+  followUpRequired: boolean;
+  ticket: { ticketNumber: string };
+}
+
+function toMyActionDto(row: MyActionRow) {
+  return {
+    id: row.id,
+    ticketId: row.ticketId,
+    ticketNumber: row.ticket.ticketNumber,
+    description: row.description,
+    actionDateTime: row.actionDateTime.toISOString(),
+    followUpRequired: row.followUpRequired,
+  };
+}
+
+/** `urgentTickets` projection (api-spec.md §3.1). */
+interface UrgentRow {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  status: string;
+  itPriority: string;
+  owner: { name: string } | null;
+}
+
+function toUrgentDto(row: UrgentRow) {
+  return {
+    id: row.id,
+    ticketNumber: row.ticketNumber,
+    title: row.summary,
+    status: row.status,
+    itPriority: row.itPriority,
+    // FR-18: an unassigned urgent Ticket is labelled, never blank.
+    ownerName: row.owner?.name ?? null,
+  };
+}
+
 // ─── Staff dashboard (§3.1) ──────────────────────────────────────────────
 
 export interface StaffDashboard {
@@ -111,6 +167,13 @@ export interface StaffDashboard {
     waitingForRequester: number;
   };
   recentTickets: ReturnType<typeof toRecentDto>[];
+  /** FR-17: the current user's newest non-voided Actions Taken. */
+  myActions: {
+    followUpCount: number;
+    items: ReturnType<typeof toMyActionDto>[];
+  };
+  /** FR-18: the whole queue's oldest active URGENT Tickets. */
+  urgentTickets: ReturnType<typeof toUrgentDto>[];
 }
 
 /**
@@ -136,6 +199,9 @@ export async function getStaffDashboard(currentUserId: string): Promise<StaffDas
     countMyAssigned,
     recentRows,
     createdAtSince,
+    myActionRows,
+    myFollowUpCount,
+    urgentRows,
     ...deltaTerms
   ] = await Promise.all([
     prisma.ticket.count({ where: { status: "NEW" } }),
@@ -154,6 +220,56 @@ export async function getStaffDashboard(currentUserId: string): Promise<StaffDas
     }),
     // The `new` delta's extra term (§3.1): creation writes no history row.
     prisma.ticket.count({ where: { createdAt: { gte: since24h } } }),
+
+    // FR-17: the CURRENT user's newest non-voided work, newest first. Voided
+    // entries are filtered in the query (BR-11: a voided entry is frozen and
+    // no longer part of the live work record) and `id` breaks same-timestamp
+    // ties deterministically, mirroring FR-03's stable-order rule.
+    prisma.actionTaken.findMany({
+      where: { performedById: currentUserId, isVoided: false },
+      orderBy: [{ actionDateTime: "desc" }, { id: "desc" }],
+      take: ACTION_LIMIT,
+      select: {
+        id: true,
+        ticketId: true,
+        actionDateTime: true,
+        description: true,
+        followUpRequired: true,
+        ticket: { select: { ticketNumber: true } },
+      },
+    }),
+    // FR-17: "My follow-ups needed" — the user's own open follow-ups. A
+    // follow-up on a CLOSED/CANCELLED Ticket is done, not needed, so those are
+    // excluded; each entry counts separately (one Ticket may carry several).
+    prisma.actionTaken.count({
+      where: {
+        performedById: currentUserId,
+        isVoided: false,
+        followUpRequired: true,
+        ticket: { status: { notIn: ["CLOSED", "CANCELLED"] } },
+      },
+    }),
+    // FR-18: urgent open work across the WHOLE staff-visible queue (the queue
+    // is shared by design — api-spec.md Lab 3 §3 — so this is not owner-scoped
+    // the way myAssigned/myActions are). Oldest first: the longest-waiting
+    // urgent Ticket is the one to act on. URGENT only — HIGH is not folded in
+    // (specification.md §11 decision 8).
+    prisma.ticket.findMany({
+      where: {
+        itPriority: "URGENT",
+        status: { in: [...OPEN_WORK_STATUSES] as TicketStatusValue[] },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: URGENT_LIMIT,
+      select: {
+        id: true,
+        ticketNumber: true,
+        summary: true,
+        status: true,
+        itPriority: true,
+        owner: { select: { name: true } },
+      },
+    }),
 
     // Deltas, term by term, computed live from TicketStatusHistory (BR-13).
     prisma.ticketStatusHistory.count({ where: { toStatus: "NEW", changedAt: { gte: since24h } } }),
@@ -202,6 +318,11 @@ export async function getStaffDashboard(currentUserId: string): Promise<StaffDas
       waitingForRequester: toWaiting - fromWaiting,
     },
     recentTickets: recentRows.map(toRecentDto),
+    myActions: {
+      followUpCount: myFollowUpCount,
+      items: myActionRows.map(toMyActionDto),
+    },
+    urgentTickets: urgentRows.map(toUrgentDto),
   };
 }
 

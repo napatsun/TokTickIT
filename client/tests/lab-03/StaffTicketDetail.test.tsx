@@ -399,6 +399,64 @@ describe("UI-06 — ownership, IT Priority, and page states", () => {
     });
   });
 
+  // UI-13 (Lab 4 AC-18, BR-17): the picker only lists ACTIVE staff, so a
+  // 422 INVALID_OWNER is only reproducible from a picker loaded before the
+  // selected user was deactivated. The screen must surface the server's own
+  // message next to the control and stay usable, without mutating the owner.
+  it("surfaces a 422 INVALID_OWNER beside the ownership control and stays usable (AC-18)", async () => {
+    // Keep every other endpoint healthy; fail only the first /assign call.
+    const healthy = mockApiClient.getMockImplementation()!;
+    let assignCalls = 0;
+    mockApiClient.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/assign")) {
+        assignCalls += 1;
+        if (assignCalls === 1) {
+          return {
+            ok: false,
+            status: 422,
+            json: async () => ({
+              error: {
+                code: "INVALID_OWNER",
+                message: "Select an active IT Staff member or Administrator.",
+                fieldErrors: { ownerId: "That user cannot own a ticket." },
+              },
+            }),
+          };
+        }
+      }
+      return healthy(url, init);
+    });
+
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    const picker = await screen.findByLabelText(/reassign owner/i);
+    await user.selectOptions(picker, "staff-2");
+    await user.click(screen.getByRole("button", { name: /^reassign$/i }));
+
+    const error = await screen.findByTestId("owner-error");
+    // Friendly server text, announced, and bound to the control it belongs to.
+    expect(error).toHaveAttribute("role", "alert");
+    expect(error).toHaveTextContent("Select an active IT Staff member or Administrator.");
+    expect(error.textContent ?? "").not.toMatch(/INVALID_OWNER|TypeError|stack/i);
+    expect(picker).toHaveAttribute("aria-describedby", "owner-error");
+    expect(picker).toHaveAttribute("aria-invalid", "true");
+
+    // BR-17: a rejected assignment mutates nothing.
+    expect(screen.getByTestId("owner-display")).toHaveTextContent("Alice Chen");
+    expect(picker).toHaveValue("staff-2");
+
+    // …and the control is usable again, so a retry with a valid owner works.
+    expect(picker).toBeEnabled();
+    const retry = screen.getByRole("button", { name: /^reassign$/i });
+    expect(retry).toBeEnabled();
+
+    await user.click(retry);
+    expect(await screen.findByTestId("owner-success")).toHaveTextContent(/reassigned to ben carter/i);
+    expect(screen.queryByTestId("owner-error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("owner-display")).toHaveTextContent("Ben Carter");
+  });
+
   it("saves IT Priority on change and never touches Requested Priority", async () => {
     const user = userEvent.setup();
     await renderLoaded();
