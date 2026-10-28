@@ -119,6 +119,8 @@ export default function StaffQueuePage() {
   const [sortBy, setSortBy] = useState<SortableField>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
+  const [searchResetSignal, setSearchResetSignal] = useState(0);
 
   const hasActiveFilters =
     search.trim() !== "" ||
@@ -182,6 +184,7 @@ export default function StaffQueuePage() {
     setStatusFilter("");
     setPriorityFilter("");
     setOwnerFilter("");
+    setSearchResetSignal((n) => n + 1);
     setPage(1);
   }
 
@@ -244,6 +247,7 @@ export default function StaffQueuePage() {
         <SearchInput
           value={search}
           onSearch={handleSearch}
+          resetSignal={searchResetSignal}
           placeholder="Search by ticket number or summary…"
           id="queue-search"
         />

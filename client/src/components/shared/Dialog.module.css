@@ -1,8 +1,9 @@
 /* ============================================================
    Dialog — shared modal primitive (ui-spec.md §7)
 
-   Same overlay / surface / token treatment as ResolveMarkConfirm and
-   StatusChangeConfirm so every modal in the app looks identical.
+   Same overlay / surface / token treatment as StatusChangeConfirm,
+   RemoveAttachmentConfirm, and the Administrator Create/Edit User
+   modals so every modal in the app looks identical.
    ============================================================ */
 
 .overlay {
@@ -56,7 +57,7 @@
   gap: var(--space-field-gap);
 }
 
-/* Body copy inside a confirmation — same treatment as ResolveMarkConfirm's. */
+/* Body copy inside a confirmation — same treatment in every dialog body. */
 .copy {
   margin: 0;
   font-size: var(--font-size-md);

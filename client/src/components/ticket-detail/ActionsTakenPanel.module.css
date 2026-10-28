@@ -442,6 +442,22 @@
     border: 0;
   }
 
+  /* RESP-02/RESP-05: the header row must collapse *with* its cells. Left as
+     default table-cell the th nodes keep their intrinsic widths and report
+     boxes past the viewport even though the 1px thead clips them visually,
+     which fails the element-level no-clipping assertion. Forcing the header
+     tr/th to auto-width blocks makes each box follow the clipped 1px parent;
+     the text stays in the accessibility tree. */
+  .table thead tr,
+  .table thead th {
+    display: block;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+  }
+
   .table,
   .table tbody,
   .table tr,
