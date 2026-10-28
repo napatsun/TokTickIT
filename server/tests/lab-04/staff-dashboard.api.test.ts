@@ -23,6 +23,11 @@ const prisma = getPrisma();
  *   API-34   a Reopened ticket folds into inProgress and myAssigned — BR-14
  *   API-36   deltas computed live from TicketStatusHistory (BR-13, Decision C)
  *   API-37   zero recent history rows → deltas are 0, never null
+ *   API-42   myActions: caller-scoped, newest first, ≤5, voided excluded
+ *   API-43   myActions.followUpCount counts open follow-ups only
+ *   API-44   urgentTickets: URGENT + open-work only, oldest first, ≤5
+ *   API-45   the new sections are whole-queue / empty-safe and leave the
+ *            existing counts untouched (FR-17, FR-18)
  *   AUTH-03  a Requester calling /api/dashboard/staff → 403 FORBIDDEN_ROLE
  *
  * Conventions match the other Lab 4 suites: real login sessions through
@@ -33,10 +38,13 @@ const prisma = getPrisma();
 
 let staffA: TestUser;
 let staffB: TestUser;
+/** A staff member with no Actions Taken of their own (API-45's empty contract). */
+let staffC: TestUser;
 let requester: TestUser;
 let adminUser: TestUser;
 
 let staffClient: SessionClient;
+let staffCClient: SessionClient;
 let adminClient: SessionClient;
 let requesterClient: SessionClient;
 
@@ -57,13 +65,21 @@ interface FixtureOptions {
   ownerId?: string | null;
   /** Backdate the ticket so it does not pollute the `new` delta's createdAt term. */
   createdAt?: Date;
+  /** IT Priority (BR-14 scale) — API-44's urgent-panel fixtures need `URGENT`. */
+  itPriority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  /**
+   * Ticket-number prefix. API-44 uses a dedicated prefix so its fixtures can be
+   * deleted again in afterAll: the urgent panel's "oldest first" assertion needs
+   * a database state this test controls completely.
+   */
+  numberPrefix?: string;
 }
 
 async function createFixtureTicket(overrides: FixtureOptions = {}) {
   const n = ++ticketSeq;
   const ticket = await prisma.ticket.create({
     data: {
-      ticketNumber: `TKT-2026-SD-${Date.now()}-${n}`,
+      ticketNumber: `${overrides.numberPrefix ?? "TKT-2026-SD"}-${Date.now()}-${n}`,
       requesterId: requester.id,
       ownerId: overrides.ownerId ?? null,
       categoryId: fixtureCategoryId,
@@ -71,12 +87,44 @@ async function createFixtureTicket(overrides: FixtureOptions = {}) {
       summary: `Staff dashboard fixture ${n}`,
       description: "Fixture ticket for the staff dashboard API suite.",
       requestedPriority: "MEDIUM",
+      ...(overrides.itPriority ? { itPriority: overrides.itPriority } : {}),
       status: overrides.status ?? "OPEN",
       ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
     },
     select: { id: true, ticketNumber: true, status: true, ownerId: true },
   });
   return ticket;
+}
+
+/** An Actions Taken row, created the way the API would (§7.1, BR-01…BR-05). */
+async function createFixtureAction(overrides: {
+  ticketId: number;
+  performedById: string;
+  actionDateTime: Date;
+  description?: string;
+  followUpRequired?: boolean;
+  isVoided?: boolean;
+}) {
+  return prisma.actionTaken.create({
+    data: {
+      ticketId: overrides.ticketId,
+      performedById: overrides.performedById,
+      actionDateTime: overrides.actionDateTime,
+      description: overrides.description ?? "Fixture action for the dashboard API suite.",
+      result: "Fixture result recorded by the dashboard suite.",
+      followUpRequired: overrides.followUpRequired ?? false,
+      followUpNote: overrides.followUpRequired ? "Confirm with the requester tomorrow." : null,
+      isVoided: overrides.isVoided ?? false,
+      ...(overrides.isVoided ? { voidReason: "Fixture void for the dashboard suite." } : {}),
+    },
+    select: {
+      id: true,
+      ticketId: true,
+      actionDateTime: true,
+      followUpRequired: true,
+      isVoided: true,
+    },
+  });
 }
 
 /** A status transition row as the workflow itself would write it (§7.3). */
@@ -102,10 +150,12 @@ beforeAll(async () => {
 
   staffA = await createTestUser({ name: "Dashboard Staff A", role: "IT_STAFF" });
   staffB = await createTestUser({ name: "Dashboard Staff B", role: "IT_STAFF" });
+  staffC = await createTestUser({ name: "Dashboard Staff C", role: "IT_STAFF" });
   requester = await createTestUser({ name: "Dashboard Requester" });
   adminUser = await createTestUser({ name: "Dashboard Admin", role: "ADMINISTRATOR" });
 
   staffClient = await loginAs(app, staffA.email);
+  staffCClient = await loginAs(app, staffC.email);
   adminClient = await loginAs(app, adminUser.email);
   requesterClient = await loginAs(app, requester.email);
 
@@ -119,7 +169,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanupTestUsers([staffA.id, staffB.id, requester.id, adminUser.id]);
+  // API-44's fixtures are deleted again: its "oldest urgent first" assertion
+  // depends on a state this suite fully controls. They carry a dedicated number
+  // prefix and have no child rows (no actions/comments/notes/attachments/
+  // history), so the delete cannot trip a Restrict relation.
+  await prisma.ticket.deleteMany({ where: { ticketNumber: { startsWith: "TKT-2026-SD-URG-" } } });
+
+  await cleanupTestUsers([staffA.id, staffB.id, staffC.id, requester.id, adminUser.id]);
   await prisma.$disconnect();
 });
 
@@ -131,7 +187,15 @@ describe("API-26 — response payload size/shape (FR-13)", () => {
 
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).sort()).toEqual(
-      ["counts", "deltas", "generatedAt", "recentTickets", "timezone"].sort(),
+      [
+        "counts",
+        "deltas",
+        "generatedAt",
+        "myActions",
+        "recentTickets",
+        "timezone",
+        "urgentTickets",
+      ].sort(),
     );
 
     expect(Object.keys(res.body.counts).sort()).toEqual(
@@ -148,6 +212,23 @@ describe("API-26 — response payload size/shape (FR-13)", () => {
     for (const item of res.body.recentTickets) {
       // The recent rows are bounded projections, not full Tickets.
       expect(Object.keys(item).sort()).toEqual(["code", "id", "status", "title", "updatedAt"].sort());
+    }
+
+    // FR-17/FR-18: the two added sections are bounded projections too.
+    expect(Object.keys(res.body.myActions).sort()).toEqual(["followUpCount", "items"].sort());
+    expect(Array.isArray(res.body.myActions.items)).toBe(true);
+    expect(res.body.myActions.items.length).toBeLessThanOrEqual(5);
+    for (const item of res.body.myActions.items) {
+      expect(Object.keys(item).sort()).toEqual(
+        ["actionDateTime", "description", "followUpRequired", "id", "ticketId", "ticketNumber"].sort(),
+      );
+    }
+    expect(Array.isArray(res.body.urgentTickets)).toBe(true);
+    expect(res.body.urgentTickets.length).toBeLessThanOrEqual(5);
+    for (const item of res.body.urgentTickets) {
+      expect(Object.keys(item).sort()).toEqual(
+        ["id", "itPriority", "ownerName", "status", "ticketNumber", "title"].sort(),
+      );
     }
 
     expect(res.body.timezone).toBe("Asia/Bangkok");
@@ -382,6 +463,330 @@ describe("recentTickets — assigned-to-me or unassigned, excluding Cancelled (�
     const times = res.body.recentTickets.map((t: { updatedAt: string }) => t.updatedAt);
     const sorted = [...times].sort((a, b) => b.localeCompare(a));
     expect(times).toEqual(sorted);
+  });
+});
+
+// ─── API-42 — myActions scope / order / limit / projection (FR-17) ─────
+
+describe("API-42 — myActions is the caller's own work, newest first, voided excluded (FR-17)", () => {
+  it("returns the 5 newest non-voided entries performed by the caller, id DESC on ties", async () => {
+    const myTicket = await createFixtureTicket({ status: "OPEN", ownerId: staffA.id });
+    const theirTicket = await createFixtureTicket({ status: "OPEN", ownerId: staffB.id });
+
+    const base = Date.UTC(2026, 0, 1, 9, 0, 0);
+    const HOUR = 60 * 60 * 1000;
+
+    // Six of my own entries, one per hour, ascending.
+    const mine = [];
+    for (let index = 0; index < 6; index += 1) {
+      mine.push(
+        await createFixtureAction({
+          ticketId: myTicket.id,
+          performedById: staffA.id,
+          actionDateTime: new Date(base + index * HOUR),
+          description: `Dashboard fixture action ${index}`,
+        }),
+      );
+    }
+
+    // Newest of all — but voided, so it must never appear.
+    const voided = await createFixtureAction({
+      ticketId: myTicket.id,
+      performedById: staffA.id,
+      actionDateTime: new Date(base + 6 * HOUR),
+      isVoided: true,
+    });
+
+    // Newest of all — but authored by another IT Staff member.
+    const theirs = await createFixtureAction({
+      ticketId: theirTicket.id,
+      performedById: staffB.id,
+      actionDateTime: new Date(base + 7 * HOUR),
+    });
+
+    // Two entries sharing one timestamp — the id DESC tie-break must decide.
+    const tieTime = new Date(base + 10 * HOUR);
+    const tieOne = await createFixtureAction({
+      ticketId: myTicket.id,
+      performedById: staffA.id,
+      actionDateTime: tieTime,
+    });
+    const tieTwo = await createFixtureAction({
+      ticketId: myTicket.id,
+      performedById: staffA.id,
+      actionDateTime: tieTime,
+    });
+    const tieOrder = [tieOne.id, tieTwo.id].sort().reverse();
+
+    const res = await staffClient.agent.get("/api/dashboard/staff");
+    expect(res.status).toBe(200);
+
+    const ids = res.body.myActions.items.map((item: { id: string }) => item.id);
+
+    // Exactly five rows: the two tie entries, then my three newest singles.
+    expect(ids).toEqual([...tieOrder, mine[5].id, mine[4].id, mine[3].id]);
+
+    // The two newest rows overall are excluded, for opposite reasons.
+    expect(ids).not.toContain(voided.id);
+    expect(ids).not.toContain(theirs.id);
+
+    // The same answer as an independent database query written here (not via
+    // the implementation): caller scope, voided filter, order, limit.
+    const expected = await prisma.actionTaken.findMany({
+      where: { performedById: staffA.id, isVoided: false },
+      orderBy: [{ actionDateTime: "desc" }, { id: "desc" }],
+      take: 5,
+      select: { id: true },
+    });
+    expect(ids).toEqual(expected.map((row) => row.id));
+
+    // Projection: the dashboard never becomes a second Actions Taken surface.
+    const first = res.body.myActions.items[0];
+    expect(first).not.toHaveProperty("result");
+    expect(first).not.toHaveProperty("followUpNote");
+    expect(first).not.toHaveProperty("attachmentNotes");
+    expect(first.ticketId).toBe(myTicket.id);
+    expect(first.ticketNumber).toBe(myTicket.ticketNumber);
+  });
+});
+
+// ─── API-43 — myActions.followUpCount (FR-17) ───────────────────────────
+
+describe("API-43 — followUpCount counts only the caller's still-open follow-ups (FR-17)", () => {
+  it("excludes voided entries, other users' entries, and finished Tickets", async () => {
+    const openTicket = await createFixtureTicket({ status: "OPEN", ownerId: staffA.id });
+    const waitingTicket = await createFixtureTicket({ status: "WAITING_FOR_REQUESTER" });
+    const closedTicket = await createFixtureTicket({ status: "CLOSED", ownerId: staffA.id });
+    const cancelledTicket = await createFixtureTicket({ status: "CANCELLED" });
+    const theirTicket = await createFixtureTicket({ status: "OPEN", ownerId: staffB.id });
+
+    const at = new Date(Date.UTC(2026, 1, 1, 10, 0, 0));
+
+    // Counted: two non-voided follow-ups on still-open Tickets.
+    await createFixtureAction({
+      ticketId: openTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: true,
+    });
+    await createFixtureAction({
+      ticketId: waitingTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: true,
+    });
+    // Not counted: finished Tickets, a non-follow-up, a voided follow-up, and
+    // another user's follow-up.
+    await createFixtureAction({
+      ticketId: closedTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: true,
+    });
+    await createFixtureAction({
+      ticketId: cancelledTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: true,
+    });
+    await createFixtureAction({
+      ticketId: openTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: false,
+    });
+    await createFixtureAction({
+      ticketId: openTicket.id,
+      performedById: staffA.id,
+      actionDateTime: at,
+      followUpRequired: true,
+      isVoided: true,
+    });
+    await createFixtureAction({
+      ticketId: theirTicket.id,
+      performedById: staffB.id,
+      actionDateTime: at,
+      followUpRequired: true,
+    });
+
+    const res = await staffClient.agent.get("/api/dashboard/staff");
+    expect(res.status).toBe(200);
+
+    // Independent database count of exactly the rule FR-17 states.
+    const expected = await prisma.actionTaken.count({
+      where: {
+        performedById: staffA.id,
+        isVoided: false,
+        followUpRequired: true,
+        ticket: { status: { notIn: ["CLOSED", "CANCELLED"] } },
+      },
+    });
+
+    expect(res.body.myActions.followUpCount).toBe(expected);
+    // The two counted fixtures guarantee the assertion is not trivially 0.
+    expect(expected).toBeGreaterThanOrEqual(2);
+    expect(Number.isInteger(res.body.myActions.followUpCount)).toBe(true);
+  });
+});
+
+// ─── API-44 — urgentTickets filter / order / limit (FR-18) ──────────────
+
+describe("API-44 — urgentTickets is URGENT open work, oldest first, max 5 (FR-18)", () => {
+  it("lists only URGENT open-work Tickets, oldest createdAt first, with owner names", async () => {
+    const PREFIX = "TKT-2026-SD-URG";
+    const at = (day: number) => new Date(Date.UTC(1975, 0, day));
+
+    // Nine decoys that a wrong `where` clause would wrongly surface: three
+    // terminal statuses and a HIGH priority, all older than the five live ones.
+    const cancelled = await createFixtureTicket({
+      status: "CANCELLED",
+      itPriority: "URGENT",
+      createdAt: at(1),
+      numberPrefix: PREFIX,
+    });
+    const closed = await createFixtureTicket({
+      status: "CLOSED",
+      itPriority: "URGENT",
+      createdAt: at(2),
+      numberPrefix: PREFIX,
+    });
+    const resolved = await createFixtureTicket({
+      status: "RESOLVED",
+      itPriority: "URGENT",
+      createdAt: at(3),
+      numberPrefix: PREFIX,
+    });
+    const high = await createFixtureTicket({
+      status: "OPEN",
+      itPriority: "HIGH",
+      createdAt: at(4),
+      numberPrefix: PREFIX,
+    });
+
+    // Five live urgent Tickets, one per open-work status, oldest to newest.
+    const unassigned = await createFixtureTicket({
+      status: "OPEN",
+      itPriority: "URGENT",
+      createdAt: at(5),
+      numberPrefix: PREFIX,
+    });
+    const assigned = await createFixtureTicket({
+      status: "IN_PROGRESS",
+      itPriority: "URGENT",
+      ownerId: staffB.id,
+      createdAt: at(6),
+      numberPrefix: PREFIX,
+    });
+    const waiting = await createFixtureTicket({
+      status: "WAITING_FOR_REQUESTER",
+      itPriority: "URGENT",
+      createdAt: at(7),
+      numberPrefix: PREFIX,
+    });
+    const brandNew = await createFixtureTicket({
+      status: "NEW",
+      itPriority: "URGENT",
+      createdAt: at(8),
+      numberPrefix: PREFIX,
+    });
+    const reopened = await createFixtureTicket({
+      status: "REOPENED",
+      itPriority: "URGENT",
+      ownerId: staffA.id,
+      createdAt: at(9),
+      numberPrefix: PREFIX,
+    });
+
+    const res = await staffClient.agent.get("/api/dashboard/staff");
+    expect(res.status).toBe(200);
+
+    const rows = res.body.urgentTickets as Array<{
+      id: number;
+      ticketNumber: string;
+      title: string;
+      status: string;
+      itPriority: string;
+      ownerName: string | null;
+    }>;
+
+    // The five fixtures are the oldest live urgent Tickets in the database, so
+    // the oldest-first order and the 5-row cap are both exercised exactly.
+    expect(rows.map((row) => row.id)).toEqual([
+      unassigned.id,
+      assigned.id,
+      waiting.id,
+      brandNew.id,
+      reopened.id,
+    ]);
+
+    // Owner projection: name, or null for an unassigned Ticket.
+    expect(rows[0].ownerName).toBeNull();
+    expect(rows[1].ownerName).toBe(staffB.name);
+    expect(rows[4].ownerName).toBe(staffA.name);
+
+    // Filter correctness, asserted independently of the top-5 membership.
+    const ids = rows.map((row) => row.id);
+    for (const decoy of [cancelled.id, closed.id, resolved.id, high.id]) {
+      expect(ids).not.toContain(decoy);
+    }
+    for (const row of rows) {
+      expect(row.itPriority).toBe("URGENT");
+      expect(["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "REOPENED"]).toContain(
+        row.status,
+      );
+    }
+
+    // And the same rows an independent database query returns.
+    const expected = await prisma.ticket.findMany({
+      where: {
+        itPriority: "URGENT",
+        status: { in: ["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "REOPENED"] },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: 5,
+      select: { id: true, ticketNumber: true, summary: true, status: true, itPriority: true },
+    });
+    expect(rows.map((row) => row.id)).toEqual(expected.map((ticket) => ticket.id));
+    expect(rows.map((row) => row.ticketNumber)).toEqual(
+      expected.map((ticket) => ticket.ticketNumber),
+    );
+    expect(rows.map((row) => row.title)).toEqual(expected.map((ticket) => ticket.summary));
+  });
+});
+
+// ─── API-45 — new sections are whole-queue + empty-safe (FR-17, FR-18) ──
+
+describe("API-45 — the new sections are whole-queue, empty-safe, and non-invasive (FR-17, FR-18)", () => {
+  it("gives a staff user with no Actions Taken an empty list and a 0 count", async () => {
+    const res = await staffCClient.agent.get("/api/dashboard/staff");
+    expect(res.status).toBe(200);
+
+    expect(res.body.myActions.items).toEqual([]);
+    expect(res.body.myActions.followUpCount).toBe(0);
+    // Not null, not omitted — the documented empty contract.
+    expect(res.body.myActions.followUpCount).not.toBeNull();
+    expect(Array.isArray(res.body.urgentTickets)).toBe(true);
+  });
+
+  it("shows every staff caller the same whole-queue urgent list and the same counts", async () => {
+    const a = await staffClient.agent.get("/api/dashboard/staff");
+    const c = await staffCClient.agent.get("/api/dashboard/staff");
+
+    expect(a.status).toBe(200);
+    expect(c.status).toBe(200);
+
+    // FR-18: the panel is the staff-visible queue, not "my assignments".
+    expect(c.body.urgentTickets).toEqual(a.body.urgentTickets);
+    // The pre-existing whole-queue metrics are untouched by the added sections
+    // (myAssigned is deliberately NOT compared: it is caller-scoped, FR-10).
+    for (const key of ["new", "open", "inProgress", "waitingForRequester"]) {
+      expect(c.body.counts[key]).toBe(a.body.counts[key]);
+    }
+    expect(Object.keys(a.body.counts).sort()).toEqual(
+      ["inProgress", "myAssigned", "new", "open", "waitingForRequester"].sort(),
+    );
+    // myActions, by contrast, IS caller-scoped (FR-17).
+    expect(c.body.myActions.followUpCount).toBeLessThanOrEqual(a.body.myActions.followUpCount);
   });
 });
 
