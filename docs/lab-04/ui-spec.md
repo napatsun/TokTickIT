@@ -71,6 +71,10 @@ precise status set whether or not that set equals the full open-work group.
 - Two-column content row below the fold:
   - Left (wider): **My Recent Tickets** — list of 5 rows (Ticket code, one-line title, status badge, last-updated timestamp), header includes a `View all` link.
   - Right (narrower): **Quick Actions** — icon buttons: `Search Tickets`, `My Queue` (§2.3's Implementation Note explains why there is no `Create Ticket` action on the staff side).
+- Second content row (added 2026-10-28, `specification.md` FR-17/FR-18 — the assignment's "current-user actions taken" + "recent or urgent tickets" requirements):
+  - Left: **My Actions Taken** — the current IT Staff/Administrator user's 5 newest non-voided Actions Taken entries, newest `actionDateTime` first. Each row: Ticket number (drill-down to `/staff/tickets/:id`), one-line truncated description (with the full text as the row's accessible name/tooltip), action date/time, and a `Follow-up` badge when `followUpRequired = true`. The panel header carries **My follow-ups needed: N** (`myActions.followUpCount`, `api-spec.md` §3.1). Empty state: "No Actions Taken recorded yet." A Requester never sees this panel (the whole Dashboard is staff-only, §2.4).
+  - Right: **Urgent Tickets** — the 5 longest-waiting `URGENT` open-work Tickets across the whole queue. Each row: Ticket number, one-line title, status badge, IT Priority badge, owner name or "Unassigned"; header carries a `View all urgent` link (§2.3). Empty state: "No urgent Tickets right now." `HIGH` is deliberately **not** treated as urgent (`specification.md` §11 decision 8), so the panel's rows always equal the `priority=URGENT` queue it links to.
+- New `data-testid`s for the two new sections (existing ids unchanged): `my-actions-section`, `my-actions-row`, `my-actions-empty`, `my-actions-error`, `my-actions-skeleton`, `my-followups-count`, `urgent-tickets-section`, `urgent-ticket-row`, `urgent-tickets-empty`, `urgent-tickets-error`, `urgent-tickets-skeleton`, `urgent-view-all-link`.
 
 ### 2.2 Data Contract
 Backed by `GET /api/dashboard/staff` (see `api-spec.md`). Every card/list is backend-computed; the UI performs no client-side aggregation of full Ticket collections.
@@ -96,6 +100,9 @@ implementation.
 | "My Assigned" card | `/staff/queue?owner=me&status=NEW,OPEN,IN_PROGRESS,WAITING_FOR_REQUESTER,REOPENED` — **must** carry this explicit status list (equivalently `status=open-work`, since `counts.myAssigned` in `api-spec.md` §3.1 is scoped to the *full* open-work set for the current owner and excludes `CLOSED`/`CANCELLED`). Filtering on `owner=me` alone would surface the user's `CLOSED`/`CANCELLED` Tickets too, which the card's number never counts. |
 | Recent Ticket row | `/staff/tickets/:id` (IT Staff Ticket Detail, internal integer id) |
 | "View all" | `/staff/queue` (unfiltered queue) |
+| "My Actions Taken" row | `/staff/tickets/:id` (IT Staff Ticket Detail; the row's Ticket number is the link, and the row itself is the button)
+| "Urgent Tickets" row | `/staff/tickets/:id`
+| "View all urgent" | `/staff/queue?priority=URGENT` (the queue seeds its IT Priority filter from this parameter, so the list matches the panel exactly)
 | Quick Action: Search Tickets | `/staff/queue?focus=search` |
 | Quick Action: My Queue | `/staff/queue?owner=me&status=open-work` |
 
@@ -111,11 +118,13 @@ The staff queue supports comma-separated multi-value `status` filters (e.g.,
 - **Empty** (e.g., "My Assigned" = 0): card still renders with value `0` and label unchanged; "My Recent Tickets" empty state renders the "No recent Tickets yet." empty-state component (asserted by UI-09/UI-10 in `tests.md`); the Requester Dashboard's quick panel carries the `Create Ticket` CTA (§3.1).
 - **Forbidden**: `/dashboard` is a single route that renders one of two components based on the authenticated session's role — a Requester session always renders the Requester Dashboard component (§3), never this one, so there is no route to "redirect away from." Defense in depth: even if the wrong component were somehow rendered, `GET /api/dashboard/staff` independently returns `403 Forbidden` for a Requester session (`api-spec.md` §3.1), so no staff data can reach the client to begin with — the UI never renders staff data and then hides it.
 - **Safe failure**: on API error, cards show a small inline error state per card group ("Couldn't load metrics — Retry") with a `Retry` button; page does not blank out entirely (partial-failure tolerant).
+- **My Actions Taken / Urgent Tickets** (added 2026-10-28): each is its own loading/empty/safe-failure unit, exactly like the metric and recent groups above. Loading renders 5 skeleton rows with `aria-busy="true"` and no layout shift; empty renders the documented empty-state text (the header count stays visible as `0`); failure renders "Couldn't load your Actions Taken." / "Couldn't load urgent tickets." with a `Retry` button in a `role="alert"` region — never a stack trace — while every other section keeps rendering its own data (a failure in one section must not blank the others).
 
 ### 2.5 Responsive
 - **Desktop (≥1024px)**: 5 cards in one row; two-column content row (recent list : quick actions ≈ 2:1).
 - **Tablet (768–1023px)**: cards wrap 3+2; content row stacks to single column (recent list above quick actions).
 - **Mobile (<768px)**: cards stack 1-per-row (or 2-per-row compact) in a vertical scroll; no horizontal scrolling of the card row; recent Ticket rows collapse the timestamp under the title on a second line.
+- **New sections** (added 2026-10-28): the second content row is 2 columns (My Actions Taken : Urgent Tickets ≈ 1:1) on desktop and stacks to one column on tablet and mobile. Rows use wrapping flex layouts with `min-width: 0` and ellipsis/`overflow-wrap` for long titles and descriptions; no fixed pixel widths, so 390/768/1440 produce no horizontal document overflow (AC-19). At 390px the badges and timestamp wrap onto a second line under the title rather than being clipped.
 
 ---
 

@@ -296,6 +296,29 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
       "status": "IN_PROGRESS",
       "updatedAt": "2026-09-20T09:14:00.000Z"
     }
+  ],
+  "myActions": {
+    "followUpCount": 2,
+    "items": [
+      {
+        "id": "cm3x0e2a40000abcd1234wxyz",
+        "ticketId": 1234,
+        "ticketNumber": "TKT-2026-01234",
+        "description": "Replaced the battery and ran a full charge cycle.",
+        "actionDateTime": "2026-09-21T03:20:00.000Z",
+        "followUpRequired": true
+      }
+    ]
+  },
+  "urgentTickets": [
+    {
+      "id": 1180,
+      "ticketNumber": "TKT-2026-01180",
+      "title": "Projector in Room 4-201 will not power on",
+      "status": "OPEN",
+      "itPriority": "URGENT",
+      "ownerName": null
+    }
   ]
 }
 ```
@@ -310,7 +333,11 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
 - `deltas.*` applies only to the first four status keys — `new`, `open`, `inProgress`, `waitingForRequester`. There is no `deltas.myAssigned` key at all (omitted from the response entirely, not present as `0` or `null`), since reassignment is not a status transition and is out of scope for Lab 4's delta indicator; the UI simply renders no delta chip on the "My Assigned" card.
 - For each of those four keys: `deltas.<key> = (# TicketStatusHistory rows where toStatus IN <that status/group> AND changedAt >= now − 24h) − (# TicketStatusHistory rows where fromStatus IN <that status/group> AND changedAt >= now − 24h)`, **plus**, for `new` only, `+ (# Tickets where createdAt >= now − 24h)`. The extra term for `new` exists because Ticket *creation* does not write a `TicketStatusHistory` row (there is no `fromStatus` to record) — without it, newly submitted Tickets would silently vanish from the "New" delta even though they visibly raise `counts.new`. (In practice `toStatus = 'NEW'` never appears in `TicketStatusHistory` at all, since no transition in §5.1's matrix targets `NEW`; the formula is written generally so it still holds if that ever changes.) All terms are computed **live** against `Ticket`/`TicketStatusHistory` at request time (`specification.md` §7.1–§7.3) — never a cached/pre-aggregated counter, satisfying BR-13. Because every term is a live event-count query rather than a snapshot comparison, `deltas.<key>` is always a well-defined integer (including `0` when nothing happened in the last 24 hours) — there is no `null` case.
 - `recentTickets` = the 5 most recently `updatedAt` Tickets where `ownerId = current user` **or** `ownerId IS NULL`, excluding `CANCELLED`, newest first. (`ownerId` is the Lab 1–3 column name for the Ticket Owner relationship — see `specification.md` §7.2's Implementation Note.)
-- **Empty behavior:** any zero count or zero delta is returned as `0` (not omitted, not `null`); `recentTickets` may be an empty array `[]`.
+- `myActions.items` = the 5 most recent `ActionTaken` rows where `performedById = current user` **and** `isVoided = false`, ordered `actionDateTime DESC, id DESC` (`specification.md` FR-17). The projection is exactly `id`, `ticketId`, `ticketNumber`, `description`, `actionDateTime`, `followUpRequired` — no `result`, `followUpNote`, `attachmentNotes`, or any other content field, so the dashboard never becomes a second Ticket-detail surface (FR-13). Note this is the **reverse** of the per-Ticket list's `actionDateTime ASC` order (`§1.2`, FR-03): the dashboard shows newest work first.
+- `myActions.followUpCount` = count of `ActionTaken` rows where `performedById = current user`, `isVoided = false`, `followUpRequired = true`, **and** the parent Ticket's `status NOT IN ('CLOSED', 'CANCELLED')` — i.e. follow-ups that still need doing, not ones on work that is already finished. Voided entries never count, and one Ticket may contribute more than one row (each entry is counted separately).
+- `urgentTickets` = at most 5 Tickets where `itPriority = 'URGENT'` **and** `status IN ('NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED')` (BR-14's open-work set; `HIGH` is deliberately not folded in — `specification.md` §11 decision 8), ordered `createdAt ASC, id ASC` so the longest-waiting urgent Ticket is first. Scope is the **whole** staff-visible queue, not only the caller's own assignments, consistent with `counts.*` and the `/staff/queue?priority=URGENT` list it links to. The projection is `id`, `ticketNumber`, `title` (`summary`), `status`, `itPriority`, `ownerName` (`null` when `ownerId IS NULL`).
+- Both new keys are present on **every** `200` response: `myActions.items` and `urgentTickets` are `[]` when nothing matches, and `myActions.followUpCount` is `0` — never omitted, never `null`.
+- **Empty behavior:** any zero count or zero delta is returned as `0` (not omitted, not `null`); `recentTickets`, `myActions.items` and `urgentTickets` may be empty arrays `[]`.
 
 ### 3.2 `GET /api/dashboard/requester`
 **Authorization:** Requester (any authenticated Requester; scope is always "me").

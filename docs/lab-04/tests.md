@@ -108,12 +108,61 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | API-35 | API | BR-14 | Seed a `Reopened` Ticket owned by current Requester; fetch requester dashboard | Counted in `counts.myOpen` | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
 | API-36 | API | BR-13, §7.3 spec | Trigger 2 status transitions into `Open` within the last 24h, then fetch staff dashboard | `deltas.open` reflects exactly those transitions, computed against live `TicketStatusHistory` rows (no cached counter involved — verified by asserting the value changes immediately after a new transition, within the same test, with no cache-invalidation step) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | API-37 | API | §3.1 api-spec | Fetch staff dashboard with zero `TicketStatusHistory` rows in the last 24h (fresh seed) | `deltas.*` are all `0` (never `null`) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-42 | API | FR-17, AC-15 | `myActions.items` scope, order, limit and projection | Only the caller's non-voided entries; newest `actionDateTime` first with `id` DESC as the tie-break; ≤5 rows; projection is exactly `id`/`ticketId`/`ticketNumber`/`description`/`actionDateTime`/`followUpRequired` (no `result`, `followUpNote`, `attachmentNotes`) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-43 | API | FR-17, AC-15 | `myActions.followUpCount` correctness | Equals a direct DB count of the caller's non-voided `followUpRequired = true` entries on Tickets that are neither `CLOSED` nor `CANCELLED`; voided entries and other users' entries excluded; one Ticket may contribute several entries | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-44 | API | FR-18, AC-16 | `urgentTickets` filter, order, limit, owner projection | Only `itPriority = 'URGENT'` Tickets in the BR-14 open-work set (`HIGH` and `RESOLVED`/`CLOSED`/`CANCELLED` excluded), oldest `createdAt` first then `id` ASC, ≤5 rows, `ownerName` is `null` when unassigned and the owner's name otherwise | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-45 | API | FR-17, FR-18, BR-13 | Both new sections against direct DB queries on a fresh fixture set | `myActions` and `urgentTickets` match counts/rows computed by the test itself through Prisma (never by calling the implementation), so a wrong `where`/`orderBy` cannot pass | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | AUTH-03 | AUTH | AC-02 | Requester calls `/api/dashboard/staff` | `403 FORBIDDEN_ROLE` | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| AUTH-05 | AUTH | BR-16 (GAP C) | Requester fetches another Requester's Ticket vs a non-existent Ticket | Both are the identical `404 TICKET_NOT_FOUND` (status, `error.code`, `error.message`) — ownership protection is evidenced by `404`, not `403` | `server/tests/lab-03/authorization.api.test.ts` (SEC-07, API-36) — already implemented before this branch; **no application code change** | Pass |
 | UI-07 | UI | AC-10 | Staff Dashboard renders zero-value card correctly (not error) | Card shows `0` with label, no error banner | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | UI-08 | UI | §2.4 ui-spec | Dashboard partial-failure: one card group fails, rest render | Only failed section shows retry; others show data | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | UI-09 | UI | §3.4 ui-spec | Requester Dashboard empty "recent tickets" state | Renders empty-state component with CTA | `client/.../lab-04 tests/StaffDashboard.test.tsx` — the Requester Dashboard suites live inside the shared dashboard test file (`describe("UI-09 …")`); there is no separate `RequesterDashboard.test.tsx` | Pass |
+| UI-11 | UI | FR-17, AC-15, AC-17 | "My Actions Taken" panel | Rows render the Ticket number as a drill-down to `/staff/tickets/:id`, a truncated description, the action date/time and a `Follow-up` badge only when required; the header shows the follow-up count; loading renders skeletons with `aria-busy`; empty renders the documented empty text; a section failure shows a friendly `role="alert"` retry **while the other sections still render their data** | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
+| UI-12 | UI | FR-18, AC-16, AC-17 | "Urgent Tickets" panel | Rows render status + IT Priority badges and the owner name or "Unassigned"; `View all urgent` targets `/staff/queue?priority=URGENT`; loading/empty/error states are independent of the other sections | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
+| UI-13 | UI | FR-19, BR-17, AC-18 | Assignment rejected with `422 INVALID_OWNER` (GAP D) | The server's friendly message appears in `owner-error` (`role="alert"`, `aria-describedby` bound to the picker); the previously displayed owner and the picker selection are unchanged; the Reassign control is enabled again and a retry against a valid owner succeeds | `client/tests/lab-03/StaffTicketDetail.test.tsx` (the ownership control is Lab 3 code; its suite is the correct home) | Pass (no production change was needed — see §3 Implementation Note) |
+| UI-14 | UI | FR-18, AC-16 | Ticket Queue seeded from the `priority` query parameter | `/staff/queue?priority=URGENT` opens the queue with its IT Priority filter set to `URGENT` and the first request carrying `priority=URGENT`, so the "View all urgent" drill-down matches the panel's rows (the queue already seeded `status`/`owner` but not `priority`) | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass |
 | RESP-01 | RESP | §2.5, §3.5 ui-spec | Dashboard card grid reflow at 1024/768/375px widths | Cards wrap/stack per spec; no horizontal scroll | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
+| RESP-02 | RESP | AC-19, §2.5 ui-spec | Responsive rules for the two new sections | Authored CSS stacks the second content row to a single column at ≤1023px, wraps rows, and declares no fixed pixel width/min-width on the new row or panel classes; the live 390/768/1440 no-overflow measurement is executed by the Playwright suites (E2E-03 / the scripted walkthrough), not by jsdom | `client/.../lab-04 tests/StaffDashboard.test.tsx` (authored CSS) + `e2e/lab-04/dashboards.spec.ts` (live reflow) | Pass for the authored-CSS assertions; the live reflow was **not** re-run on this branch (no Playwright run — its global setup resets the dev database) |
 | E2E-03 | E2E | AC-02, FR-12 | Drill-down from every dashboard card/row to correct filtered destination | URL/query params match §2.3/§3.3 ui-spec mapping | `e2e/lab-04/dashboards.spec.ts` | Pass |
+
+**Implementation Note (`fix/lab4-dashboard-gap-fix`, 2026-10-28).** `API-42`…`API-45`, `UI-11`…`UI-14`
+and `RESP-02` were added after Feature 7 was merged, when the shipped IT Staff Dashboard was
+re-checked against the assignment's dashboard requirements (`specification.md` FR-17/FR-18/FR-19,
+AC-15…AC-19). The gaps and how each is closed:
+
+1. **GAP A — no "My Actions Taken" section.** Covered by `API-42`/`API-43`/`API-45` (server) and
+   `UI-11` (panel).
+2. **GAP B — no "Urgent Tickets" panel.** Covered by `API-44`/`API-45` and `UI-12`; `UI-14` proves
+   the panel's `View all urgent` destination actually filters, which required seeding the queue's IT
+   Priority filter from the `priority` query parameter (the queue already did this for
+   `status`/`owner`).
+3. **GAP C — cross-owner access returns `404`, not `403`.** No behaviour change and therefore no new
+   test: this is the deliberate no-leak rule now written down as BR-16, and it is already asserted
+   by `SEC-07` and `API-36` in `server/tests/lab-03/authorization.api.test.ts` (`AUTH-05` above).
+4. **GAP D — `422 INVALID_OWNER` had no UI-level coverage.** `UI-13` drives the rejection through the
+   real ownership control. The dropdown shows only active staff, which is why the rejection is only
+   reproducible from a stale picker; the test simulates exactly that and asserts the friendly message,
+   the unchanged owner/selection, and a usable control afterwards. No server rule and no dropdown
+   filter was changed.
+
+`UI-11`/`UI-12` follow the existing per-section state pattern (`UI-08`): each section issues its own
+`GET /api/dashboard/staff` and keeps its own loading/error state, so a failure in one section cannot
+blank the others (`specification.md` §11 decision 9).
+
+**Result of writing `UI-13` first (GAP D):** the test **passed against the unmodified
+`StaffTicketDetailPage`**, so the shipped ownership control already satisfied FR-19/BR-17 — the
+server's `error.message` was already rendered in `owner-error` (`role="alert"`, `aria-describedby`
+bound to the picker), `selectedOwner` and the `/assign` failure path already left the displayed owner
+untouched, and `ownerBusy` was already cleared in a `finally`. No production code was changed for
+GAP D; the gap was missing UI-level coverage, not a defect. The Test-DD expectation that the new
+test would fail first was therefore not met here, and that is recorded rather than hidden.
+
+**KL-01 (known flakiness) observed while verifying this branch:** the first `npx vitest run
+tests/lab-04/staff-dashboard.api.test.ts` of the session failed `AUTH-03 … answers unauthenticated
+callers with 401` with supertest's `Parse Error: Expected HTTP/, RTSP/ or ICE/`; the identical re-run
+passed 18/18, and the full server suite then passed 638/638 on its first run. Per KL-01 (§8) the
+single red run is treated as the documented harness flake, both outcomes are recorded, and no test
+was changed or skipped.
 
 ## 4. Migration & Regression (Labs 1–3)
 
@@ -157,6 +206,11 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | AC-12 | REGRESSION-01…04, E2E-04, MIGRATION-01…03 |
 | AC-13 | (Accessibility checklist, `ui-spec.md` §8 — axe scans in the component suites plus the scripted keyboard/responsive walkthrough in `e2e/walkthrough/regression-walkthrough.spec.ts`, with contrast ratios and screenshot evidence recorded inline in §8) |
 | AC-14 | API-32 (E2E-05 not implemented — see §5) |
+| AC-15 | API-42, API-43, API-45, UI-11 |
+| AC-16 | API-44, API-45, UI-12, UI-14 |
+| AC-17 | UI-11, UI-12 (per-section states) |
+| AC-18 | UI-13 |
+| AC-19 | RESP-02 (authored CSS) + E2E-03 (live 390/768/1440 overflow measurement) |
 
 ---
 
