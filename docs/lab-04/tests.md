@@ -121,6 +121,7 @@ Points where this plan met the shipped codebase, resolved before implementation:
 | UI-12 | UI | FR-18, AC-16, AC-17 | "Urgent Tickets" panel | Rows render status + IT Priority badges and the owner name or "Unassigned"; `View all urgent` targets `/staff/queue?priority=URGENT`; loading/empty/error states are independent of the other sections | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | UI-13 | UI | FR-19, BR-17, AC-18 | Assignment rejected with `422 INVALID_OWNER` (GAP D) | The server's friendly message appears in `owner-error` (`role="alert"`, `aria-describedby` bound to the picker); the previously displayed owner and the picker selection are unchanged; the Reassign control is enabled again and a retry against a valid owner succeeds | `client/tests/lab-03/StaffTicketDetail.test.tsx` (the ownership control is Lab 3 code; its suite is the correct home) | Pass (no production change was needed — see §3 Implementation Note) |
 | UI-14 | UI | FR-18, AC-16 | Ticket Queue seeded from the `priority` query parameter | `/staff/queue?priority=URGENT` opens the queue with its IT Priority filter set to `URGENT` and the first request carrying `priority=URGENT`, so the "View all urgent" drill-down matches the panel's rows (the queue already seeded `status`/`owner` but not `priority`) | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass |
+| UI-15 | UI | §3 ui-spec (Lab 3 Change Password), §8 ui-spec (no overlap/clipping) | The always-visible password-complexity hint renders fully **below** the New Password input, not over its bottom border | The hint follows the input in DOM order and is the middle element of the New Password field group (the wrapper holding that input precedes it, the Confirm New Password group follows it); `ChangePasswordPage.module.css` `.hint` authors only positive, token-based margins — no negative margin, no `position: absolute/fixed`, no fixed height; on a validation failure the hint is still rendered below the field, is neither nested in nor replaced by the error, and stays in the input's `aria-describedby` | `client/tests/lab-03/ChangePassword.test.tsx` | Pass for the DOM-order + authored-CSS assertions; the rendered pixels at 390×844 / 768×1024 / 1440×900 were **not** measured on this branch (no Playwright run — its global setup resets the dev database) |
 | RESP-01 | RESP | §2.5, §3.5 ui-spec | Dashboard card grid reflow at 1024/768/375px widths | Cards wrap/stack per spec; no horizontal scroll | `client/.../lab-04 tests/StaffDashboard.test.tsx` | Pass |
 | RESP-02 | RESP | AC-19, §2.5 ui-spec | Responsive rules for the two new sections | Authored CSS stacks the second content row to a single column at ≤1023px, wraps rows, and declares no fixed pixel width/min-width on the new row or panel classes; the live 390/768/1440 no-overflow measurement is executed by the Playwright suites (E2E-03 / the scripted walkthrough), not by jsdom | `client/.../lab-04 tests/StaffDashboard.test.tsx` (authored CSS) + `e2e/lab-04/dashboards.spec.ts` (live reflow) | Pass for the authored-CSS assertions; the live reflow was **not** re-run on this branch (no Playwright run — its global setup resets the dev database) |
 | E2E-03 | E2E | AC-02, FR-12 | Drill-down from every dashboard card/row to correct filtered destination | URL/query params match §2.3/§3.3 ui-spec mapping | `e2e/lab-04/dashboards.spec.ts` | Pass |
@@ -163,6 +164,17 @@ callers with 401` with supertest's `Parse Error: Expected HTTP/, RTSP/ or ICE/`;
 passed 18/18, and the full server suite then passed 638/638 on its first run. Per KL-01 (§8) the
 single red run is treated as the documented harness flake, both outcomes are recorded, and no test
 was changed or skipped.
+
+**Implementation Note (`fix/lab4-09-change-password-layout-fix`, 2026-10-28).** `UI-15` was added
+after a review of the shipped "Set a new password" screen found the always-visible complexity hint
+overlapping the New Password input. The cause was local, not shared: the hint is a sibling *outside*
+the `Field` wrapper (which owns the 4px label→input gap), and `ChangePasswordPage.module.css`
+pulled it upward with `margin: calc(-1 * var(--space-2)) 0 var(--space-4)`. The fix replaces that
+negative top margin with `var(--space-1)` (4px, the same gap `Field` uses internally), leaving the
+label/input/hint/error order and every validation rule, route and API call untouched; the shared
+`Field` component was **not** modified, so no other screen changes. The test was written first and
+failed for the intended reason (the negative margin) before the fix; jsdom performs no layout, so it
+pins DOM order and the authored spacing rather than measuring overlap.
 
 ## 4. Migration & Regression (Labs 1–3)
 
