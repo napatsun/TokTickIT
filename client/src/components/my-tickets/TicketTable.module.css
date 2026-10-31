@@ -13,7 +13,7 @@
 .tableContainer {
   width: 100%;
   overflow-x: auto; /* §11: scroll within container only, not the page */
-  border: 1px solid #dde7e1;
+  border: 1px solid var(--color-field-editable-border);
   border-radius: 8px;
   background-color: var(--color-surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -145,7 +145,7 @@
     padding: 16px;
     min-height: 44px; /* §11: touch target ≥44px */
     background-color: var(--color-surface);
-    border: 1px solid #dde7e1;
+    border: 1px solid var(--color-field-editable-border);
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
     cursor: pointer;

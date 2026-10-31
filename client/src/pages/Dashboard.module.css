@@ -256,12 +256,14 @@
 
 .rowTitle {
   flex: 1 1 200px;
+  min-width: 0;
   font-size: var(--font-size-md);
   color: var(--color-text);
   /* One-line title per §2.1; mobile lets it wrap to a second line. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .rowMeta {
@@ -445,5 +447,11 @@
   .panelHeader {
     flex-wrap: wrap;
     gap: var(--space-1) var(--space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metricCard {
+    transition: none;
   }
 }

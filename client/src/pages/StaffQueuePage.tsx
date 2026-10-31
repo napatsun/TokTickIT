@@ -105,6 +105,7 @@ export default function StaffQueuePage() {
   const initialStatus = searchParams.get("status") ?? "";
   const initialOwner = searchParams.get("owner") ?? "";
   const initialPriority = searchParams.get("priority") ?? "";
+  const focusSearch = searchParams.get("focus") === "search";
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -115,6 +116,13 @@ export default function StaffQueuePage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
   const [searchResetSignal, setSearchResetSignal] = useState(0);
+
+  useEffect(() => {
+    if (focusSearch) {
+      const searchInput = document.getElementById("queue-search") as HTMLInputElement | null;
+      searchInput?.focus();
+    }
+  }, [focusSearch]);
 
   const hasActiveFilters =
     search.trim() !== "" ||
@@ -276,6 +284,16 @@ export default function StaffQueuePage() {
                 {option.label}
               </option>
             ))}
+            {statusFilter !== "" &&
+              !STATUS_OPTIONS.some((option) => option.value === statusFilter) && (
+                <option value={statusFilter}>
+                  {statusFilter.toLowerCase() === "open-work"
+                    ? "Open work (from dashboard)"
+                    : statusFilter.includes(",")
+                      ? `${statusFilter.split(",").length} statuses (from dashboard)`
+                      : statusFilter}
+                </option>
+              )}
           </select>
         </label>
 
@@ -311,9 +329,11 @@ export default function StaffQueuePage() {
           </select>
         </label>
 
-        <Button variant="tertiary" onClick={clearFilters} disabled={!hasActiveFilters}>
-          Clear filters
-        </Button>
+        {hasActiveFilters && (
+          <Button variant="tertiary" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* ─── Loading skeleton ─────────────────────────────────────────── */}

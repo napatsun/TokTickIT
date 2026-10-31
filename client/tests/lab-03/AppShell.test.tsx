@@ -193,7 +193,7 @@ describe("UI-10 — App Shell accessibility (ui-spec §9)", () => {
     // tabindex="-1", so Tab reaches them all.
     const controls = [
       screen.getByTestId("shell-user-name"),
-      screen.getByRole("button", { name: /^log out$/i }),
+      ...screen.getAllByRole("button", { name: /^log out$/i }),
       screen.getByRole("button", { name: /open menu/i }),
       screen.getByRole("navigation", { name: /main navigation/i }),
     ];

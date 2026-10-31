@@ -242,6 +242,31 @@ describe("Actions Taken — view mode (ui-spec §4.2)", () => {
     expect(screen.getByTestId("edited-caption-act-1")).toHaveTextContent(/Edited .* by Alice Chen/);
   });
 
+  it("uses 'Show more' / 'Show less' for both description and row-details expansion with distinct accessible names", async () => {
+    const user = userEvent.setup();
+    const longDescription = "A".repeat(140);
+    routeApi({
+      items: [makeEntry({ id: "act-long", description: longDescription })],
+    });
+    renderPanel(userFor("IT_STAFF"));
+
+    const descToggle = await screen.findByTestId("show-more-act-long");
+    const rowToggle = screen.getByTestId("expand-action-act-long");
+
+    expect(descToggle).toHaveTextContent("Show more");
+    expect(descToggle).toHaveAccessibleName("Show more description");
+    expect(rowToggle).toHaveTextContent("Show more");
+    expect(rowToggle).toHaveAccessibleName("Show more row details");
+
+    await user.click(descToggle);
+    expect(descToggle).toHaveTextContent("Show less");
+    expect(descToggle).toHaveAccessibleName("Show less description");
+
+    await user.click(rowToggle);
+    expect(rowToggle).toHaveTextContent("Show less");
+    expect(rowToggle).toHaveAccessibleName("Show less row details");
+  });
+
   it("hides voided rows by default and shows them under the Show-voided toggle (staff only)", async () => {
     const user = userEvent.setup();
     routeApi({

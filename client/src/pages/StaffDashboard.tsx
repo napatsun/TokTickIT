@@ -486,6 +486,7 @@ export default function StaffDashboard() {
                     type="button"
                     className={styles.actionRow}
                     data-testid="my-actions-row"
+                    title={action.description}
                     onClick={() => navigate(`/staff/tickets/${action.ticketId}`)}
                     aria-label={`${action.ticketNumber}: ${action.description}, open ticket detail`}
                   >

@@ -943,7 +943,7 @@ export default function ActionsTakenPanel({
                 <th scope="col">Performed By</th>
                 <th scope="col">Follow-up</th>
                 <th scope="col">
-                  <span className={styles.visuallyHidden}>Details</span>
+                  <span className={styles.visuallyHidden}>Actions</span>
                 </th>
               </tr>
             </thead>
@@ -1048,6 +1048,7 @@ function TableRow({
               onClick={() => setShowFullDescription((current) => !current)}
               aria-expanded={showFullDescription}
               aria-controls={descId}
+              aria-label={showFullDescription ? "Show less description" : "Show more description"}
               data-testid={`show-more-${entry.id}`}
             >
               {showFullDescription ? "Show less" : "Show more"}
@@ -1064,7 +1065,7 @@ function TableRow({
             {entry.followUpRequired ? "Follow-up needed" : "No follow-up"}
           </span>
         </td>
-        <td data-label="Details" className={styles.cellActions}>
+        <td data-label="Actions" className={styles.cellActions}>
           {(canEdit || canVoid) && (
             <>
               {canEdit && (
@@ -1084,9 +1085,10 @@ function TableRow({
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={detailsId}
+            aria-label={expanded ? "Show less row details" : "Show more row details"}
             data-testid={`expand-action-${entry.id}`}
           >
-            {expanded ? "Hide details" : "Details"}
+            {expanded ? "Show less" : "Show more"}
           </Button>
         </td>
       </tr>
