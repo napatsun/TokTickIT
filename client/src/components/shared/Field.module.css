@@ -35,7 +35,12 @@
   font-size: 14px;
   font-family: inherit;
   line-height: 1.4;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  /* No border-color/box-shadow transition (2026-10-30): the field focus ring
+     must be fully present in the frame focus happens. A 150ms fade made an
+     immediate read see the transition's start value — a transparent 0px
+     shadow — which is what `e2e/lab-03/responsive.spec.ts` (RESP-04) had to
+     wait 250ms to avoid, and what the focus-ring evidence run reported as
+     "no visible focus indicator". ui-spec.md §8 (AC-13), tests.md UI-16. */
 }
 
 /* §10: input 40px height */
@@ -71,10 +76,18 @@
 /* -----------------------------------------------------------
    State: focused — secondary-green border + 2px focus ring
    §3: "never removed for keyboard users"
+
+   The rule covers EVERY editable state so the ring is identical everywhere:
+   default and invalid, input and textarea (`.inputControl` is listed for
+   completeness even though Field does not currently apply that class to
+   plain inputs), and select. Readonly/disabled keep their documented no-ring
+   treatment below. ui-spec.md §8 (AC-13), tests.md UI-16.
    ----------------------------------------------------------- */
 .focusedControl,
 .defaultControl:focus,
+.invalidControl:focus,
 .inputControl:focus,
+.selectControl:focus,
 .textareaControl:focus {
   border-color: var(--color-secondary-green);
   outline: none;

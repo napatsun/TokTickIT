@@ -1,6 +1,9 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ActionsTakenPanel from "../../src/components/ticket-detail/ActionsTakenPanel";
 import { expectNoA11yViolations } from "../support/a11y";
 import type { AuthUser } from "../../src/contexts/AuthContext";
@@ -14,6 +17,9 @@ import type { ActionTakenEntry } from "../../src/components/ticket-detail/Action
  *          second request from a second click — FR-15/AC-11 client guard)
  *   UI-03  Failed submit preserves every entered value (§4.5 safe failure)
  *   UI-04  Requester view renders no create/edit controls in the DOM
+ *   UI-17  every styles.* reference resolves to a defined CSS-module class
+ *   UI-18  every aria-describedby id on the form resolves (describedby audit)
+ *   UI-19  Show-voided heading wording (AC-20)
  *   plus: edit-window/Administrator gating, void flow, Show-voided toggle,
  *   error-code handling (EDIT_WINDOW_EXPIRED / NOT_AUTHOR / ENTRY_VOIDED),
  *   the §4.2 view-mode table, and automated axe checks (§8).
@@ -778,5 +784,169 @@ describe("Actions Taken — automated accessibility (ui-spec §8)", () => {
     await screen.findByTestId("actions-taken-empty");
 
     await expectNoA11yViolations(document.body, "Actions Taken (empty)");
+  });
+});
+
+// ─── UI-17: every styles.* reference resolves to a defined class ────────
+
+/** The component and its stylesheet, read as source (UI-15 technique). */
+function actionsTakenSources() {
+  const dir = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "src",
+    "components",
+    "ticket-detail",
+  );
+  return {
+    tsx: fs.readFileSync(path.join(dir, "ActionsTakenPanel.tsx"), "utf8"),
+    css: fs.readFileSync(path.join(dir, "ActionsTakenPanel.module.css"), "utf8"),
+  };
+}
+
+/**
+ * UI-17 — `TableRow` built `class="undefined … rowVoided"` because `.row` was
+ * never authored in `ActionsTakenPanel.module.css` (nor were three skeleton
+ * modifiers). jsdom performs no layout, so this pins the authored CSS
+ * contract: every static `styles.X` reference must exist in the module. The
+ * alternative choice — adding new `.row` styling — would duplicate the
+ * padding/divider `.table td` already provides (ui-spec §4.2), which the
+ * second assertion keeps pinned.
+ */
+describe("UI-17 — ActionsTakenPanel references only defined CSS-module classes (ui-spec §4.2)", () => {
+  it("defines every static styles.* class the component uses", () => {
+    const { tsx, css } = actionsTakenSources();
+    const refs = [...new Set([...tsx.matchAll(/\bstyles\.([A-Za-z_$][\w$]*)/g)].map((m) => m[1]))];
+    const missing = refs.filter(
+      (ref) => !new RegExp(`\\.${ref}(?![A-Za-z0-9_-])`).test(css),
+    );
+
+    expect(
+      missing,
+      "classes referenced by ActionsTakenPanel.tsx but never defined in its CSS module",
+    ).toEqual([]);
+  });
+
+  it("keeps the row spacing and divider on the table-cell rules the row element relies on", () => {
+    const { css } = actionsTakenSources();
+    const tdRule = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) =>
+      /(^|[,\s])\.table\s+td(?![A-Za-z0-9_-])/.test(m[1]),
+    );
+
+    expect(tdRule, ".table td must be authored").toBeDefined();
+    const body = tdRule?.[2] ?? "";
+    // §4.2: cells own the row's vertical/horizontal padding and the divider,
+    // so the <tr> itself needs no extra class.
+    expect(body).toMatch(/padding:\s*var\(--space-3\)/);
+    expect(body).toMatch(/border-bottom:\s*1px solid var\(--color-field-editable-border\)/);
+  });
+});
+
+// ─── UI-18: aria-describedby targets all resolve ─────────────────────────
+
+/** Every dangling describedby id across every control in the form. */
+function danglingDescribedBy(form: HTMLElement): string[] {
+  const dangling: string[] = [];
+  for (const control of form.querySelectorAll("input, textarea, select")) {
+    const ids = (control.getAttribute("aria-describedby") ?? "")
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const id of ids) {
+      if (!document.getElementById(id)) {
+        dangling.push(`${control.id || control.tagName}: ${id}`);
+      }
+    }
+  }
+  return dangling;
+}
+
+/**
+ * UI-18 — the follow-up note added `action-followUpNote-error` to its
+ * `aria-describedby` on a server 422, but no element ever carries that id:
+ * the error text lives in the field's aria-live paragraph. Every other field
+ * conditionally pairs its id with a conditionally rendered error element.
+ */
+describe("UI-18 — every aria-describedby id on the Actions Taken form resolves (ui-spec §8, AC-13)", () => {
+  it("has no dangling describedby target after a server 422 on the follow-up note", async () => {
+    const user = userEvent.setup();
+    routeApi({
+      items: [makeEntry()],
+      createResponse: () => ({
+        status: 422,
+        body: {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Please fix the highlighted fields.",
+            fieldErrors: { followUpNote: "Follow-up note must be at least 3 characters." },
+          },
+        },
+      }),
+    });
+    renderPanel(userFor("IT_STAFF"));
+
+    await user.click(await screen.findByTestId("add-action-button"));
+    await user.click(screen.getByLabelText(/follow-up required/i));
+    await user.type(screen.getByLabelText(/action description/i), "Diagnosed the fault.");
+    await user.type(screen.getByLabelText(/^result/i), "Replaced the swollen cell.");
+    await user.type(screen.getByLabelText(/follow-up note/i), "ab");
+    await user.click(screen.getByTestId("action-save-button"));
+
+    // The server 422 lands as a field error (aria-invalid flips on the note).
+    const note = (await screen.findByLabelText(/follow-up note/i)) as HTMLTextAreaElement;
+    await waitFor(() => expect(note).toHaveAttribute("aria-invalid", "true"));
+
+    expect(danglingDescribedBy(screen.getByTestId("actions-taken-form"))).toEqual([]);
+
+    // …and the error text is still programmatically associated: the note keeps
+    // its live region in aria-describedby, and that region carries the message.
+    const described = (note.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    expect(described.length).toBeGreaterThan(0);
+    const live = document.getElementById(described[0]);
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(live).toHaveTextContent(/at least 3 characters/i);
+  });
+});
+
+// ─── UI-19: Show-voided heading wording (AC-20) ──────────────────────────
+
+/**
+ * UI-19 — with the Administrator "Show voided" toggle on, the panel renders
+ * more rows than the heading's count (the badge counts non-voided entries,
+ * ui-spec §4.1/§4.2). AC-20: the header must then carry a plain-text secondary
+ * label stating how many voided rows are additionally shown.
+ */
+describe("UI-19 — Show-voided heading wording (AC-20, ui-spec §4.1)", () => {
+  it("keeps the non-voided count and adds '+1 voided shown' only while the toggle is on", async () => {
+    const user = userEvent.setup();
+    routeApi({
+      items: [
+        makeEntry(),
+        makeEntry({ id: "act-voided", isVoided: true, voidReason: "Duplicate entry." }),
+      ],
+    });
+    renderPanel(userFor("ADMINISTRATOR"));
+
+    const heading = await screen.findByRole("heading", { name: /actions taken/i });
+    expect(heading).toHaveTextContent("(1)");
+    expect(screen.queryByText(/\+\d+ voided shown/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("show-voided-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("actions-taken-row")).toHaveLength(2);
+    });
+    // The heading keeps the non-voided count; the label makes the extra row
+    // explicit in words (never colour alone).
+    expect(screen.getByRole("heading", { name: /actions taken/i })).toHaveTextContent("(1)");
+    expect(screen.getByText("+1 voided shown")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("show-voided-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("actions-taken-row")).toHaveLength(1);
+    });
+    expect(screen.getByRole("heading", { name: /actions taken/i })).toHaveTextContent("(1)");
+    expect(screen.queryByText("+1 voided shown")).not.toBeInTheDocument();
   });
 });

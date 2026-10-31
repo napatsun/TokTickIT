@@ -18,6 +18,7 @@ import type { AuthUser } from "../../src/contexts/AuthContext";
  *   UI-08    partial failure: one group shows retry, the other still renders
  *   UI-11    "My Actions Taken" panel: rows, follow-up badge, count, states
  *   UI-12    "Urgent Tickets" panel: rows, badges, owner, view-all, states
+ *   UI-20    Quick Actions is not a nested <aside> (axe landmark rule)
  *   RESP-01  the card grid reflow rules exist for 1024/768/375px breakpoints
  *   RESP-02  the new sections' responsive rules carry no fixed widths
  *   plus     delta chips (icon + text, only when present), drill-down
@@ -773,5 +774,39 @@ describe("dashboards — automated accessibility (ui-spec §8)", () => {
     renderRequester();
     await screen.findByTestId("recent-empty");
     await expectNoA11yViolations(document.body, "Requester dashboard (empty)");
+  });
+});
+
+// ─── UI-20 — no nested complementary landmark (axe) ──────────────────────
+
+/**
+ * UI-20 — axe `landmark-complementary-is-top-level` (moderate) fired on both
+ * dashboards: the Quick Actions panel was an `<aside>` nested inside the App
+ * Shell's `<main>`. The fix swaps in a `<section>` that keeps the same
+ * `aria-labelledby` association; `Dashboard.module.css` has no `aside` element
+ * selector, so the box model is unchanged. These assertions pin both halves:
+ * no complementary element remains, and the labelled panel survives.
+ */
+describe("UI-20 — Quick Actions is not a nested <aside> (axe landmark-complementary-is-top-level)", () => {
+  it("renders the staff dashboard's Quick Actions panel without a complementary landmark", async () => {
+    mockApiClient.mockResolvedValue(ok(staffPayload()));
+    const { container } = renderStaff();
+
+    await screen.findByTestId("quick-actions");
+
+    expect(container.querySelector("aside")).toBeNull();
+    expect(screen.getByRole("heading", { name: /quick actions/i })).toBeInTheDocument();
+    expect(container.querySelector('[aria-labelledby="quick-heading"]')).not.toBeNull();
+  });
+
+  it("renders the requester dashboard's Quick Actions panel without a complementary landmark", async () => {
+    mockApiClient.mockResolvedValue(ok(requesterPayload()));
+    const { container } = renderRequester();
+
+    await screen.findByTestId("quick-actions");
+
+    expect(container.querySelector("aside")).toBeNull();
+    expect(screen.getByRole("heading", { name: /quick actions/i })).toBeInTheDocument();
+    expect(container.querySelector('[aria-labelledby="quick-heading"]')).not.toBeNull();
   });
 });

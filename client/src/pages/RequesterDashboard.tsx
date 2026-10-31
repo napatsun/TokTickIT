@@ -298,7 +298,10 @@ export default function RequesterDashboard() {
           )}
         </section>
 
-        <aside className={styles.quickPanel} aria-labelledby="quick-heading">
+        {/* §8 (AC-13): a <section> (not <aside>) keeps the labelled panel
+            out of the App Shell's <main> landmark — axe
+            `landmark-complementary-is-top-level`. Same class, same box model. */}
+        <section className={styles.quickPanel} aria-labelledby="quick-heading">
           <h2 id="quick-heading" className={styles.panelTitle}>
             Quick Actions
           </h2>
@@ -310,7 +313,7 @@ export default function RequesterDashboard() {
               View My Tickets
             </Button>
           </div>
-        </aside>
+        </section>
       </div>
     </div>
   );
