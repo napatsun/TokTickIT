@@ -72,7 +72,7 @@ async function clearFilters(page: Page) {
   // re-apply *after* we clear and silently refilter the list (E2E-06).
   await page.waitForTimeout(400);
 
-  if (await clear.isEnabled()) {
+  if ((await clear.count()) > 0 && (await clear.isEnabled())) {
     await clear.click();
   }
   await expect(searchInput).toHaveValue("");

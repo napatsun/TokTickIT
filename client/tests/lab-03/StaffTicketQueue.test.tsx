@@ -390,6 +390,35 @@ describe("UI-14 — the queue seeds its filters from drill-down query params", (
     expect(screen.getByLabelText(/^Ownership/i)).toHaveValue("me");
     expect(screen.getByLabelText(/^IT Priority/i)).toHaveValue("HIGH");
   });
+
+  it("renders a matching synthetic option when seeded with a multi-status dashboard drill-down", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?status=IN_PROGRESS,REOPENED"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    const statusSelect = screen.getByLabelText(/^Status/i) as HTMLSelectElement;
+    expect(statusSelect).toHaveValue("IN_PROGRESS,REOPENED");
+    expect(statusSelect.selectedOptions[0]?.textContent).toBe("2 statuses (from dashboard)");
+  });
+
+  it("focuses the search input when navigated with ?focus=search from Quick Actions", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?focus=search"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    const searchInput = screen.getByLabelText(/search by ticket number or summary/i);
+    expect(searchInput).toHaveFocus();
+  });
 });
 
 // ─── UI-10: automated accessibility (jest-axe) ───────────────────────────

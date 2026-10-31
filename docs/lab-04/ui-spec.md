@@ -9,16 +9,25 @@ rules.
 
 ## 1. Design Tokens (reused, not redefined)
 
-| Token | Usage |
-|---|---|
-| `--color-primary` (Zen Green, e.g. `#1E5B45`) | Header bar, primary buttons, active nav |
-| `--color-success` | `RESOLVED` / `CLOSED` badges, positive deltas |
-| `--color-warning` | `WAITING_FOR_REQUESTER`, follow-up-required badge |
-| `--color-info` | `OPEN` / `NEW` badges |
-| `--color-danger` | `CANCELLED` badge, validation errors, destructive actions |
-| `--color-surface`, `--color-surface-alt` | Card backgrounds |
-| `--radius-card` | Card corner radius (reuse Lab 2/3 value) |
-| `--shadow-card` | Card elevation (reuse Lab 2/3 value) |
+| Token | Value | Usage |
+|---|---|---|
+| `--color-primary-green` | `#006B3C` | App header bar, primary buttons, strong emphasis |
+| `--color-secondary-green` | `#0B7A46` | Active tabs, focus accents (`--focus-ring-color`), links, primary button hover |
+| `--color-pale-green` | `#EAF6EF` | Selected states, success backgrounds, subtle section emphasis |
+| `--color-bg-page` | `#F5F7F6` | Quiet near-white page background across all screens |
+| `--color-disabled-text` | `#5B6B62` | Disabled control text (`4.74:1` contrast on `#E9ECEA`) |
+| `--color-success` | `#0B7A46` / `#EAF6EF` | `RESOLVED` / `CLOSED` badges, positive deltas |
+| `--color-warning` | `#8A5300` / `#FFF6E5` | `WAITING_FOR_REQUESTER`, follow-up-required badge |
+| `--color-info` | `#006B3C` / `#EAF6EF` | `OPEN` / `NEW` badges |
+| `--color-danger` | `#B42318` / `#FDECEC` | `CANCELLED` badge, validation errors, destructive actions |
+| `--color-surface` | `#FFFFFF` | Card and panel backgrounds |
+| `--radius-card` | `8px` | Card corner radius (reuse Lab 2/3 value) |
+| `--shadow-card` | `var(--shadow-sm)` | Card elevation (reuse Lab 2/3 value) |
+
+**Cross-screen consistency rules (`fix/lab4-11-final-fix`):**
+- **Date formatting:** All screens format dates via the shared `formatDate` / `formatDateTime` helpers in `client/src/lib/dateFormat.ts` using strict 3-letter English month abbreviations (`Jan`..`Dec`, e.g. `2 Sep 2026`, never locale-dependent `Sept`).
+- **"Clear filters" visibility:** On every filterable list screen (`MyTicketsPage`, `StaffQueuePage`, `AdminUsersPage`), the `"Clear filters"` button is rendered **only** when at least one search or filter is active (`hasActiveFilters === true`) and is hidden from the DOM otherwise.
+- **"Log out" button:** Both the desktop header and the mobile navigation drawer render the exact visible text `"Log out"` (two words) with matching accessible name `"Log out"` (WCAG 2.5.3 Label in Name).
 
 No new colors are introduced in Lab 4; status colors must reuse the exact mapping already used on
 Ticket badges in Lab 2/3 so a status reads identically on Dashboard cards, Ticket list rows, and
@@ -132,12 +141,17 @@ The staff queue supports comma-separated multi-value `status` filters (e.g.,
 
 ### 3.1 Layout
 - Same header pattern. Nav items for Requester: `Dashboard | My Tickets | Create Ticket` — My Tickets is the role's home page.
-- Welcome row: `Welcome, {firstName}!` + subtitle.
+- Welcome row: `Welcome, {firstName}!` + subtitle + `Refresh` button.
 - Metric card row (4 cards): **My Open Tickets**, **In Progress**, **Resolved**, **Closed** — each card includes a `View all` link beneath the value (not just a card-level click, to make the drill-down affordance explicit and screen-reader-labelled).
-- Two-column content row: **My Recent Tickets** (5 rows) + **Quick Actions** (`Create Ticket` → `/tickets/new`, `View My Tickets` → `/tickets`).
+- First content row (two columns on desktop):
+  - Left (wider): **Recently Updated** (`data-testid="recently-updated-section"`) — header carries a total count badge `Total: N` (`recentlyUpdated.count`, `data-testid="recently-updated-count"`) and a `View all` link (`data-testid="recent-view-all"` → `/tickets`); body lists up to 5 most recently updated non-`CANCELLED` Tickets owned by the Requester (`data-testid="recent-ticket-row"`).
+  - Right (narrower): **Quick Actions** (`Create Ticket` → `/tickets/new`, `View My Tickets` → `/tickets`).
+- Second content row (two columns on desktop, stacked on tablet/mobile — `specification.md` FR-11, AC-21):
+  - Left: **Attention Required** (`data-testid="attention-required-section"`) — own Tickets with `status IN ('WAITING_FOR_REQUESTER', 'REOPENED')`, ordered by `updatedAt DESC`, up to 5 rows (`data-testid="attention-required-row"`). Header carries `Total: N` (`attentionRequired.count`, `data-testid="attention-required-count"`) and `View all` (`data-testid="attention-required-view-all"` → `/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED`). Empty state: `"No Tickets require your attention right now."` (`data-testid="attention-required-empty"`).
+  - Right: **Resolved** (`data-testid="resolved-work-section"`) — own Tickets with `status IN ('RESOLVED', 'CLOSED')`, ordered by `updatedAt DESC`, up to 5 rows (`data-testid="resolved-work-row"`). Header carries `Total: N` (`resolvedWork.count`, `data-testid="resolved-work-count"`) and `View all` (`data-testid="resolved-work-view-all"` → `/tickets?currentStatus=RESOLVED,CLOSED`). Empty state: `"No resolved Tickets yet."` (`data-testid="resolved-work-empty"`).
 
 ### 3.2 Data Contract
-Backed by `GET /api/dashboard/requester`, scoped strictly to `requesterId = current user` at the query layer (never filtered client-side).
+Backed by `GET /api/dashboard/requester`, scoped strictly to `requesterId = current user` at the query layer (never filtered client-side). Every section's `count` equals the `pagination.totalItems` of its matching `/tickets` drill-down query.
 
 ### 3.3 Drill-down
 
@@ -145,18 +159,22 @@ Backed by `GET /api/dashboard/requester`, scoped strictly to `requesterId = curr
 `MyTicketsPage` at `/tickets`, and its status query parameter is **`currentStatus`** (not `status`) —
 `MyTicketsPage` reads `searchParams.get("currentStatus")` and `GET /api/tickets` validates
 `currentStatus` the same way the staff queue validates `status` (multi-value + `open-work` alias,
-case-insensitively — see §1's tolerance note). Recent-list rows navigate by Ticket **code**
+case-insensitively — see §1's tolerance note). Section list rows navigate by Ticket **code**
 (`/tickets/:ticketNumber`), while the staff side navigates by internal id (`/staff/tickets/:id`).
 All verified against `RequesterDashboard.tsx` and asserted by E2E-03 in
 `e2e/lab-04/dashboards.spec.ts`.
 
 | Element | Destination |
 |---|---|
-| My Open Tickets | `/tickets?currentStatus=NEW,OPEN,WAITING_FOR_REQUESTER,REOPENED` — **must not** use the `status=open-work` alias here: `counts.myOpen` in `api-spec.md` §3.2 deliberately **excludes `IN_PROGRESS`** (which has its own dedicated card below), while the `open-work` alias includes it. Using the alias would show more Tickets than the card's number counts. |
-| In Progress | `/tickets?currentStatus=IN_PROGRESS` |
-| Resolved | `/tickets?currentStatus=RESOLVED` |
-| Closed | `/tickets?currentStatus=CLOSED` |
-| Recent Ticket row | `/tickets/:ticketNumber` (Requester Ticket Detail, by Ticket code) |
+| My Open Tickets card / View all | `/tickets?currentStatus=NEW,OPEN,WAITING_FOR_REQUESTER,REOPENED` — **must not** use the `status=open-work` alias here: `counts.myOpen` in `api-spec.md` §3.2 deliberately **excludes `IN_PROGRESS`** (which has its own dedicated card below), while the `open-work` alias includes it. Using the alias would show more Tickets than the card's number counts. |
+| In Progress card / View all | `/tickets?currentStatus=IN_PROGRESS` |
+| Resolved card / View all | `/tickets?currentStatus=RESOLVED` |
+| Closed card / View all | `/tickets?currentStatus=CLOSED` |
+| Recently Updated "View all" | `/tickets` |
+| Attention Required "View all" | `/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED` |
+| Resolved section "View all" | `/tickets?currentStatus=RESOLVED,CLOSED` |
+| Any section Ticket row | `/tickets/:ticketNumber` (Requester Ticket Detail, by Ticket code) |
+| Quick Action: Create Ticket | `/tickets/new` |
 | Quick Action: View My Tickets | `/tickets` |
 
 ### 3.4 States
@@ -179,8 +197,8 @@ secondary label beside it states how many voided rows are additionally rendered 
 off the header is unchanged (AC-20).
 
 ### 4.2 View Mode (default, all roles with Ticket access)
-- Table/list, one row per non-voided Actions Taken, oldest first: `Date/Time | Description (truncated to 2 lines, "Show more" toggle) | Result | Performed By | Follow-up` (badge: "Follow-up needed" in `--color-warning` or "No follow-up" muted).
-- Row expands (accordion) to reveal `Attachment Notes` and, if edited, an "Edited {relativeTime} by {editor}" caption.
+- Table/list, one row per non-voided Actions Taken, oldest first: `Date/Time | Description (truncated to 2 lines, "Show more" / "Show less" toggle with aria-label="Show more description" / "Show less description") | Result | Performed By | Follow-up` (badge: "Follow-up needed" in `--color-warning` or "No follow-up" muted).
+- Row expands (accordion via `"Show more"` / `"Show less"` toggle with `aria-label="Show more row details"` / `"Show less row details"` and `aria-controls`) to reveal `Attachment Notes` and, if edited, an "Edited {relativeTime} by {editor}" caption. Both toggles use the visible text `"Show more"` / `"Show less"` and keep distinct `aria-label` and `aria-controls` attributes that contain the visible label (WCAG 2.5.3).
 - Row layout is authored once on the table cells: `td` carries `var(--space-3) var(--space-2)` padding
   plus the 1px bottom divider, and the ≤767px card treatment styles the `tr` directly (§7). The row
   element itself needs no extra class, so desktop and stacked rows share one spacing definition.
@@ -250,7 +268,7 @@ Evidence abbreviations: **axe** = the 34 jest-axe scan call sites across 10 comp
 - [x] Every status/priority badge conveys meaning via text label, not color alone.
   — *Evidence:* the shared `Badge` component maps every `TicketStatus`/priority value to a human label ("In Progress", "Waiting for Requester", "URGENT"…); dashboard delta chips pair arrow icon + sign + value, so colour is never the sole indicator (covered by axe `link-name`/`button-name` scans).
 - [x] Metric cards used as links/buttons have an accessible name that includes both the label and value.
-  — *Evidence:* `StaffDashboard.tsx` `aria-label={`${card.label}: ${card.value}, view filtered queue`}` (and recent rows `${code}: ${title}, open ticket detail`); `RequesterDashboard.tsx` same pattern with "view filtered tickets".
+  — *Evidence:* `StaffDashboard.tsx` `aria-label={`${card.value} ${card.label}${chip ? ` ${chip.icon} ${chip.text}` : ""}, view filtered queue`}` and `RequesterDashboard.tsx` `aria-label={`${card.value} ${card.label}, view filtered tickets`}` (matching the visible text order per WCAG 2.5.3); list rows derive their accessible name directly from their visible text (`code`, `title`, status badge, date) and carry `title` tooltips for truncated text.
 - [x] Form fields have associated `<label>`s; conditional fields (Follow-up Note) are announced when they appear.
   — *Evidence:* `Field.tsx` renders `<label htmlFor={id}>` for every field (axe `label`/`form-label` scans pass); the conditional Follow-up Note reveal is announced by an `aria-live="polite" role="status"` region (`ActionsTakenPanel.tsx`), asserted in `ActionsTaken.test.tsx`; AdminUsersPage toasts live in an `aria-live="polite"` region.
 - [x] Validation errors are programmatically associated with their field (`aria-describedby`) and focus moves to the first error on failed submit.
@@ -258,9 +276,13 @@ Evidence abbreviations: **axe** = the 34 jest-axe scan call sites across 10 comp
 - [x] Modal/inline dialogs (if any) trap focus and are dismissible via `Esc`.
   — *Evidence:* shared `Dialog.tsx` moves focus in on open, traps Tab/Shift+Tab, closes on Escape (unless a request is busy), returns focus to the trigger, and scopes Escape/trap to the top-most dialog when nested; walkthrough verified live: 30 Tabs never left the Create User dialog, Escape closed it, focus returned to the trigger.
 - [x] No content is clipped, no controls overlap, and no page requires horizontal scrolling at any breakpoint in §7.
-  — *Evidence:* walkthrough measured `scrollWidth − clientWidth` on Dashboard / My Tickets / Create Ticket at 1280/768/375 px — 0 px overflow on all nine combinations; RESP-01…05 e2e (dashboard reflow, Actions Taken 375 px stacked rows with the hidden-thead collapse fix, queue table↔cards breakpoint at 992 px) all pass in the current 47/47 e2e run. Shared field groups (including the Lab 3 Change Password screen) stack **label → input → always-visible hint → validation message** in normal flow with positive token gaps only — never a negative margin, `absolute` positioning or fixed height on a hint (asserted by `UI-15`, `tests.md`).
+  — *Evidence:* walkthrough measured `scrollWidth − clientWidth` on Dashboard / My Tickets / Create Ticket at 1280/768/375 px — 0 px overflow on all nine combinations; `e2e/lab-04/a11y-axe.spec.ts` verified 0 px horizontal overflow across all 7 major screens at Desktop `1440×900`, Tablet `820×1180`, and Mobile `390×844` (21/21 checks passing); RESP-01…05 e2e all pass. Shared field groups (including the Lab 3 Change Password screen) stack **label → input → always-visible hint → validation message** in normal flow with positive token gaps only — never a negative margin, `absolute` positioning or fixed height on a hint (asserted by `UI-15`, `tests.md`).
 - [x] Color contrast for all new text/badges meets at least WCAG AA (4.5:1 normal text, 3:1 large text/icons).
-  — *Evidence:* WCAG 2.x relative-luminance ratios computed from the exact `theme.scss` token values (method as `docs/lab-03/visual-checklist.md` §5); every Lab 4 pairing passes: delta chips UP/DOWN/FLAT 4.87 / 5.62 / 4.74 :1, Follow-up badge 4.94:1, workflow reconciliation banner 4.94:1, inline error 5.62:1, success message 5.40:1, metric value/label 14.72 / 5.64 :1, priority badges 7.37 / 6.91 :1; focus ring 5.40:1 (≥3:1). One non-text exception noted: the editable-field border `#C7D3CC` on white is 1.54:1 — an input's boundary is not the sole indicator of the field (each has a visible label and text-state tokens), matching WCAG 1.4.11's exception and the lab-03 checklist's deliberate exclusion of field borders.
+  — *Evidence:* WCAG 2.x relative-luminance ratios computed from the exact `theme.scss` token values and verified live via `@axe-core/playwright` in `e2e/lab-04/a11y-axe.spec.ts`: delta chips UP/DOWN/FLAT 4.87 / 5.62 / 4.74 :1, Follow-up badge 4.94:1, workflow reconciliation banner 4.94:1, inline error 5.62:1, success message 5.40:1, metric value/label 14.72 / 5.64 :1, priority badges 7.37 / 6.91 :1, disabled text `#5B6B62` on `#E9ECEA` 4.74:1; focus ring 5.40:1 (≥3:1).
+- [x] Reduced motion (`@media (prefers-reduced-motion: reduce)`) and hover/focus states respected across all interactive controls and animations.
+  — *Evidence:* global `@media (prefers-reduced-motion: reduce)` rule in `client/src/styles/theme.scss` plus component-level reduced-motion rules in `Button.module.css` (`.spinner { animation: none }`), `Dashboard.module.css` (`.metricSkeleton, .rowSkeleton { animation: none }`), and `ActionsTakenPanel.module.css` (`.rowHighlighted, .skeletonLine { animation: none }`); `SearchInput.module.css` and `Field.module.css` apply focus rings immediately without transition delay.
+- [x] Automated WCAG 2.1 A/AA `@axe-core/playwright` scan passes with zero serious/critical violations across all 7 major screens at Desktop (`1440×900`), Tablet (`820×1180`), and Mobile (`390×844`).
+  — *Evidence:* `e2e/lab-04/a11y-axe.spec.ts` runs `@axe-core/playwright` with tags `["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]` across Login, IT Staff Dashboard, Actions Taken List, Actions Taken Create/Edit Form, Ticket Detail (Staff & Requester), Requester Dashboard, and My Tickets at `1440×900`, `820×1180`, and `390×844` (21 scans, **0 violations**); raw scan output saved in `docs/lab-04/axe-report.json`.
 - [x] Screenshot evidence captured at desktop, tablet, and mobile widths for: IT Staff Dashboard, Requester Dashboard, Actions Taken panel (view + create), and the status transition control.
   — *Evidence:* 15 PNGs captured live by `e2e/lab-04/screenshots.spec.ts` (9/9 passing) into `artifacts/lab-04/screenshots/{staff-dashboard,requester-dashboard,actions-taken,workflow-controls}/…-{1280,768,375}.png`; full-page captures verified as real rendered content (e.g. 375×3900 mobile full page, ~1500–2500 unique colours per sampled image).
 

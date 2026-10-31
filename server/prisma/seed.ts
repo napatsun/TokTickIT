@@ -129,6 +129,8 @@ interface SeedTicket {
    * while a stale one is correctly rejected.
    */
   version?: number;
+  /** Backdated creation timestamp so 24h dashboard deltas are realistic and consistent. */
+  createdAt: Date;
 }
 
 const SEED_TICKETS: SeedTicket[] = [
@@ -148,6 +150,7 @@ const SEED_TICKETS: SeedTicket[] = [
     requesterConfirmedResolved: true,
     requesterConfirmedResolvedAt: DAYS_AGO(1),
     version: 1,
+    createdAt: DAYS_AGO(2),
   },
   {
     ticketNumber: "TKT-2026-000007",
@@ -161,6 +164,7 @@ const SEED_TICKETS: SeedTicket[] = [
     itPriority: "URGENT",
     status: "IN_PROGRESS",
     version: 2,
+    createdAt: DAYS_AGO(3),
   },
   {
     ticketNumber: "TKT-2026-000008",
@@ -174,6 +178,7 @@ const SEED_TICKETS: SeedTicket[] = [
     itPriority: "MEDIUM",
     status: "WAITING_FOR_REQUESTER",
     version: 2,
+    createdAt: DAYS_AGO(3),
   },
   {
     ticketNumber: "TKT-2026-000009",
@@ -186,6 +191,7 @@ const SEED_TICKETS: SeedTicket[] = [
     requestedPriority: "LOW",
     itPriority: "LOW",
     status: "NEW",
+    createdAt: HOURS_AGO(14),
   },
   {
     ticketNumber: "TKT-2026-000010",
@@ -198,6 +204,7 @@ const SEED_TICKETS: SeedTicket[] = [
     requestedPriority: "MEDIUM",
     itPriority: "MEDIUM",
     status: "NEW",
+    createdAt: HOURS_AGO(10),
   },
   {
     ticketNumber: "TKT-2026-000011",
@@ -213,6 +220,7 @@ const SEED_TICKETS: SeedTicket[] = [
     requesterMarkedResolved: true,
     resolvedAt: DAYS_AGO(4),
     version: 1,
+    createdAt: DAYS_AGO(7),
   },
   {
     ticketNumber: "TKT-2026-000012",
@@ -227,6 +235,7 @@ const SEED_TICKETS: SeedTicket[] = [
     status: "CLOSED",
     resolvedAt: DAYS_AGO(20),
     version: 1,
+    createdAt: DAYS_AGO(25),
   },
   {
     ticketNumber: "TKT-2026-000013",
@@ -243,6 +252,7 @@ const SEED_TICKETS: SeedTicket[] = [
     // rejected by BR-10 (AC-09), while IT Staff/Administrator still may reopen.
     resolvedAt: DAYS_AGO(9),
     version: 2,
+    createdAt: DAYS_AGO(12),
   },
   {
     ticketNumber: "TKT-2026-000014",
@@ -256,6 +266,7 @@ const SEED_TICKETS: SeedTicket[] = [
     itPriority: "LOW",
     status: "CANCELLED",
     version: 1,
+    createdAt: DAYS_AGO(3),
   },
   {
     ticketNumber: "TKT-2026-000015",
@@ -270,6 +281,7 @@ const SEED_TICKETS: SeedTicket[] = [
     status: "OPEN",
     requesterMarkedResolved: false,
     version: 1,
+    createdAt: DAYS_AGO(4),
   },
   // ─── Lab 4 (§7.6) — completes the dashboard-visible demo volume ────────
   // Gives Jennifer Anderson a Closed Ticket, so all four Requester Dashboard
@@ -290,6 +302,7 @@ const SEED_TICKETS: SeedTicket[] = [
     requesterConfirmedResolvedAt: DAYS_AGO(6),
     resolvedAt: DAYS_AGO(5),
     version: 2,
+    createdAt: DAYS_AGO(8),
   },
   // Gives Jennifer a Reopened Ticket: BR-14 counts it in her "My Open" card and
   // in the staff "In Progress" card rather than in a separate bucket.
@@ -306,6 +319,7 @@ const SEED_TICKETS: SeedTicket[] = [
     status: "REOPENED",
     resolvedAt: DAYS_AGO(3),
     version: 3,
+    createdAt: DAYS_AGO(6),
   },
 ];
 
@@ -774,6 +788,7 @@ export async function seed(): Promise<void> {
       requesterConfirmedResolvedAt: ticket.requesterConfirmedResolvedAt ?? null,
       resolvedAt: ticket.resolvedAt ?? null,
       version: ticket.version ?? 0,
+      createdAt: ticket.createdAt,
     };
 
     await prisma.ticket.upsert({
@@ -900,6 +915,25 @@ export async function seed(): Promise<void> {
       create: { id: entry.id, ...data },
     });
   }
+
+  // Clean up any non-seeded work-log or status-history rows attached to the 12
+  // seeded demo Tickets (e.g. left behind by interactive or E2E runs) so re-running
+  // the seed restores deterministic dashboard counts and 24h deltas.
+  const seededTicketIds = Array.from(ticketIdByNumber.entries())
+    .filter(([num]) => SEED_TICKETS.some((t) => t.ticketNumber === num))
+    .map(([, id]) => id);
+  await prisma.actionTaken.deleteMany({
+    where: {
+      ticketId: { in: seededTicketIds },
+      id: { notIn: SEED_ACTIONS_TAKEN.map((a) => a.id) },
+    },
+  });
+  await prisma.ticketStatusHistory.deleteMany({
+    where: {
+      ticketId: { in: seededTicketIds },
+      id: { notIn: SEED_STATUS_HISTORY.map((h) => h.id) },
+    },
+  });
 
   console.log("Seed completed.");
 }

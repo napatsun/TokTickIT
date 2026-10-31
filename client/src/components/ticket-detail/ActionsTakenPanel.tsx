@@ -37,7 +37,7 @@
  * (never colour-only), and mobile stacked label:value rows (§7).
  */
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Button from "../shared/Button";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import { apiClient } from "../../lib/apiClient";
@@ -119,17 +119,9 @@ const FIELD_ORDER: FieldName[] = [
   "attachmentNotes",
 ];
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+import { formatDateTime } from "../../lib/dateFormat";
 
-function formatDateTime(isoString: string): string {
-  return new Date(isoString).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 /** §4.2 "Edited {relativeTime} by {editor}" — coarse, test-stable units. */
 export function formatRelativeTime(isoString: string, now: number = Date.now()): string {
@@ -239,6 +231,7 @@ export default function ActionsTakenPanel({
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Void (Administrator only, §4.4)
@@ -357,7 +350,7 @@ export default function ActionsTakenPanel({
   const submitForm = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (submitting) return;
+      if (submitting || submittingRef.current) return;
       setFormError(null);
 
       // Client-side BR-04: a future Action Date/Time is rejected before the
@@ -376,6 +369,7 @@ export default function ActionsTakenPanel({
         return;
       }
 
+      submittingRef.current = true;
       setSubmitting(true);
       setFieldErrors({});
 
@@ -492,6 +486,7 @@ export default function ActionsTakenPanel({
         // §4.5: never clear the draft on a network failure.
         setFormError("Couldn't save — check your connection and try again.");
       } finally {
+        submittingRef.current = false;
         setSubmitting(false);
       }
     },
@@ -951,7 +946,7 @@ export default function ActionsTakenPanel({
                 <th scope="col">Performed By</th>
                 <th scope="col">Follow-up</th>
                 <th scope="col">
-                  <span className={styles.visuallyHidden}>Details</span>
+                  <span className={styles.visuallyHidden}>Actions</span>
                 </th>
               </tr>
             </thead>
@@ -1056,6 +1051,7 @@ function TableRow({
               onClick={() => setShowFullDescription((current) => !current)}
               aria-expanded={showFullDescription}
               aria-controls={descId}
+              aria-label={showFullDescription ? "Show less description" : "Show more description"}
               data-testid={`show-more-${entry.id}`}
             >
               {showFullDescription ? "Show less" : "Show more"}
@@ -1072,7 +1068,7 @@ function TableRow({
             {entry.followUpRequired ? "Follow-up needed" : "No follow-up"}
           </span>
         </td>
-        <td data-label="Details" className={styles.cellActions}>
+        <td data-label="Actions" className={styles.cellActions}>
           {(canEdit || canVoid) && (
             <>
               {canEdit && (
@@ -1092,9 +1088,10 @@ function TableRow({
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={detailsId}
+            aria-label={expanded ? "Show less row details" : "Show more row details"}
             data-testid={`expand-action-${entry.id}`}
           >
-            {expanded ? "Hide details" : "Details"}
+            {expanded ? "Show less" : "Show more"}
           </Button>
         </td>
       </tr>

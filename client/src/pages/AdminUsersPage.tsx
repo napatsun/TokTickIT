@@ -515,17 +515,18 @@ export default function AdminUsersPage() {
           </select>
         </label>
 
-        <Button
-          variant="tertiary"
-          onClick={() => {
-            setSearch("");
-            setRoleFilter("");
-            setSearchResetSignal((n) => n + 1);
-          }}
-          disabled={!hasActiveFilters}
-        >
-          Clear filters
-        </Button>
+        {hasActiveFilters && (
+          <Button
+            variant="tertiary"
+            onClick={() => {
+              setSearch("");
+              setRoleFilter("");
+              setSearchResetSignal((n) => n + 1);
+            }}
+          >
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* Toast region — success feedback for create/edit/reset (§7). */}

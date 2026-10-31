@@ -172,20 +172,23 @@ export default function AttachmentPicker({
         onDragLeave={isAtLimit ? undefined : handleDragLeave}
         onDrop={isAtLimit ? undefined : handleDrop}
         onClick={handleBrowseClick}
-        role="button"
-        tabIndex={isAtLimit ? -1 : 0}
-        onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && !isAtLimit) {
-            e.preventDefault();
-            handleBrowseClick();
-          }
-        }}
-        aria-label={isAtLimit ? "Maximum attachments reached" : "Drop files here or click to browse"}
-        aria-disabled={isAtLimit}
       >
-        <span className={styles.dropZoneIcon} aria-hidden="true">
-          📎
-        </span>
+        <div
+          role="button"
+          tabIndex={isAtLimit ? -1 : 0}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !isAtLimit) {
+              e.preventDefault();
+              handleBrowseClick();
+            }
+          }}
+          aria-label={isAtLimit ? "Maximum attachments reached" : "Drop files here or click to browse"}
+          aria-disabled={isAtLimit}
+        >
+          <span className={styles.dropZoneIcon} aria-hidden="true">
+            📎
+          </span>
+        </div>
         <span className={styles.dropZoneText}>
           Drag and drop files here, or{" "}
           <span className={styles.dropZoneBrowse}>browse files</span>

@@ -243,6 +243,95 @@ describe("recentTickets — own tickets, any non-Cancelled status, newest first 
   });
 });
 
+// ─── API-36 — Three Requester Dashboard sections (FR-11, BR-14, AC-21) ───
+
+describe("API-36 — Attention Required, Recently Updated, and Resolved sections (FR-11, BR-14, AC-21)", () => {
+  it("returns only own tickets across all 3 sections and never leaks another Requester's tickets", async () => {
+    const now = new Date();
+    // Create Requester B tickets in WAITING_FOR_REQUESTER, REOPENED, RESOLVED, CLOSED
+    const bTickets = [
+      await createFixtureTicket({ status: "WAITING_FOR_REQUESTER", requesterId: requesterB.id, updatedAt: now }),
+      await createFixtureTicket({ status: "REOPENED", requesterId: requesterB.id, updatedAt: now }),
+      await createFixtureTicket({ status: "RESOLVED", requesterId: requesterB.id, updatedAt: now }),
+      await createFixtureTicket({ status: "CLOSED", requesterId: requesterB.id, updatedAt: now }),
+    ];
+
+    // Create Requester A tickets in WAITING_FOR_REQUESTER, REOPENED, RESOLVED, CLOSED
+    const aWaiting = await createFixtureTicket({
+      status: "WAITING_FOR_REQUESTER",
+      requesterId: requesterA.id,
+      updatedAt: new Date(now.getTime() + 1000),
+    });
+    const aReopened = await createFixtureTicket({
+      status: "REOPENED",
+      requesterId: requesterA.id,
+      updatedAt: new Date(now.getTime() + 2000),
+    });
+    const aResolved = await createFixtureTicket({
+      status: "RESOLVED",
+      requesterId: requesterA.id,
+      updatedAt: new Date(now.getTime() + 3000),
+    });
+    const aClosed = await createFixtureTicket({
+      status: "CLOSED",
+      requesterId: requesterA.id,
+      updatedAt: new Date(now.getTime() + 4000),
+    });
+
+    const res = await clientA.agent.get("/api/dashboard/requester");
+    expect(res.status).toBe(200);
+
+    expect(res.body.attentionRequired).toBeDefined();
+    expect(res.body.recentlyUpdated).toBeDefined();
+    expect(res.body.resolvedWork).toBeDefined();
+
+    // Verify B's tickets never appear in any of A's 3 sections
+    const allSectionIds = [
+      ...res.body.attentionRequired.items.map((t: { id: number }) => t.id),
+      ...res.body.recentlyUpdated.items.map((t: { id: number }) => t.id),
+      ...res.body.resolvedWork.items.map((t: { id: number }) => t.id),
+    ];
+    for (const bt of bTickets) {
+      expect(allSectionIds).not.toContain(bt.id);
+    }
+
+    // Verify A's newest tickets appear in the expected sections
+    const attentionIds = res.body.attentionRequired.items.map((t: { id: number }) => t.id);
+    expect(attentionIds).toContain(aWaiting.id);
+    expect(attentionIds).toContain(aReopened.id);
+
+    const resolvedIds = res.body.resolvedWork.items.map((t: { id: number }) => t.id);
+    expect(resolvedIds).toContain(aResolved.id);
+    expect(resolvedIds).toContain(aClosed.id);
+
+    // Every section caps items at 5 and orders by updatedAt DESC
+    for (const section of [res.body.attentionRequired, res.body.recentlyUpdated, res.body.resolvedWork]) {
+      expect(section.items.length).toBeLessThanOrEqual(5);
+      const times: string[] = section.items.map((t: { updatedAt: string }) => t.updatedAt);
+      expect(times).toEqual([...times].sort((a, b) => b.localeCompare(a)));
+    }
+  });
+
+  it("section counts match the filtered My Tickets (/api/tickets) totalItems exactly", async () => {
+    const dashRes = await clientA.agent.get("/api/dashboard/requester");
+    expect(dashRes.status).toBe(200);
+
+    const [attentionList, recentList, resolvedList] = await Promise.all([
+      clientA.agent.get("/api/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED"),
+      clientA.agent.get("/api/tickets"),
+      clientA.agent.get("/api/tickets?currentStatus=RESOLVED,CLOSED"),
+    ]);
+
+    expect(attentionList.status).toBe(200);
+    expect(recentList.status).toBe(200);
+    expect(resolvedList.status).toBe(200);
+
+    expect(dashRes.body.attentionRequired.count).toBe(attentionList.body.pagination.totalItems);
+    expect(dashRes.body.recentlyUpdated.count).toBe(recentList.body.pagination.totalItems);
+    expect(dashRes.body.resolvedWork.count).toBe(resolvedList.body.pagination.totalItems);
+  });
+});
+
 // ─── Role enforcement (BR-15) ────────────────────────────────────────────
 
 describe("role enforcement on /api/dashboard/requester", () => {

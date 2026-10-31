@@ -144,6 +144,9 @@ function requesterPayload(overrides: Record<string, unknown> = {}) {
     timezone: "Asia/Bangkok",
     counts: { myOpen: 3, inProgress: 2, resolved: 5, closed: 12 },
     recentTickets: [],
+    attentionRequired: { count: 0, items: [] },
+    recentlyUpdated: { count: 0, items: [] },
+    resolvedWork: { count: 0, items: [] },
     ...overrides,
   };
 }
@@ -716,7 +719,7 @@ describe("RESP-02 — new sections stack on tablet/mobile and use no fixed width
   });
 });
 
-// ─── UI-09 — Requester Dashboard (ui-spec §3.4) ─────────────────────────
+// ─── UI-09 & UI-21 — Requester Dashboard (ui-spec §3.4, AC-21) ──────────
 
 describe("UI-09 — Requester Dashboard empty recent state with CTA (ui-spec §3.4)", () => {
   it("renders the empty-state component with a Create Ticket CTA", async () => {
@@ -741,6 +744,107 @@ describe("UI-09 — Requester Dashboard empty recent state with CTA (ui-spec §3
     }
     // No delta chips exist on the requester dashboard at all (§3.2).
     expect(screen.queryByTestId(/^delta-/)).not.toBeInTheDocument();
+  });
+});
+
+describe("UI-21 — Requester Dashboard Attention Required, Recently Updated, and Resolved sections (FR-11, AC-21)", () => {
+  it("renders all 3 sections with total count badges, up to 5 rows, and matching drill-down links", async () => {
+    mockApiClient.mockResolvedValue(
+      ok(
+        requesterPayload({
+          attentionRequired: {
+            count: 2,
+            items: [
+              {
+                id: 101,
+                code: "TKT-2026-000101",
+                title: "Need VPN confirmation code",
+                status: "WAITING_FOR_REQUESTER",
+                updatedAt: "2026-09-22T07:00:00.000Z",
+              },
+              {
+                id: 102,
+                code: "TKT-2026-000102",
+                title: "Printer jam recurred",
+                status: "REOPENED",
+                updatedAt: "2026-09-21T07:00:00.000Z",
+              },
+            ],
+          },
+          recentlyUpdated: {
+            count: 20,
+            items: [
+              {
+                id: 101,
+                code: "TKT-2026-000101",
+                title: "Need VPN confirmation code",
+                status: "WAITING_FOR_REQUESTER",
+                updatedAt: "2026-09-22T07:00:00.000Z",
+              },
+            ],
+          },
+          resolvedWork: {
+            count: 17,
+            items: [
+              {
+                id: 103,
+                code: "TKT-2026-000103",
+                title: "Laptop battery replaced",
+                status: "RESOLVED",
+                updatedAt: "2026-09-20T07:00:00.000Z",
+              },
+              {
+                id: 104,
+                code: "TKT-2026-000104",
+                title: "Badge access granted",
+                status: "CLOSED",
+                updatedAt: "2026-09-19T07:00:00.000Z",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    renderRequester();
+
+    await screen.findByTestId("requester-dashboard");
+
+    // 1. Attention Required section
+    const attentionSection = screen.getByTestId("attention-required-section");
+    expect(within(attentionSection).getByRole("heading", { name: /attention required/i })).toBeInTheDocument();
+    expect(screen.getByTestId("attention-required-count")).toHaveTextContent("Total: 2");
+    expect(screen.getAllByTestId("attention-required-row")).toHaveLength(2);
+    expect(screen.getByTestId("attention-required-view-all")).toHaveTextContent("View all");
+
+    // 2. Recently Updated section
+    expect(screen.getByRole("heading", { name: /recently updated/i })).toBeInTheDocument();
+    expect(screen.getByTestId("recently-updated-count")).toHaveTextContent("Total: 20");
+    expect(screen.getAllByTestId("recent-ticket-row")).toHaveLength(1);
+    expect(screen.getByTestId("recent-view-all")).toHaveTextContent("View all");
+
+    // 3. Resolved section
+    const resolvedSection = screen.getByTestId("resolved-work-section");
+    expect(within(resolvedSection).getByRole("heading", { name: /^resolved$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("resolved-work-count")).toHaveTextContent("Total: 17");
+    expect(screen.getAllByTestId("resolved-work-row")).toHaveLength(2);
+    expect(screen.getByTestId("resolved-work-view-all")).toHaveTextContent("View all");
+  });
+
+  it("pins the drill-down URLs for Attention Required, Recently Updated, and Resolved", () => {
+    const source = fs.readFileSync(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "..",
+        "src",
+        "pages",
+        "RequesterDashboard.tsx",
+      ),
+      "utf8",
+    );
+    expect(source).toContain('"/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED"');
+    expect(source).toContain('"/tickets?currentStatus=RESOLVED,CLOSED"');
+    expect(source).toContain('navigate("/tickets")');
   });
 });
 

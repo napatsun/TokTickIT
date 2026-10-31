@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -96,6 +97,10 @@ async function openTicketWithActions(page: Page) {
 
 test.describe("Lab 4 screenshot evidence", () => {
   test.beforeAll(() => {
+    execSync("npx tsx prisma/seed.ts", {
+      cwd: path.resolve("server"),
+      stdio: "inherit",
+    });
     for (const dir of [STAFF_DASHBOARD_DIR, REQUESTER_DASHBOARD_DIR, ACTIONS_DIR, WORKFLOW_DIR]) {
       fs.mkdirSync(dir, { recursive: true });
     }

@@ -15,7 +15,7 @@ $warning:   #B8860B;  // --color-warning
 $danger:    #B3261E;  // --color-error
 
 // Body / page
-$body-bg:   #F5FAF7;  // --color-bg-page
+$body-bg:   #F5F7F6;  // --color-bg-page
 $body-color: #1E2B24; // --color-text
 
 // Typography — system UI stack, 16px base (ui-spec.md §2)
@@ -38,7 +38,7 @@ $input-height:           2.5rem;   // 40px (§10 shared component rule)
 
 // Disabled state (§3)
 $input-disabled-bg:      #E9ECEA;
-$input-disabled-color:   #9AA5A0;
+$input-disabled-color:   #5B6B62;
 
 // Spacing scale — 4px base unit (§2)
 $spacer: 1rem; // 16px — Bootstrap's base spacer
@@ -63,7 +63,7 @@ $spacer-7: 3rem;     // 48px
   --color-primary-green: #006B3C;
   --color-secondary-green: #0B7A46;
   --color-pale-green: #EAF6EF;
-  --color-bg-page: #F5FAF7;
+  --color-bg-page: #F5F7F6;
   --color-surface: #FFFFFF;
 
   --color-text: #1E2B24;
@@ -92,7 +92,7 @@ $spacer-7: 3rem;     // 48px
   --color-success-bg: #EAF6EF;
 
   --color-disabled-bg: #E9ECEA;
-  --color-disabled-text: #9AA5A0;
+  --color-disabled-text: #5B6B62;
 
   // --- Priority badge tokens (added during implementation) ---
   // Derived from Section 1 colors:
@@ -149,8 +149,8 @@ $spacer-7: 3rem;     // 48px
   background-color: var(--color-primary-green);
   border-color: var(--color-primary-green);
   &:hover {
-    background-color: darken(#006B3C, 7.5%);
-    border-color: darken(#006B3C, 10%);
+    background-color: var(--color-secondary-green);
+    border-color: var(--color-secondary-green);
   }
 }
 
@@ -169,4 +169,16 @@ body {
   color: var(--color-text);
   font-family: var(--font-family);
   font-size: var(--font-size-base);
+}
+
+// §8: Respect reduced-motion preference globally
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

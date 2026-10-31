@@ -1,0 +1,181 @@
+{
+  "tool": "@axe-core/playwright",
+  "tags": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa"
+  ],
+  "totalScans": 21,
+  "totalViolations": 0,
+  "scans": [
+    {
+      "screen": "Login",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/login",
+      "passesCount": 18,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Login",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/login",
+      "passesCount": 18,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Login",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/login",
+      "passesCount": 18,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "IT Staff Dashboard",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 23,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "IT Staff Dashboard",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 23,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "IT Staff Dashboard",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 23,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail & Actions Taken List (Staff)",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail & Actions Taken List (Staff)",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail & Actions Taken List (Staff)",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Actions Taken Create/Edit Form",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Actions Taken Create/Edit Form",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Actions Taken Create/Edit Form",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/staff/tickets/4",
+      "passesCount": 24,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Requester Dashboard",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 22,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Requester Dashboard",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 22,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "Requester Dashboard",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/dashboard",
+      "passesCount": 22,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "My Tickets",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/tickets",
+      "passesCount": 27,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "My Tickets",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/tickets",
+      "passesCount": 26,
+      "incompleteCount": 0,
+      "violations": []
+    },
+    {
+      "screen": "My Tickets",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/tickets",
+      "passesCount": 24,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail (Requester)",
+      "viewport": "desktop-1440x900",
+      "url": "http://localhost:5173/tickets/TKT-2026-000007",
+      "passesCount": 29,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail (Requester)",
+      "viewport": "tablet-820x1180",
+      "url": "http://localhost:5173/tickets/TKT-2026-000007",
+      "passesCount": 29,
+      "incompleteCount": 1,
+      "violations": []
+    },
+    {
+      "screen": "Ticket Detail (Requester)",
+      "viewport": "mobile-390x844",
+      "url": "http://localhost:5173/tickets/TKT-2026-000007",
+      "passesCount": 29,
+      "incompleteCount": 1,
+      "violations": []
+    }
+  ]
+}

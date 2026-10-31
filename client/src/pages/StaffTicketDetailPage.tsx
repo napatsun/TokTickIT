@@ -93,15 +93,9 @@ type PageStatus = "loading" | "ready" | "not-found" | "forbidden" | "error";
 
 const IT_PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+import { formatDate } from "../lib/dateFormat";
 
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

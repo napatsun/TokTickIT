@@ -103,9 +103,8 @@ export default function AppShell() {
             type="button"
             className={styles.logoutButton}
             onClick={handleLogout}
-            aria-label="Log out"
           >
-            Logout
+            Log out
           </button>
 
           {/* §11: hamburger — mobile only */}
@@ -151,9 +150,8 @@ export default function AppShell() {
           type="button"
           className={styles.mobileLogoutButton}
           onClick={handleLogout}
-          aria-label="Log out (mobile)"
         >
-          Logout
+          Log out
         </button>
       </div>
 

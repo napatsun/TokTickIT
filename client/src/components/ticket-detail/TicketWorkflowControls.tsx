@@ -28,7 +28,7 @@
  * visually secondary advisory button (FR-08/BR-08) that never changes status.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Badge from "../shared/Badge";
 import Button from "../shared/Button";
 import StatusChangeConfirm, { STATUS_LABELS } from "./StatusChangeConfirm";
@@ -85,18 +85,12 @@ function isStaff(role: AuthUser["role"]): boolean {
   return role === "IT_STAFF" || role === "ADMINISTRATOR";
 }
 
+import { formatDate } from "../../lib/dateFormat";
+
 function newIdempotencyKey(): string {
   const cryptoObj = globalThis.crypto as Crypto | undefined;
   if (cryptoObj?.randomUUID) return cryptoObj.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 interface ApiErrorBody {
@@ -120,6 +114,7 @@ export default function TicketWorkflowControls({
   onReload,
 }: TicketWorkflowControlsProps) {
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -132,6 +127,8 @@ export default function TicketWorkflowControls({
 
   // ─── Status transition ────────────────────────────────────────────────
   async function applyTransition(target: string) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusyTarget(target);
     setError(null);
     setSuccess(null);
@@ -190,6 +187,7 @@ export default function TicketWorkflowControls({
     } catch {
       setError("Couldn't change the status. Please check your connection and try again.");
     } finally {
+      busyRef.current = false;
       setBusyTarget(null);
       setConfirmBusy(false);
     }
