@@ -400,6 +400,16 @@ describe("API-36 — deltas are computed live from TicketStatusHistory (BR-13)",
     const after = await staffClient.agent.get("/api/dashboard/staff");
     expect(after.body.deltas.open).toBe(before + 1);
   });
+
+  it("keeps yesterday's baseline non-negative (today - delta >= 0) and ignores tickets inserted directly into non-NEW statuses without history", async () => {
+    const before = await staffClient.agent.get("/api/dashboard/staff");
+    expect(before.body.counts.new - before.body.deltas.new).toBeGreaterThanOrEqual(0);
+
+    await createFixtureTicket({ status: "OPEN" });
+    const after = await staffClient.agent.get("/api/dashboard/staff");
+    expect(after.body.deltas.new).toBe(before.body.deltas.new);
+    expect(after.body.counts.new - after.body.deltas.new).toBeGreaterThanOrEqual(0);
+  });
 });
 
 // ─── API-37 — zero recent history rows → deltas are 0, never null ────────

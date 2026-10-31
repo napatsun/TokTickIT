@@ -219,7 +219,19 @@ export async function getStaffDashboard(currentUserId: string): Promise<StaffDas
       select: RECENT_SELECT,
     }),
     // The `new` delta's extra term (§3.1): creation writes no history row.
-    prisma.ticket.count({ where: { createdAt: { gte: since24h } } }),
+    // Only count tickets created in the last 24h that actually started in NEW
+    // (either still in NEW or have a TicketStatusHistory transition out of NEW
+    // within the window) so fixtures/seeds inserted directly into another
+    // status without history never inflate `deltas.new`.
+    prisma.ticket.count({
+      where: {
+        createdAt: { gte: since24h },
+        OR: [
+          { status: "NEW" },
+          { statusHistory: { some: { fromStatus: "NEW", changedAt: { gte: since24h } } } },
+        ],
+      },
+    }),
 
     // FR-17: the CURRENT user's newest non-voided work, newest first. Voided
     // entries are filtered in the query (BR-11: a voided entry is frozen and
