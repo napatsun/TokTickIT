@@ -172,10 +172,18 @@ Same breakpoint behavior as §2.5, with 4 cards instead of 5 (desktop: one row; 
 ### 4.1 Placement
 Appended as a new section below the existing Public Comments and Internal Notes areas on Ticket
 Detail, titled **"Actions Taken."** Section header includes a count badge (e.g., "Actions Taken (3)").
+The badge counts the **non-voided** entries (the rows §4.2 defines). While the Administrator
+**Show voided** toggle (§4.4) is on, the badge keeps that non-voided number and a plain-text
+secondary label beside it states how many voided rows are additionally rendered (e.g.
+**Actions Taken (4)** followed by **+1 voided shown** — words, never colour alone); with the toggle
+off the header is unchanged (AC-20).
 
 ### 4.2 View Mode (default, all roles with Ticket access)
 - Table/list, one row per non-voided Actions Taken, oldest first: `Date/Time | Description (truncated to 2 lines, "Show more" toggle) | Result | Performed By | Follow-up` (badge: "Follow-up needed" in `--color-warning` or "No follow-up" muted).
 - Row expands (accordion) to reveal `Attachment Notes` and, if edited, an "Edited {relativeTime} by {editor}" caption.
+- Row layout is authored once on the table cells: `td` carries `var(--space-3) var(--space-2)` padding
+  plus the 1px bottom divider, and the ≤767px card treatment styles the `tr` directly (§7). The row
+  element itself needs no extra class, so desktop and stacked rows share one spacing definition.
 - Requesters see this table read-only, identical data, with the "Add Actions Taken" control removed entirely from the DOM (not just visually hidden), per FR-06 ("Requesters do not create or change Actions Taken"). The corresponding server-side enforcement guarantee (control-hiding is never treated as authorization) is BR-15, and is verified independently by the role-denial tests spread across `server/tests/lab-04/actions-taken.api.test.ts` and `server/tests/lab-04/ticket-workflow.api.test.ts` (cited per-test in `tests.md`).
 
 ### 4.3 Create Mode (IT Staff / Administrator only)
@@ -233,6 +241,12 @@ Evidence abbreviations: **axe** = the 34 jest-axe scan call sites across 10 comp
   — *Evidence:* walkthrough asserted the login tab order (email → password → submit) and that focus never escapes interactive surfaces; axe checks focusability of every interactive control in all 34 scans. DOM order equals visual order throughout Lab 4 screens (dashboard cards, recent-list buttons, Actions Taken rows); the only `tabIndex` values in `client/src` are `0` (My Tickets row activation), `-1` (read-only fields, dialog container) — no positive `tabIndex` anywhere.
 - [x] A visible focus outline (not just a browser default that a reset stylesheet may have removed) is present on every focusable element.
   — *Evidence:* 20 `:focus-visible` rules across 10 CSS modules (Button, Field, Dialog, AppShell, queue controls, dashboards, ActionsTakenPanel, TicketWorkflowControls), all drawing the `--focus-ring-color` token (secondary green, 5.40:1 against the card surface — ≥3:1 non-text requirement); walkthrough asserted computed `outline`/`box-shadow` ≠ none on each login tab stop.
+  — *Scope (clarified 2026-10-30):* the ring applies to **every form control in every editable state** —
+  `Field` inputs, textareas and selects alike, in both the `default` and the `invalid` state — and it
+  takes effect **immediately on focus** (no fade/transition window, so an instant read or screenshot
+  after focus already shows the full 2px ring). The readonly/disabled states keep their documented
+  no-ring treatment (Lab 2/3 `ui-spec.md` §3); `tests.md` UI-16 pins both the coverage and the
+  no-transition rule at CSS-source level.
 - [x] Every status/priority badge conveys meaning via text label, not color alone.
   — *Evidence:* the shared `Badge` component maps every `TicketStatus`/priority value to a human label ("In Progress", "Waiting for Requester", "URGENT"…); dashboard delta chips pair arrow icon + sign + value, so colour is never the sole indicator (covered by axe `link-name`/`button-name` scans).
 - [x] Metric cards used as links/buttons have an accessible name that includes both the label and value.
