@@ -224,12 +224,21 @@ Frontend จะรันที่: `http://localhost:5173`
 ```bash
 cd server
 npm run test
+# รันเฉพาะ Lab 4 backend tests:
+npx vitest run tests/lab-04
 ```
 
 **Frontend tests (Vitest + Testing Library):**
 ```bash
 cd client
 npm run test
+# รันเฉพาะ Lab 4 frontend tests:
+npx vitest run tests/lab-04
+```
+
+**Verify test paths & AC traceability (`docs/lab-04/tests.md` ↔ `specification.md`):**
+```bash
+npm run verify:test-paths
 ```
 
 **Type checker (ทั้งสองฝั่ง):**
@@ -244,6 +253,8 @@ cd client && npx tsc --noEmit
 npm install
 
 npm run test:e2e
+# รันเฉพาะ Lab 4 E2E + Accessibility (axe) suite:
+npx playwright test e2e/lab-04
 ```
 
 Playwright จะ **reset database ด้วย `prisma migrate reset --force --skip-seed` แล้ว seed ใหม่ทุกครั้ง** (playwright.global-setup.ts) จากนั้น start API (3000) + Vite (5173) ให้อัตโนมัติ — ต้องมี PostgreSQL รันอยู่ก่อน การรันแต่ละครั้งจึงเริ่มจากสถานะ seed บริสุทธิ์เสมอ

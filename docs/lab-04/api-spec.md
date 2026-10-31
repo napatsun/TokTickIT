@@ -330,8 +330,8 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
 - `counts.waitingForRequester` = count of Tickets where `status = 'WAITING_FOR_REQUESTER'`.
 - All four counts above are across the whole queue visible to IT Staff (not scoped to one assignee); `CANCELLED` and `CLOSED` Tickets are never included in any of them (BR-14).
 - `counts.myAssigned` = count of Tickets where `ownerId = current user` and `status` is in the open-work set `{NEW, OPEN, IN_PROGRESS, WAITING_FOR_REQUESTER, REOPENED}` (BR-14) — i.e., `CLOSED` and `CANCELLED` Tickets assigned to the user do not count toward "My Assigned".
-- `deltas.*` applies only to the first four status keys — `new`, `open`, `inProgress`, `waitingForRequester`. There is no `deltas.myAssigned` key at all (omitted from the response entirely, not present as `0` or `null`), since reassignment is not a status transition and is out of scope for Lab 4's delta indicator; the UI simply renders no delta chip on the "My Assigned" card.
-- For each of those four keys: `deltas.<key> = (# TicketStatusHistory rows where toStatus IN <that status/group> AND changedAt >= now − 24h) − (# TicketStatusHistory rows where fromStatus IN <that status/group> AND changedAt >= now − 24h)`, **plus**, for `new` only, `+ (# Tickets where createdAt >= now − 24h)`. The extra term for `new` exists because Ticket *creation* does not write a `TicketStatusHistory` row (there is no `fromStatus` to record) — without it, newly submitted Tickets would silently vanish from the "New" delta even though they visibly raise `counts.new`. (In practice `toStatus = 'NEW'` never appears in `TicketStatusHistory` at all, since no transition in §5.1's matrix targets `NEW`; the formula is written generally so it still holds if that ever changes.) All terms are computed **live** against `Ticket`/`TicketStatusHistory` at request time (`specification.md` §7.1–§7.3) — never a cached/pre-aggregated counter, satisfying BR-13. Because every term is a live event-count query rather than a snapshot comparison, `deltas.<key>` is always a well-defined integer (including `0` when nothing happened in the last 24 hours) — there is no `null` case.
+- `deltas.*` applies only to the first four status keys — `new`, `open`, `inProgress`, `waitingForRequester`. There is no `deltas.myAssigned` key at all (omitted from the response entirely, not present as `0` or `null`), because `ownerId` assignment/reassignment is not a status transition and is not tracked in `TicketStatusHistory`; the UI simply renders no delta chip on the "My Assigned" card.
+- For each of those four keys: `deltas.<key> = (# TicketStatusHistory rows where toStatus IN <that status/group> AND changedAt >= now − 24h) − (# TicketStatusHistory rows where fromStatus IN <that status/group> AND changedAt >= now − 24h)`, **plus**, for `new` only, `+ (# Tickets where createdAt >= now − 24h AND (status = 'NEW' OR EXISTS statusHistory row with fromStatus = 'NEW' AND changedAt >= now − 24h))`. The extra term for `new` exists because Ticket *creation* does not write a `TicketStatusHistory` row (there is no `fromStatus` to record) — without it, newly submitted `NEW` Tickets would silently vanish from the "New" delta even though they visibly raise `counts.new`, while restricting to Tickets that started in `NEW` guarantees `yesterday = today − delta >= 0`. All terms are computed **live** against `Ticket`/`TicketStatusHistory` at request time (`specification.md` §7.1–§7.3) — never a cached/pre-aggregated counter, satisfying BR-13. Because every term is a live event-count query rather than a snapshot comparison, `deltas.<key>` is always a well-defined integer (including `0` when nothing happened in the last 24 hours) — there is no `null` case.
 - `recentTickets` = the 5 most recently `updatedAt` Tickets where `ownerId = current user` **or** `ownerId IS NULL`, excluding `CANCELLED`, newest first. (`ownerId` is the Lab 1–3 column name for the Ticket Owner relationship — see `specification.md` §7.2's Implementation Note.)
 - `myActions.items` = the 5 most recent `ActionTaken` rows where `performedById = current user` **and** `isVoided = false`, ordered `actionDateTime DESC, id DESC` (`specification.md` FR-17). The projection is exactly `id`, `ticketId`, `ticketNumber`, `description`, `actionDateTime`, `followUpRequired` — no `result`, `followUpNote`, `attachmentNotes`, or any other content field, so the dashboard never becomes a second Ticket-detail surface (FR-13). Note this is the **reverse** of the per-Ticket list's `actionDateTime ASC` order (`§1.2`, FR-03): the dashboard shows newest work first.
 - `myActions.followUpCount` = count of `ActionTaken` rows where `performedById = current user`, `isVoided = false`, `followUpRequired = true`, **and** the parent Ticket's `status NOT IN ('CLOSED', 'CANCELLED')` — i.e. follow-ups that still need doing, not ones on work that is already finished. Voided entries never count, and one Ticket may contribute more than one row (each entry is counted separately).
@@ -361,7 +361,43 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
       "status": "IN_PROGRESS",
       "updatedAt": "2026-09-09T11:05:00.000Z"
     }
-  ]
+  ],
+  "attentionRequired": {
+    "count": 2,
+    "items": [
+      {
+        "id": 5679,
+        "code": "TKT-2026-05679",
+        "title": "VPN token confirmation needed",
+        "status": "WAITING_FOR_REQUESTER",
+        "updatedAt": "2026-09-10T08:30:00.000Z"
+      }
+    ]
+  },
+  "recentlyUpdated": {
+    "count": 22,
+    "items": [
+      {
+        "id": 5678,
+        "code": "TKT-2026-05678",
+        "title": "Need new monitor",
+        "status": "IN_PROGRESS",
+        "updatedAt": "2026-09-09T11:05:00.000Z"
+      }
+    ]
+  },
+  "resolvedWork": {
+    "count": 17,
+    "items": [
+      {
+        "id": 5670,
+        "code": "TKT-2026-05670",
+        "title": "Printer jam resolved",
+        "status": "RESOLVED",
+        "updatedAt": "2026-09-08T14:20:00.000Z"
+      }
+    ]
+  }
 }
 ```
 
@@ -369,9 +405,11 @@ Ticket collection (§6.2 of handout, BR-13/FR-13).
 - `counts.myOpen` = Tickets owned (`requesterId = current user`) with `status IN ('NEW', 'OPEN', 'WAITING_FOR_REQUESTER', 'REOPENED')` — `REOPENED` is included here (BR-14) so a Requester's reopened Ticket is not invisible on their own dashboard. Note this set deliberately **excludes `IN_PROGRESS`**, which has its own separate card immediately below; `ui-spec.md` §3.3's drill-down for this card must filter on exactly this four-status list, not the broader `open-work` alias (see `ui-spec.md` §1).
 - `counts.inProgress` = Tickets owned by current user with `status = 'IN_PROGRESS'`.
 - `counts.resolved`, `counts.closed` = Tickets owned by current user in exactly that status.
-- `recentTickets` = 5 most recently `updatedAt` Tickets where `requesterId = current user`, any non-`CANCELLED` status, newest first.
-- Scope is enforced at the database query layer (`WHERE requesterId = :sessionUserId`), never filtered after fetching all Tickets (AC-02, AC-06).
-- **Empty behavior:** identical to §3.1 — zero counts render as `0`; empty `recentTickets` renders `[]` and the UI shows its empty state. The Requester Dashboard does not show delta indicators (only the IT Staff Dashboard does, per `ui-spec.md` §3.1), so there is no `deltas` key in this response.
+- `attentionRequired` = `{ count, items }` for Tickets where `requesterId = current user` and `status IN ('WAITING_FOR_REQUESTER', 'REOPENED')`, ordered `updatedAt DESC, id DESC`, `items` capped at 5 rows. `attentionRequired.count` equals the total number of matching Tickets in `/api/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED` (FR-11, AC-21).
+- `recentlyUpdated` = `{ count, items }` for Tickets where `requesterId = current user` and `status <> 'CANCELLED'`, ordered `updatedAt DESC, id DESC`, `items` capped at 5 rows (`recentTickets` is preserved with the identical 5-row array for backward compatibility). `recentlyUpdated.count` equals the total number of own Tickets.
+- `resolvedWork` = `{ count, items }` for Tickets where `requesterId = current user` and `status IN ('RESOLVED', 'CLOSED')`, ordered `updatedAt DESC, id DESC`, `items` capped at 5 rows. `resolvedWork.count` equals the total number of matching Tickets in `/api/tickets?currentStatus=RESOLVED,CLOSED` (FR-11, AC-21).
+- Scope is enforced at the database query layer (`WHERE requesterId = :sessionUserId`), never filtered after fetching all Tickets (AC-02, AC-06, AC-21).
+- **Empty behavior:** identical to §3.1 — zero counts render as `0`; empty section `items` arrays render `[]` and the UI shows each section's empty state. The Requester Dashboard does not show delta indicators (only the IT Staff Dashboard does, per `ui-spec.md` §3.1), so there is no `deltas` key in this response.
 
 ---
 
