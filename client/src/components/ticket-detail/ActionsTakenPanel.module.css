@@ -42,6 +42,16 @@
   white-space: nowrap;
 }
 
+/* AC-20: secondary " +N voided shown" label while the Show-voided toggle is
+   on — words, never colour alone (muted text beside the badge). */
+.voidedCount {
+  margin-left: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .hint {
   margin: 0;
   font-size: var(--font-size-sm);

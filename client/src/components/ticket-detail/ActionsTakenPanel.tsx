@@ -572,6 +572,11 @@ export default function ActionsTakenPanel({
     () => entries.filter((entry) => !entry.isVoided).length,
     [entries],
   );
+  /** AC-20/§4.1: voided rows rendered *in addition* under "Show voided". */
+  const voidedShownCount = useMemo(
+    () => (showVoided ? entries.filter((entry) => entry.isVoided).length : 0),
+    [entries, showVoided],
+  );
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -580,9 +585,17 @@ export default function ActionsTakenPanel({
       <div className={styles.headerRow}>
         <h2 className={styles.heading} id={headingId}>
           Actions Taken{" "}
-          {/* No aria-label override: the h2's accessible name must match its visible
-              text "Actions Taken (N)" (ui-spec §4.2, WCAG 2.5.3 Label in Name). */}
+          {/* No aria-label override: the h2's accessible name must match its
+              visible text "Actions Taken (N)" (ui-spec §4.2, WCAG 2.5.3
+              Label in Name). While "Show voided" is on, the plain-text
+              secondary label below keeps the badge number (non-voided) and
+              the rendered row count reconciled in words (AC-20). */}
           <span className={styles.countBadge}>({nonVoidedCount})</span>
+          {voidedShownCount > 0 && (
+            <span className={styles.voidedCount} data-testid="voided-count-label">
+              +{voidedShownCount} voided shown
+            </span>
+          )}
         </h2>
         {canWrite && formMode === "closed" && (
           <Button variant="primary" onClick={openCreate} data-testid="add-action-button">
@@ -733,18 +746,18 @@ export default function ActionsTakenPanel({
                   value={draft.followUpNote}
                   onChange={(event) => setDraftField("followUpNote", event.target.value)}
                   aria-invalid={fieldErrors.followUpNote ? true : undefined}
-                  aria-describedby={
-                    [noteLiveId, fieldErrors.followUpNote ? "action-followUpNote-error" : null]
-                      .filter(Boolean)
-                      .join(" ") || undefined
-                  }
+                  aria-describedby={noteLiveId}
                   placeholder={`Required when follow-up is needed (at least ${FOLLOW_UP_NOTE_MIN} characters)`}
                   aria-busy={submitting}
                   required
                 />
                 {/* The live region carries both the appearance announcement and
                     the live inline validation state so AT users hear the field
-                    become required without moving focus (§8, BR-05). */}
+                    become required without moving focus (§8, BR-05). Both the
+                    client hint and the server 422 message render here, so the
+                    textarea describes this region only — there is no separate
+                    `action-followUpNote-error` element to reference (tests.md
+                    UI-18 pins that every describedby id resolves). */}
                 <p className={styles.hint} id={noteLiveId} aria-live="polite" role="status">
                   {fieldErrors.followUpNote ??
                     liveFollowUpNoteMessage ??
@@ -894,11 +907,14 @@ export default function ActionsTakenPanel({
         <div className={styles.skeletonBlock} aria-hidden="true" data-testid="actions-taken-skeleton">
           {Array.from({ length: 2 }, (_, index) => (
             <div key={index} className={styles.skeletonRow}>
-              <div className={`${styles.skeletonLine} ${styles.skeletonNarrow}`} />
-              <div className={`${styles.skeletonLine} ${styles.skeletonWide}`} />
-              <div className={`${styles.skeletonLine} ${styles.skeletonNarrow}`} />
-              <div className={`${styles.skeletonLine} ${styles.skeletonNarrow}`} />
-              <div className={`${styles.skeletonLine} ${styles.skeletonBadge}`} />
+              {/* The grid columns (.skeletonRow) size each line; the skeleton
+                  modifiers that used to be concatenated here were never
+                  defined in the module (tests.md UI-17). */}
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLine} />
             </div>
           ))}
         </div>
@@ -1019,7 +1035,7 @@ function TableRow({
   return (
     <>
       <tr
-        className={`${styles.row} ${highlighted ? styles.rowHighlighted : ""} ${
+        className={`${highlighted ? styles.rowHighlighted : ""} ${
           entry.isVoided ? styles.rowVoided : ""
         }`}
         data-testid="actions-taken-row"
