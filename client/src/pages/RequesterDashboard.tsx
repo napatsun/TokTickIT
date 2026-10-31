@@ -10,19 +10,15 @@
  *   - 4 metric cards: My Open Tickets, In Progress, Resolved, Closed — each
  *     with its own explicit "View all" link beneath the value (screen-reader
  *     labelled; the card body is also clickable).
- *   - My Recent Tickets (≤5 rows) + Quick Actions (Create Ticket, View My
- *     Tickets). No delta chips anywhere: the requester response carries no
- *     `deltas` key (api-spec.md §3.2).
- *
- * Drill-downs (§3.3): the My Open card links to the four-status list
- * {New, Open, WaitingForRequester, Reopened} — deliberately NOT the open-work
- * alias, because that would include In Progress, which has its own card
- * (§1's "exactly the card's set" rule).
- *
- * States (§3.4): same per-group loading / zero-value / partial-failure /
- * retry pattern as the Staff Dashboard (each group holds its own request
- * state; one failing group never blanks the other), scaled to 4 cards
- * (§3.5 responsive: desktop 1 row, tablet 2×2, mobile stacked).
+ *   - Three distinct summary sections (FR-11), each with a total count badge,
+ *     up to 5 rows, and a drill-down link to My Tickets with the matching filter:
+ *       1. Attention Required (status IN WAITING_FOR_REQUESTER, REOPENED →
+ *          /tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED)
+ *       2. Recently Updated (own top 5 by updatedAt DESC → /tickets)
+ *       3. Resolved (status IN RESOLVED, CLOSED →
+ *          /tickets?currentStatus=RESOLVED,CLOSED)
+ *   - Quick Actions (Create Ticket, View My Tickets). No delta chips anywhere:
+ *     the requester response carries no `deltas` key (api-spec.md §3.2).
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -30,6 +26,7 @@ import { useNavigate } from "react-router-dom";
 import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import { apiClient } from "../lib/apiClient";
+import { formatDate } from "../lib/dateFormat";
 import { useAuth } from "../hooks/useAuth";
 import styles from "./Dashboard.module.css";
 
@@ -43,6 +40,11 @@ interface RecentTicket {
   updatedAt: string;
 }
 
+interface RequesterSection {
+  count: number;
+  items: RecentTicket[];
+}
+
 interface RequesterDashboardPayload {
   generatedAt: string;
   timezone: string;
@@ -53,6 +55,9 @@ interface RequesterDashboardPayload {
     closed: number;
   };
   recentTickets: RecentTicket[];
+  attentionRequired?: RequesterSection;
+  recentlyUpdated?: RequesterSection;
+  resolvedWork?: RequesterSection;
 }
 
 type GroupState = "loading" | "ready" | "error";
@@ -64,8 +69,6 @@ interface MetricCard {
   /** §3.3: the exact status set this card counts — never the open-work alias. */
   to: string;
 }
-
-import { formatDate } from "../lib/dateFormat";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -90,7 +93,9 @@ export default function RequesterDashboard() {
   const [metricsState, setMetricsState] = useState<GroupState>("loading");
   const [recentState, setRecentState] = useState<GroupState>("loading");
   const [counts, setCounts] = useState<RequesterDashboardPayload["counts"] | null>(null);
-  const [recent, setRecent] = useState<RecentTicket[] | null>(null);
+  const [recentlyUpdated, setRecentlyUpdated] = useState<RequesterSection | null>(null);
+  const [attentionRequired, setAttentionRequired] = useState<RequesterSection | null>(null);
+  const [resolvedWork, setResolvedWork] = useState<RequesterSection | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchMetrics = useCallback(async () => {
@@ -108,7 +113,31 @@ export default function RequesterDashboard() {
     setRecentState("loading");
     const payload = await fetchPayload();
     if (payload) {
-      setRecent(payload.recentTickets);
+      const fallbackRecent = payload.recentTickets ?? [];
+      setRecentlyUpdated(
+        payload.recentlyUpdated ?? {
+          count: fallbackRecent.length,
+          items: fallbackRecent,
+        },
+      );
+      setAttentionRequired(
+        payload.attentionRequired ?? {
+          count: fallbackRecent.filter(
+            (t) => t.status === "WAITING_FOR_REQUESTER" || t.status === "REOPENED",
+          ).length,
+          items: fallbackRecent.filter(
+            (t) => t.status === "WAITING_FOR_REQUESTER" || t.status === "REOPENED",
+          ),
+        },
+      );
+      setResolvedWork(
+        payload.resolvedWork ?? {
+          count:
+            (payload.counts?.resolved ?? 0) + (payload.counts?.closed ?? 0) ||
+            fallbackRecent.filter((t) => t.status === "RESOLVED" || t.status === "CLOSED").length,
+          items: fallbackRecent.filter((t) => t.status === "RESOLVED" || t.status === "CLOSED"),
+        },
+      );
       setRecentState("ready");
     } else {
       setRecentState("error");
@@ -213,6 +242,7 @@ export default function RequesterDashboard() {
                 className={styles.cardViewAll}
                 data-testid={`card-view-all-${card.key}`}
                 onClick={() => navigate(card.to)}
+                aria-label={`View all ${card.label}`}
               >
                 View all
               </button>
@@ -221,18 +251,28 @@ export default function RequesterDashboard() {
         </div>
       )}
 
-      {/* ─── Two-column content row (§3.1) ─────────────────────────────── */}
+      {/* ─── First content row: Recently Updated + Quick Actions (§3.1) ─── */}
       <div className={styles.contentRow}>
-        <section className={styles.recentPanel} aria-labelledby="recent-heading">
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="recent-heading"
+          data-testid="recently-updated-section"
+        >
           <div className={styles.panelHeader}>
             <h2 id="recent-heading" className={styles.panelTitle}>
-              My Recent Tickets
+              Recently Updated
             </h2>
+            {recentState === "ready" && recentlyUpdated && (
+              <span className={styles.panelCount} data-testid="recently-updated-count">
+                Total: {recentlyUpdated.count}
+              </span>
+            )}
             <button
               type="button"
               className={styles.viewAll}
               data-testid="recent-view-all"
               onClick={() => navigate("/tickets")}
+              aria-label="View all recently updated tickets"
             >
               View all
             </button>
@@ -255,7 +295,7 @@ export default function RequesterDashboard() {
             </div>
           )}
 
-          {recentState === "ready" && recent && recent.length === 0 && (
+          {recentState === "ready" && recentlyUpdated && recentlyUpdated.items.length === 0 && (
             <div className={styles.emptyState} data-testid="recent-empty">
               <p>No recent Tickets yet.</p>
               <Button
@@ -268,19 +308,22 @@ export default function RequesterDashboard() {
             </div>
           )}
 
-          {recentState === "ready" && recent && recent.length > 0 && (
+          {recentState === "ready" && recentlyUpdated && recentlyUpdated.items.length > 0 && (
             <ul className={styles.recentList} data-testid="recent-list">
-              {recent.map((ticket) => (
+              {recentlyUpdated.items.map((ticket) => (
                 <li key={ticket.id}>
                   <button
                     type="button"
                     className={styles.recentRow}
                     data-testid="recent-ticket-row"
+                    title={ticket.title}
                     onClick={() => navigate(`/tickets/${ticket.code}`)}
                     aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.code}</span>
-                    <span className={styles.rowTitle}>{ticket.title}</span>
+                    <span className={styles.rowTitle} title={ticket.title}>
+                      {ticket.title}
+                    </span>
                     <span className={styles.rowMeta}>
                       <Badge variant="status" value={ticket.status} />
                       <span className={styles.rowUpdated}>{formatDate(ticket.updatedAt)}</span>
@@ -307,6 +350,159 @@ export default function RequesterDashboard() {
               View My Tickets
             </Button>
           </div>
+        </section>
+      </div>
+
+      {/* ─── Second content row: Attention Required + Resolved (FR-11) ─── */}
+      <div className={styles.contentRow2}>
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="attention-required-heading"
+          data-testid="attention-required-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="attention-required-heading" className={styles.panelTitle}>
+              Attention Required
+            </h2>
+            {recentState === "ready" && attentionRequired && (
+              <span className={styles.panelCount} data-testid="attention-required-count">
+                Total: {attentionRequired.count}
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.viewAll}
+              data-testid="attention-required-view-all"
+              onClick={() => navigate("/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED")}
+              aria-label="View all attention-required tickets"
+            >
+              View all
+            </button>
+          </div>
+
+          {recentState === "loading" && (
+            <div aria-busy="true" aria-label="Loading attention-required tickets">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className={styles.rowSkeleton} data-testid="attention-required-skeleton" />
+              ))}
+            </div>
+          )}
+
+          {recentState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="attention-required-error">
+              <p>Couldn&apos;t load attention-required tickets.</p>
+              <Button variant="secondary" onClick={() => void fetchRecent()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {recentState === "ready" && attentionRequired && attentionRequired.items.length === 0 && (
+            <div className={styles.emptyState} data-testid="attention-required-empty">
+              <p>No Tickets require your attention right now.</p>
+            </div>
+          )}
+
+          {recentState === "ready" && attentionRequired && attentionRequired.items.length > 0 && (
+            <ul className={styles.recentList} data-testid="attention-required-list">
+              {attentionRequired.items.map((ticket) => (
+                <li key={ticket.id}>
+                  <button
+                    type="button"
+                    className={styles.recentRow}
+                    data-testid="attention-required-row"
+                    title={ticket.title}
+                    onClick={() => navigate(`/tickets/${ticket.code}`)}
+                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
+                  >
+                    <span className={styles.rowCode}>{ticket.code}</span>
+                    <span className={styles.rowTitle} title={ticket.title}>
+                      {ticket.title}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      <Badge variant="status" value={ticket.status} />
+                      <span className={styles.rowUpdated}>{formatDate(ticket.updatedAt)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="resolved-work-heading"
+          data-testid="resolved-work-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="resolved-work-heading" className={styles.panelTitle}>
+              Resolved
+            </h2>
+            {recentState === "ready" && resolvedWork && (
+              <span className={styles.panelCount} data-testid="resolved-work-count">
+                Total: {resolvedWork.count}
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.viewAll}
+              data-testid="resolved-work-view-all"
+              onClick={() => navigate("/tickets?currentStatus=RESOLVED,CLOSED")}
+              aria-label="View all resolved and closed tickets"
+            >
+              View all
+            </button>
+          </div>
+
+          {recentState === "loading" && (
+            <div aria-busy="true" aria-label="Loading resolved tickets">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className={styles.rowSkeleton} data-testid="resolved-work-skeleton" />
+              ))}
+            </div>
+          )}
+
+          {recentState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="resolved-work-error">
+              <p>Couldn&apos;t load resolved tickets.</p>
+              <Button variant="secondary" onClick={() => void fetchRecent()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {recentState === "ready" && resolvedWork && resolvedWork.items.length === 0 && (
+            <div className={styles.emptyState} data-testid="resolved-work-empty">
+              <p>No resolved Tickets yet.</p>
+            </div>
+          )}
+
+          {recentState === "ready" && resolvedWork && resolvedWork.items.length > 0 && (
+            <ul className={styles.recentList} data-testid="resolved-work-list">
+              {resolvedWork.items.map((ticket) => (
+                <li key={ticket.id}>
+                  <button
+                    type="button"
+                    className={styles.recentRow}
+                    data-testid="resolved-work-row"
+                    title={ticket.title}
+                    onClick={() => navigate(`/tickets/${ticket.code}`)}
+                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
+                  >
+                    <span className={styles.rowCode}>{ticket.code}</span>
+                    <span className={styles.rowTitle} title={ticket.title}>
+                      {ticket.title}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      <Badge variant="status" value={ticket.status} />
+                      <span className={styles.rowUpdated}>{formatDate(ticket.updatedAt)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>

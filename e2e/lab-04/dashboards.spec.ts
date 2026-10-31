@@ -201,6 +201,21 @@ test.describe("E2E-03 — requester dashboard drill-downs (ui-spec §3.3)", () =
     await page.getByTestId("card-view-all-resolved").click();
     await expect(page).toHaveURL(/\/tickets\?currentStatus=RESOLVED$/);
 
+    // Three Requester Dashboard sections (Attention Required, Recently Updated, Resolved) drill-downs (AC-21)
+    await page.goto("/dashboard");
+    await expect(page.getByTestId("attention-required-section")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("attention-required-view-all").click();
+    await expect(page).toHaveURL(/\/tickets\?currentStatus=WAITING_FOR_REQUESTER,REOPENED$/);
+
+    await page.goto("/dashboard");
+    await expect(page.getByTestId("resolved-work-section")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("resolved-work-view-all").click();
+    await expect(page).toHaveURL(/\/tickets\?currentStatus=RESOLVED,CLOSED$/);
+
+    await page.goto("/dashboard");
+    await page.getByTestId("recent-view-all").click();
+    await expect(page).toHaveURL(/\/tickets$/);
+
     // Recent row → Ticket Detail (requester route keys by ticket number).
     await page.goto("/dashboard");
     await expect(page.getByTestId("recent-list")).toBeVisible({ timeout: 15_000 });

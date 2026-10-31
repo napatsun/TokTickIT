@@ -340,6 +340,14 @@ export async function getStaffDashboard(currentUserId: string): Promise<StaffDas
 
 // ─── Requester dashboard (§3.2) ──────────────────────────────────────────
 
+const ATTENTION_REQUIRED_GROUP = ["WAITING_FOR_REQUESTER", "REOPENED"] as const;
+const RESOLVED_WORK_GROUP = ["RESOLVED", "CLOSED"] as const;
+
+export interface RequesterSection {
+  count: number;
+  items: ReturnType<typeof toRecentDto>[];
+}
+
 export interface RequesterDashboard {
   generatedAt: string;
   timezone: "Asia/Bangkok";
@@ -350,12 +358,25 @@ export interface RequesterDashboard {
     closed: number;
   };
   recentTickets: ReturnType<typeof toRecentDto>[];
+  attentionRequired: RequesterSection;
+  recentlyUpdated: RequesterSection;
+  resolvedWork: RequesterSection;
 }
 
 /**
  * The Requester dashboard aggregate. Scope is enforced HERE, in the query's
  * where clause (`requesterId = :sessionUserId`) — never by filtering a wider
  * fetch after the fact (AC-02, AC-06).
+ *
+ * Three distinct summary sections (FR-11):
+ *   1. Attention Required — own Tickets with status IN (WAITING_FOR_REQUESTER, REOPENED),
+ *      ordered by updatedAt DESC, id DESC (≤5 rows), matching
+ *      /tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED.
+ *   2. Recently Updated — own Tickets ordered by updatedAt DESC, id DESC (≤5 rows),
+ *      matching /tickets.
+ *   3. Resolved — own Tickets with status IN (RESOLVED, CLOSED), ordered by
+ *      updatedAt DESC, id DESC (≤5 rows), matching
+ *      /tickets?currentStatus=RESOLVED,CLOSED.
  *
  * There is deliberately no `deltas` key in this response (§3.2): the Requester
  * Dashboard shows no delta indicators (ui-spec.md §3.1).
@@ -364,7 +385,19 @@ export async function getRequesterDashboard(currentUserId: string): Promise<Requ
   const prisma = getPrisma();
   const own = { requesterId: currentUserId } as const;
 
-  const [myOpen, inProgress, resolved, closed, recentRows] = await Promise.all([
+  const [
+    myOpen,
+    inProgress,
+    resolved,
+    closed,
+    recentRows,
+    attentionCount,
+    attentionRows,
+    recentlyUpdatedCount,
+    recentlyUpdatedRows,
+    resolvedWorkCount,
+    resolvedWorkRows,
+  ] = await Promise.all([
     // §3.2: the four-status set that excludes IN_PROGRESS (its own card) but
     // includes REOPENED (BR-14) so a reopened Ticket is not invisible here.
     prisma.ticket.count({ where: { ...own, status: { in: [...MY_OPEN_GROUP] } } }),
@@ -378,6 +411,33 @@ export async function getRequesterDashboard(currentUserId: string): Promise<Requ
       take: RECENT_LIMIT,
       select: RECENT_SELECT,
     }),
+    prisma.ticket.count({
+      where: { ...own, status: { in: [...ATTENTION_REQUIRED_GROUP] } },
+    }),
+    prisma.ticket.findMany({
+      where: { ...own, status: { in: [...ATTENTION_REQUIRED_GROUP] } },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: RECENT_LIMIT,
+      select: RECENT_SELECT,
+    }),
+    prisma.ticket.count({
+      where: { ...own },
+    }),
+    prisma.ticket.findMany({
+      where: { ...own },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: RECENT_LIMIT,
+      select: RECENT_SELECT,
+    }),
+    prisma.ticket.count({
+      where: { ...own, status: { in: [...RESOLVED_WORK_GROUP] } },
+    }),
+    prisma.ticket.findMany({
+      where: { ...own, status: { in: [...RESOLVED_WORK_GROUP] } },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: RECENT_LIMIT,
+      select: RECENT_SELECT,
+    }),
   ]);
 
   return {
@@ -385,5 +445,17 @@ export async function getRequesterDashboard(currentUserId: string): Promise<Requ
     timezone: "Asia/Bangkok",
     counts: { myOpen, inProgress, resolved, closed },
     recentTickets: recentRows.map(toRecentDto),
+    attentionRequired: {
+      count: attentionCount,
+      items: attentionRows.map(toRecentDto),
+    },
+    recentlyUpdated: {
+      count: recentlyUpdatedCount,
+      items: recentlyUpdatedRows.map(toRecentDto),
+    },
+    resolvedWork: {
+      count: resolvedWorkCount,
+      items: resolvedWorkRows.map(toRecentDto),
+    },
   };
 }
