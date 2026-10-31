@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import Pagination from "../components/shared/Pagination";
@@ -82,20 +82,13 @@ const OWNER_OPTIONS = [
   { value: "me", label: "Mine" },
 ];
 
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { formatDate } from "../lib/dateFormat";
 
 // ─── Component ──────────────────────────────────────────────────────────
 
 export default function StaffQueuePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [items, setItems] = useState<QueueItem[]>([]);
   const [status, setStatus] = useState<QueueStatus>("loading");
@@ -103,14 +96,33 @@ export default function StaffQueuePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
 
-  // Filters / sort
+  // Filters / sort. Lab 4 (ui-spec.md §2.3): the initial values are seeded from
+  // the URL query params the Dashboard drill-downs arrive with (status —
+  // including its comma-separated multi-value form and the open-work alias —
+  // owner=me, and priority for the Urgent Tickets panel's "View all urgent"
+  // link, FR-18). React Router's read-only initial parse is fine here: the user
+  // can still change every control freely afterwards.
+  const initialStatus = searchParams.get("status") ?? "";
+  const initialOwner = searchParams.get("owner") ?? "";
+  const initialPriority = searchParams.get("priority") ?? "";
+  const focusSearch = searchParams.get("focus") === "search";
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [priorityFilter, setPriorityFilter] = useState(initialPriority);
+  const [ownerFilter, setOwnerFilter] = useState(initialOwner);
   const [sortBy, setSortBy] = useState<SortableField>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
+  const [searchResetSignal, setSearchResetSignal] = useState(0);
+
+  useEffect(() => {
+    if (focusSearch) {
+      const searchInput = document.getElementById("queue-search") as HTMLInputElement | null;
+      searchInput?.focus();
+    }
+  }, [focusSearch]);
 
   const hasActiveFilters =
     search.trim() !== "" ||
@@ -174,6 +186,7 @@ export default function StaffQueuePage() {
     setStatusFilter("");
     setPriorityFilter("");
     setOwnerFilter("");
+    setSearchResetSignal((n) => n + 1);
     setPage(1);
   }
 
@@ -236,6 +249,7 @@ export default function StaffQueuePage() {
         <SearchInput
           value={search}
           onSearch={handleSearch}
+          resetSignal={searchResetSignal}
           placeholder="Search by ticket number or summary…"
           id="queue-search"
         />
@@ -270,6 +284,16 @@ export default function StaffQueuePage() {
                 {option.label}
               </option>
             ))}
+            {statusFilter !== "" &&
+              !STATUS_OPTIONS.some((option) => option.value === statusFilter) && (
+                <option value={statusFilter}>
+                  {statusFilter.toLowerCase() === "open-work"
+                    ? "Open work (from dashboard)"
+                    : statusFilter.includes(",")
+                      ? `${statusFilter.split(",").length} statuses (from dashboard)`
+                      : statusFilter}
+                </option>
+              )}
           </select>
         </label>
 
@@ -305,9 +329,11 @@ export default function StaffQueuePage() {
           </select>
         </label>
 
-        <Button variant="tertiary" onClick={clearFilters} disabled={!hasActiveFilters}>
-          Clear filters
-        </Button>
+        {hasActiveFilters && (
+          <Button variant="tertiary" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* ─── Loading skeleton ─────────────────────────────────────────── */}

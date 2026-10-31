@@ -9,7 +9,7 @@ Reuses all Lab 2 Zen Green tokens: color palette, spacing scale, typography, car
 **Purpose:** Wraps every authenticated screen; shows identity and role-scoped navigation.
 
 **Elements**
-- Top bar: product wordmark, current user's **Name** + **Role badge** (Requester / IT Staff / Administrator), **Logout** button.
+- Top bar: product wordmark, current user's **Name** + **Role badge** (Requester / IT Staff / Administrator), **Log out** button.
 - Left/top nav (responsive collapses to a hamburger menu on mobile): only destinations permitted for the current role are rendered — never rendered-but-disabled.
   - Requester: "My Tickets", "Create Ticket".
   - IT Staff: "Ticket Queue".

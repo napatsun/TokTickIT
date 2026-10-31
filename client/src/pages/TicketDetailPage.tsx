@@ -19,7 +19,12 @@ import Badge from "../components/shared/Badge";
 import Button from "../components/shared/Button";
 import AttachmentSection from "../components/ticket-detail/AttachmentSection";
 import PublicCommentsPanel from "../components/ticket-detail/PublicCommentsPanel";
-import ResolveMarkConfirm from "../components/ticket-detail/ResolveMarkConfirm";
+import ActionsTakenPanel from "../components/ticket-detail/ActionsTakenPanel";
+import { AuthContext } from "../contexts/AuthContext";
+import { useContext } from "react";
+import TicketWorkflowControls, {
+  type WorkflowTicketState,
+} from "../components/ticket-detail/TicketWorkflowControls";
 import { apiClient } from "../lib/apiClient";
 import styles from "./TicketDetailPage.module.css";
 
@@ -42,6 +47,13 @@ interface TicketData {
   // BR-05/BR-20: separate from `currentStatus` — never a formal status change.
   requesterMarkedResolved?: boolean;
   requesterMarkedResolvedAt?: string | null;
+  // Lab 4 §7.2 / §5.1 — the Requester workflow control's inputs.
+  version: number;
+  resolvedAt: string | null;
+  requesterConfirmedResolved: boolean;
+  requesterConfirmedResolvedAt: string | null;
+  hasActionsWithResult: boolean;
+  allowedStatusTransitions: string[];
 }
 
 interface AttachmentData {
@@ -68,16 +80,9 @@ interface TicketDetailResponse {
   };
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+import { formatDate } from "../lib/dateFormat";
 
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -85,17 +90,16 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * ui-spec.md §4: "Problem Appears Resolved" is offered only for these statuses
- * and only while the marker has not already been set.
- */
-const RESOLVE_MARK_ELIGIBLE_STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER"];
-
 // ─── Component ──────────────────────────────────────────────────────────
 
 export default function TicketDetailPage() {
   const { ticketNumber } = useParams<{ ticketNumber: string }>();
   const navigate = useNavigate();
+  // §4: the Actions Taken panel renders read-only for the Requester; the
+  // create/edit/void controls are absent from the DOM entirely (§4.2).
+  // Null-guarded context read (see StaffTicketDetailPage for the rationale).
+  const auth = useContext(AuthContext);
+  const user = auth?.user ?? null;
 
   const [ticket, setTicket] = useState<TicketData | null>(null);
   const [attachments, setAttachments] = useState<{
@@ -104,11 +108,6 @@ export default function TicketDetailPage() {
   }>({ active: [], removed: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // ─── "Problem Appears Resolved" state (ui-spec.md §4) ────────────────
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [isMarkingResolved, setIsMarkingResolved] = useState(false);
-  const [resolveError, setResolveError] = useState<string | null>(null);
 
   // ─── Fetch ticket detail ──────────────────────────────────────────
   const fetchTicketDetail = useCallback(async () => {
@@ -153,50 +152,24 @@ export default function TicketDetailPage() {
     fetchTicketDetail();
   }, [fetchTicketDetail]);
 
-  // ─── "Problem Appears Resolved" ──────────────────────────────────────
-  const handleResolveMarkConfirm = useCallback(async () => {
-    if (!ticketNumber) return;
-
-    setIsMarkingResolved(true);
-    setResolveError(null);
-
-    try {
-      const response = await apiClient(`/api/tickets/${ticketNumber}/resolve-mark`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        setResolveError(
-          body?.error?.message ?? "Couldn't record your response. Please try again.",
-        );
-        return; // dialog stays open, state unchanged
-      }
-
-      const data = (await response.json()) as {
-        requesterMarkedResolved: boolean;
-        requesterMarkedResolvedAt: string | null;
-      };
-
-      // The formal status is untouched (BR-20) — only the marker changes.
-      setTicket((current) =>
-        current
-          ? {
-              ...current,
-              requesterMarkedResolved: data.requesterMarkedResolved,
-              requesterMarkedResolvedAt: data.requesterMarkedResolvedAt,
-            }
-          : current,
-      );
-      setShowResolveConfirm(false);
-    } catch {
-      setResolveError(
-        "Couldn't record your response. Please check your connection and try again.",
-      );
-    } finally {
-      setIsMarkingResolved(false);
-    }
-  }, [ticketNumber]);
+  // ─── Workflow control (ui-spec.md §5) ────────────────────────────────
+  // The shared control owns its own busy/conflict micro-state; the page only
+  // merges the server-confirmed workflow slice into its ticket.
+  const handleTicketUpdated = useCallback((next: WorkflowTicketState) => {
+    setTicket((current) =>
+      current
+        ? {
+            ...current,
+            currentStatus: next.status,
+            version: next.version,
+            resolvedAt: next.resolvedAt,
+            requesterConfirmedResolved: next.requesterConfirmedResolved,
+            requesterConfirmedResolvedAt: next.requesterConfirmedResolvedAt,
+            allowedStatusTransitions: next.allowedStatusTransitions,
+          }
+        : current,
+    );
+  }, []);
 
   // ─── Render: Loading state ────────────────────────────────────────
   if (isLoading) {
@@ -251,10 +224,6 @@ export default function TicketDetailPage() {
 
   // ─── Render: Happy path ───────────────────────────────────────────
   if (!ticket) return null;
-
-  const canMarkResolved =
-    RESOLVE_MARK_ELIGIBLE_STATUSES.includes(ticket.currentStatus) &&
-    !ticket.requesterMarkedResolved;
 
   return (
     <div className={styles.page}>
@@ -313,28 +282,28 @@ export default function TicketDetailPage() {
         </p>
       </section>
 
-      {/* §4: "Problem Appears Resolved" — visually distinct from the Status
-          badge; it never implies a formal status change (BR-05/BR-20). */}
-      {(canMarkResolved || ticket.requesterMarkedResolved) && (
-        <section className={styles.resolveSection} data-testid="resolve-mark-section">
-          {ticket.requesterMarkedResolved ? (
-            <p className={styles.requesterResolvedMarker} data-testid="requester-resolved-badge">
-              You marked this as resolved on{" "}
-              {ticket.requesterMarkedResolvedAt
-                ? formatDate(ticket.requesterMarkedResolvedAt)
-                : "an earlier date"}
-              . IT Staff will confirm and close the ticket.
-            </p>
-          ) : (
-            <>
-              <p className={styles.resolveHint}>
-                Has IT fixed the problem? Let them know it looks resolved.
-              </p>
-              <Button variant="secondary" onClick={() => setShowResolveConfirm(true)}>
-                Problem Appears Resolved
-              </Button>
-            </>
-          )}
+      {/* §5: the Requester workflow control — the only status transitions a
+          Requester may make (cancel own / reopen own within BR-10), plus the
+          advisory "This looks resolved to me" acknowledgement (FR-08/BR-08).
+          The control is deliberately separate from and secondary to any
+          authoritative status change, which only IT Staff can make. */}
+      {user && (
+        <section className={styles.resolveSection} data-testid="workflow-section">
+          <h2 className={styles.summaryTitle}>Status &amp; Resolution</h2>
+          <TicketWorkflowControls
+            ticketId={ticket.id}
+            currentUser={user}
+            currentStatus={ticket.currentStatus}
+            version={ticket.version}
+            resolvedAt={ticket.resolvedAt}
+            allowedTransitions={ticket.allowedStatusTransitions}
+            hasActionsWithResult={ticket.hasActionsWithResult}
+            requesterConfirmedResolved={ticket.requesterConfirmedResolved}
+            requesterConfirmedResolvedAt={ticket.requesterConfirmedResolvedAt}
+            showStatusBadge={false}
+            onTicketUpdated={handleTicketUpdated}
+            onReload={fetchTicketDetail}
+          />
         </section>
       )}
 
@@ -353,18 +322,9 @@ export default function TicketDetailPage() {
       {/* §4: Public Comments panel (Requester route — own ticket only) */}
       <PublicCommentsPanel commentsPath={`/api/tickets/${ticket.ticketNumber}/comments`} />
 
-      {/* §4: confirmation dialog for the appears-resolved action */}
-      {showResolveConfirm && (
-        <ResolveMarkConfirm
-          onConfirm={handleResolveMarkConfirm}
-          onCancel={() => {
-            setShowResolveConfirm(false);
-            setResolveError(null);
-          }}
-          busy={isMarkingResolved}
-          error={resolveError}
-        />
-      )}
+      {/* Lab 4 §4: Actions Taken — appended below Public Comments (read-only
+          view for the owning Requester, per FR-06). */}
+      {user && ticket && <ActionsTakenPanel ticketId={ticket.id} currentUser={user} />}
     </div>
   );
 }

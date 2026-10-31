@@ -62,15 +62,26 @@ async function rowFor(page: Page, email: string) {
  * timer, and every later assertion would be made against a stale list.
  */
 async function clearFilters(page: Page) {
+  const searchInput = page.getByLabel(/search by name or email/i);
   const clear = page.getByRole("button", { name: "Clear filters" }).first();
-  if (!(await clear.isEnabled())) return;
-  await clear.click();
-  await expect(page.getByLabel(/search by name or email/i)).toHaveValue("");
-  // The search box is debounced (300ms). Wait out that window and re-assert, so
-  // a stale timer that re-applies the cleared term fails here, with a message
-  // that says what happened, instead of surfacing later as a mystery timeout.
+
+  // The search box is debounced (300ms), so a term typed just before this call
+  // may still be pending: the page's filter state is not applied yet and the
+  // Clear button can briefly be disabled even though the box shows text. Wait
+  // the debounce out first so the pending term lands, otherwise it would
+  // re-apply *after* we clear and silently refilter the list (E2E-06).
+  await page.waitForTimeout(400);
+
+  if ((await clear.count()) > 0 && (await clear.isEnabled())) {
+    await clear.click();
+  }
+  await expect(searchInput).toHaveValue("");
+
+  // Re-assert after another debounce window: a stale timer that re-applies the
+  // cleared term fails here with a clear message, instead of surfacing later as
+  // a mystery timeout.
   await page.waitForTimeout(450);
-  await expect(page.getByLabel(/search by name or email/i)).toHaveValue("");
+  await expect(searchInput).toHaveValue("");
 }
 
 /**
@@ -221,19 +232,6 @@ test.describe("E2E-06 — Administrator User Management", () => {
     // ─── 7. Self-deactivation is blocked ────────────────────────────────
     await clearFilters(page);
     const selfRow = await rowFor(page, ADMIN.email);
-    const dump = async (tag: string) => {
-      const events = (await page.evaluate(() => (window as any).__si ?? [])) as Array<unknown[]>;
-      console.log(
-        tag,
-        JSON.stringify(
-          events.slice(-8).map((e, i, arr) => {
-            const prev = arr[i - 1];
-            return i === 0 || !prev ? e : [...e, `+${Number(e[e.length - 1]) - Number(prev[prev.length - 1])}ms`];
-          }),
-        ),
-      );
-    };
-    await dump("SI_BEFORE");
     await selfRow.getByRole("button", { name: /^Edit / }).click();
 
     const selfDialog = page.getByTestId("edit-user-dialog");

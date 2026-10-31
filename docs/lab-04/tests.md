@@ -1,0 +1,294 @@
+# TokTickIT — Sprint 4 Test Plan & Traceability (`tests.md`)
+
+This plan is written before/alongside implementation (Test DD). Every row maps to at least one
+Acceptance Criterion in `specification.md` §9. "Final" column is updated to `Pass`/`Fail` with a
+link to the CI run once implementation is complete.
+
+Legend for **Type**: `UNIT` (isolated function/module), `API` (integration against running API +
+test DB), `UI` (component test, e.g. React Testing Library), `STYLE` (visual/style assertion),
+`RESP` (responsive/breakpoint check), `AUTH` (authorization/role check), `WORKFLOW` (status
+transition), `MIGRATION` (migration/regression of existing data), `PERF` (performance smoke),
+`E2E` (Playwright/Cypress end-to-end).
+
+---
+
+## 1. Actions Taken
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| API-01 | API | FR-01, AC-01 | IT Staff creates a valid Actions Taken | `201`, saved under correct Ticket, `performedById` = actor | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-02 | API | BR-03 | Client attempts to override `performedById` in payload | Field is ignored/overridden by server session value | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-03 | API | AC-01 | Create a valid Actions Taken (baseline happy path, per handout example) | Created under the correct Ticket and actor | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-04 | API | BR-05, AC-07 | `followUpRequired=true` with empty `followUpNote` | `422 VALIDATION_ERROR` naming `followUpNote` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-05 | API | BR-05 | `followUpRequired=false` with non-empty `followUpNote` | `422` (note must be empty when not required) | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-06 | API | BR-04 | `actionDateTime` in the future | `422 VALIDATION_ERROR` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-07 | API | AC-06 | Requester calls `POST /actions` directly | `403 FORBIDDEN_ROLE` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-08 | API | BR-15 | Ticket-access denial on the Actions Taken routes: a Requester requesting another Requester's Ticket, and any caller against a `ticketId` that does not exist (Lab 3's staff queue gives every IT Staff/Administrator access to every *existing* Ticket — see the Implementation Note below) | `403 FORBIDDEN_TICKET_ACCESS` for the Requester-not-owner case; `404 TICKET_NOT_FOUND` for a non-existent `ticketId` — a staff-wide `FORBIDDEN_TICKET_ACCESS` is unreachable by design | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-09 | API | BR-11 | Author edits own entry within 15 min | `200`, fields updated, `editedAt/editedById` set | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-10 | API | BR-11 | Non-author IT Staff edits entry within window | `403 NOT_AUTHOR` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-11 | API | BR-11 | Author edits own entry after 15 min | `403 EDIT_WINDOW_EXPIRED` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-12 | API | BR-11 | Administrator edits/voids any entry any time | `200`, `isVoided=true` with `voidReason` stored | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-13 | API | FR-03 | `GET /actions` ordering | Returns oldest-first, stable secondary sort | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-14 | API | FR-15, AC-11 | Duplicate submit with same `Idempotency-Key` within the 5-second window | Only one row persisted; both calls return same `201` body | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-14b | API | FR-15, AC-11 | Duplicate submit with same `Idempotency-Key` after the 5-second window has elapsed | Treated as a new, independent create — two rows persisted | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-28 | API | §7.1 spec, BR-11 | `PATCH .../actions/:id` with `isVoided=true` and empty/missing `voidReason` | `422 VALIDATION_ERROR` naming `voidReason` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-29 | API | §1.3 api-spec | Author edits `actionDateTime` within edit window to a valid past value | `200`, `actionDateTime` updated | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-30 | API | §1.3 api-spec, BR-04 | Author edits `actionDateTime` to a future value | `422 VALIDATION_ERROR` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-31 | API | §1.2 api-spec | Requester calls `GET .../actions?includeVoided=true` | `403 FORBIDDEN_QUERY_PARAM` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-38 | API | §1.3 api-spec, AC-06 | Requester calls `PATCH .../actions/:actionId` directly (any body, own or others' Ticket) | `403 FORBIDDEN_ROLE` — same code/semantics as `POST` (API-07); read access to a Requester's own Ticket (§1.2) does not extend to this endpoint | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-39 | API | §1.3 api-spec | `PATCH` with a `ticketId` that does not exist, for any `actionId` | `404 TICKET_NOT_FOUND` — confirms the Ticket-existence check runs, and rejects, before any Action lookup is attempted | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-39b | API | §1.3 api-spec | `PATCH` with a valid, existing `ticketId` but an `actionId` that does not exist under that Ticket | `404 ACTION_NOT_FOUND` — paired with API-39, confirms the check order is Ticket first, Action second (a request with both a bad `ticketId` and a bad `actionId` must return `TICKET_NOT_FOUND`, not `ACTION_NOT_FOUND`) | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-40 | API | §1.3 api-spec, BR-11 | Administrator attempts to edit a field (e.g. `description` or `result`) on an entry that already has `isVoided=true` | `409 Conflict (ENTRY_VOIDED)` — voiding is permanently one-way; even an Administrator cannot edit a voided entry's other fields | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-41 | API | §1.3 api-spec, BR-11 | Administrator attempts to set `isVoided: false` on an entry that already has `isVoided=true` ("un-void") | `409 Conflict (ENTRY_VOIDED)` — un-voiding is never permitted, regardless of caller role | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| UNIT-01 | UNIT | BR-05 | Follow-up-note conditional validator (pure function) | Returns valid/invalid per truth table (4 cases) | `server/tests/lab-04/validators/actionTaken.unit.test.ts` | Pass |
+| UI-01 | UI | §4.3 ui-spec | Create form shows/hides Follow-up Note based on toggle | Field appears only when toggle is on; required marker shown | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-02 | UI | §4.3 ui-spec, FR-15, AC-11 | Submit button disabled while request in flight | Second click before response does not fire a second request | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-03 | UI | §4.5 ui-spec | Failed submit preserves entered form values | All fields retain user input after a simulated 500 error | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-04 | UI | §4.2 ui-spec | Requester view renders no create/edit controls in DOM | `queryByRole('button', {name: /add actions taken/i})` returns null | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-17 | STYLE | §4.2 ui-spec (row layout) | Every static `styles.X` reference in `ActionsTakenPanel.tsx` resolves to a class defined in `ActionsTakenPanel.module.css` — `.row` and the three skeleton modifiers (`.skeletonNarrow`/`.skeletonWide`/`.skeletonBadge`) were never defined, so rows rendered `class="undefined …"` | Source-level scan finds zero missing classes for the component (jsdom performs no layout, so — like UI-15 — this pins the authored CSS contract rather than pixels; the rendered spacing/divider come from the `.table td` rules asserted alongside) | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-18 | UI | AC-13, §8 ui-spec | Every id in `aria-describedby` on the Actions Taken create/edit form resolves to an element in the document, including the follow-up note after a server `422` (the previously dangling `action-followUpNote-error`) | No dangling describedby target for any control in any form state; the follow-up-note error stays announced via its live region | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-19 | UI | AC-20, §4.1/§4.4 ui-spec | Show-voided heading wording | Toggle **off**: heading is exactly "Actions Taken (N)" with no secondary label. Toggle **on**: heading keeps the non-voided count and a plain-text `+V voided shown` label appears (and disappears again when toggled off) while the voided row renders | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| E2E-01 | E2E | AC-01, AC-07 | Full create flow incl. validation error then success | User creates Actions Taken, sees it appear in list | `e2e/lab-04/actions-taken-flow.spec.ts` | Pass |
+
+**Implementation Note (`feature/lab4-03-actions-taken-api`).** The `API-01`…`API-14b`,
+`API-28`…`API-31`, `API-38`…`API-41` and `UNIT-01` rows above are implemented in this branch
+(`server/tests/lab-04/actions-taken.api.test.ts`, `server/tests/lab-04/validators/actionTaken.unit.test.ts`).
+Points where this plan met the shipped codebase, resolved before implementation:
+
+1. **API-08 cannot be a staff-wide `403`.** Lab 3's `/api/staff` router is deliberately a shared queue
+   ("any IT Staff member or Administrator may operate on any Ticket", `api-spec.md` §3 of Lab 3) and
+   BR-02 relies on it ("any active IT Staff/Administrator with access may author an Actions Taken
+   entry; `performedById` may differ from the Ticket's `ownerId`"). No Ticket is therefore unreachable
+   by a staff caller, and the test asserts the two denials that *do* exist: `FORBIDDEN_TICKET_ACCESS`
+   for a Requester reading a Ticket they do not own (§1.2), and `TICKET_NOT_FOUND` for a `ticketId`
+   that does not exist. Tickets have no soft-delete column, so "soft-deleted" is not a distinct case.
+2. **Validation errors are asserted as `error.fieldErrors`**, matching the Lab 2/3 envelope that the
+   existing server routes and clients already emit and read (`api-spec.md` §1.
+   Implementation Note). `API-04`/`API-28` therefore assert `fieldErrors.followUpNote` and
+   `fieldErrors.voidReason` respectively.
+3. **`API-14`/`API-14b` use the 5-second window** (`IDEMPOTENCY_WINDOW_SECONDS = 5`), so `API-14b`
+   waits past 5s before its second submission — that is what makes "treated as a new, independent
+   create" observable rather than assumed.
+4. **`UNIT-01` targets the pure conditional-follow-up validator** exported from
+   `server/src/lib/actionTaken.ts` (`validateFollowUpNote`), exercised as a truth table over
+   (`followUpRequired`, `followUpNote`) including the whitespace-only and 3-character boundaries.
+5. **`UI-01`…`UI-04` and `E2E-01`/`E2E-05` are out of scope for this branch** by instruction — they
+   belong to `feature/lab4-04-actions-taken-ui` and the end-to-end suite. `API-15`…`API-21b`,
+   `API-32`/`API-33`, `AUTH-01` and `WORKFLOW-01` belong to the ticket-workflow branch; this branch
+   never touches `PATCH /status`, `requester-confirmation`, or the dashboards.
+
+## 2. Ticket Workflow & Resolution
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| API-15 | API | BR-09, AC-04 | Resolve attempt with zero Actions Taken | `409 ACTIONS_REQUIRED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-16 | API | BR-09, AC-03 | Resolve attempt with ≥1 Actions Taken (result set) | `200`, status=`RESOLVED`, `resolvedAt` set | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| WORKFLOW-01 | WORKFLOW | BR-07, BR-15 | Exhaustive matrix sweep of `specification.md` §5.1: for every (fromStatus × targetStatus) cell, attempt the transition once per role. Two distinct rejection reasons are asserted separately — this test must **not** collapse them into a single expected code: (a) if the cell is `—` (no role can make that transition from that status), every role's attempt → `409 INVALID_STATUS_TRANSITION`; (b) if the cell lists specific permitted roles, any role **not** in that list attempting the same transition → `403 FORBIDDEN_ROLE` (this is the general case that AUTH-01 below spot-checks for one specific combination) | Case (a): `409 INVALID_STATUS_TRANSITION` for every role. Case (b): `200` for a listed role, `403 FORBIDDEN_ROLE` for every other role. No cell/role combination is ever expected to return `409` for a pure role mismatch, or `403` for a genuinely unreachable target status | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-17 | API | BR-12, AC-08 | Two clients submit status change; second uses stale `version` | First `200`; second `409 STALE_VERSION` with `currentState` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-18 | API | BR-10, AC-09 | Requester reopens own Ticket 10 days after `resolvedAt` | `403 REOPEN_WINDOW_EXPIRED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-19 | API | BR-10 | Requester reopens own Ticket 2 days after `resolvedAt` | `200`, status=`REOPENED` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-20 | API | BR-10 | IT Staff reopens Ticket at any time | `200`, regardless of window | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-21 | API | FR-08, BR-08, AC-05 | Requester submits "looks resolved" confirmation | `200`; `requesterConfirmedResolved=true`; Ticket `status` unchanged | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-21b | API | FR-08, §7.2 spec | Requester confirmation is followed immediately by an IT Staff status transition using the pre-confirmation `version` | `200` — status transition succeeds; confirms the two writes never conflict on `version` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-32 | API | FR-15, AC-14 | Duplicate `PATCH /status` submit with same `Idempotency-Key` within 5s | Status changes/`version` increments exactly once; second call returns identical `200` body | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-33 | API | §7.3 spec | Successful status transition writes exactly one `TicketStatusHistory` row with correct `fromStatus`/`toStatus`/`changedById` | Row exists and matches | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| AUTH-01 | AUTH | BR-15 | Requester attempts `PATCH /status` on own Ticket to `Resolved` | `403 FORBIDDEN_ROLE` — a role-mismatch case of WORKFLOW-01's case (b) above, spot-checked explicitly because it is the transition most likely to be attempted by a Requester in practice | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| AUTH-02 | AUTH | BR-14 | `Cancelled` Ticket excluded from IT Staff open-work counts | Verified via API-24 below (cross-ref) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| UI-05 | UI | §5 ui-spec | Status control renders only permitted transitions for current role/status | Disallowed options absent from DOM entirely | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pass |
+| UI-06 | UI | §5 ui-spec | Resolve button disabled with tooltip when Actions Taken precondition unmet | Button `disabled`, accessible tooltip text present | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pass |
+| E2E-02 | E2E | AC-03 | Full resolution flow: add Actions Taken → resolve Ticket → badge updates | Ticket badge shows `Resolved`; Requester later reopens within window | `e2e/lab-04/ticket-resolution.spec.ts` | Pass |
+
+## 3. Dashboards
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| API-22 | API | FR-11, AC-02 | Requester A's dashboard never includes Requester B's Tickets | Response counts/list scoped strictly to caller | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
+| API-23 | API | FR-11 | Requester dashboard calculation correctness | Counts match direct DB query for seeded fixture | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
+| API-24 | API | FR-10, BR-14 | Staff dashboard counts exclude Cancelled Tickets | `counts.*` match DB query excluding `Cancelled` | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-25 | API | FR-10 | `myAssigned` scoped to `ownerId = current user`, excludes Closed/Cancelled | Matches expected fixture count | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-26 | API | §6.2 handout | Dashboard response payload size/shape | Response contains only `counts`, `deltas`, `recentTickets` (≤5 items) — never a full Ticket array | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-34 | API | BR-14 | Seed a `Reopened` Ticket assigned to current user; fetch staff dashboard | Counted in `counts.inProgress` and `counts.myAssigned`, not in a separate bucket | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-35 | API | BR-14 | Seed a `Reopened` Ticket owned by current Requester; fetch requester dashboard | Counted in `counts.myOpen` | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
+| API-36 | API | BR-13, §7.3 spec | Trigger 2 status transitions into `Open` within the last 24h, then fetch staff dashboard | `deltas.open` reflects exactly those transitions, computed against live `TicketStatusHistory` rows (no cached counter involved — verified by asserting the value changes immediately after a new transition, within the same test, with no cache-invalidation step) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-37 | API | §3.1 api-spec | Fetch staff dashboard with zero `TicketStatusHistory` rows in the last 24h (fresh seed) | `deltas.*` are all `0` (never `null`) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-42 | API | FR-17, AC-15 | `myActions.items` scope, order, limit and projection | Only the caller's non-voided entries; newest `actionDateTime` first with `id` DESC as the tie-break; ≤5 rows; projection is exactly `id`/`ticketId`/`ticketNumber`/`description`/`actionDateTime`/`followUpRequired` (no `result`, `followUpNote`, `attachmentNotes`) | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-43 | API | FR-17, AC-15 | `myActions.followUpCount` correctness | Equals a direct DB count of the caller's non-voided `followUpRequired = true` entries on Tickets that are neither `CLOSED` nor `CANCELLED`; voided entries and other users' entries excluded; one Ticket may contribute several entries | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-44 | API | FR-18, AC-16 | `urgentTickets` filter, order, limit, owner projection | Only `itPriority = 'URGENT'` Tickets in the BR-14 open-work set (`HIGH` and `RESOLVED`/`CLOSED`/`CANCELLED` excluded), oldest `createdAt` first then `id` ASC, ≤5 rows, `ownerName` is `null` when unassigned and the owner's name otherwise | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-45 | API | FR-17, FR-18, BR-13 | Both new sections against direct DB queries on a fresh fixture set | `myActions` and `urgentTickets` match counts/rows computed by the test itself through Prisma (never by calling the implementation), so a wrong `where`/`orderBy` cannot pass | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| API-46 | API | FR-11, BR-14, AC-21 | Requester Dashboard `attentionRequired`, `recentlyUpdated`, and `resolvedWork` sections ownership and filtered-count parity | Only the calling Requester's Tickets appear in any section (Requester B's Tickets never leak); each section's `count` equals `pagination.totalItems` from `GET /api/tickets` with the matching `currentStatus` filter | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pass |
+| AUTH-03 | AUTH | AC-02 | Requester calls `/api/dashboard/staff` | `403 FORBIDDEN_ROLE` | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
+| AUTH-05 | AUTH | BR-16 (GAP C) | Requester fetches another Requester's Ticket vs a non-existent Ticket | Both are the identical `404 TICKET_NOT_FOUND` (status, `error.code`, `error.message`) — ownership protection is evidenced by `404`, not `403` | `server/tests/lab-03/authorization.api.test.ts` (SEC-07, API-36) — already implemented before this branch; **no application code change** | Pass |
+| UI-07 | UI | AC-10 | Staff Dashboard renders zero-value card correctly (not error) | Card shows `0` with label, no error banner | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-08 | UI | §2.4 ui-spec | Dashboard partial-failure: one card group fails, rest render | Only failed section shows retry; others show data | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-09 | UI | §3.4 ui-spec | Requester Dashboard empty "recent tickets" state | Renders empty-state component with CTA | `client/tests/lab-04/StaffDashboard.test.tsx` — the Requester Dashboard suites live inside the shared dashboard test file (`describe("UI-09 …")`); there is no separate `RequesterDashboard.test.tsx` | Pass |
+| UI-11 | UI | FR-17, AC-15, AC-17 | "My Actions Taken" panel | Rows render the Ticket number as a drill-down to `/staff/tickets/:id`, a truncated description, the action date/time and a `Follow-up` badge only when required; the header shows the follow-up count; loading renders skeletons with `aria-busy`; empty renders the documented empty text; a section failure shows a friendly `role="alert"` retry **while the other sections still render their data** | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-12 | UI | FR-18, AC-16, AC-17 | "Urgent Tickets" panel | Rows render status + IT Priority badges and the owner name or "Unassigned"; `View all urgent` targets `/staff/queue?priority=URGENT`; loading/empty/error states are independent of the other sections | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-13 | UI | FR-19, BR-17, AC-18 | Assignment rejected with `422 INVALID_OWNER` (GAP D) | The server's friendly message appears in `owner-error` (`role="alert"`, `aria-describedby` bound to the picker); the previously displayed owner and the picker selection are unchanged; the Reassign control is enabled again and a retry against a valid owner succeeds | `client/tests/lab-03/StaffTicketDetail.test.tsx` (the ownership control is Lab 3 code; its suite is the correct home) | Pass (no production change was needed — see §3 Implementation Note) |
+| UI-14 | UI | FR-18, AC-16 | Ticket Queue seeded from the `priority` query parameter | `/staff/queue?priority=URGENT` opens the queue with its IT Priority filter set to `URGENT` and the first request carrying `priority=URGENT`, so the "View all urgent" drill-down matches the panel's rows (the queue already seeded `status`/`owner` but not `priority`) | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass |
+| UI-20 | UI | AC-13, §8 ui-spec (landmarks) | Neither dashboard nests a complementary landmark inside another landmark (axe `landmark-complementary-is-top-level`, moderate — the Quick Actions panel was an `<aside>` inside the App Shell's `<main>`) | No `<aside>` element renders in either dashboard; the Quick Actions panel keeps its heading, `aria-labelledby` association and class-styled layout (a `<section>` swaps in 1:1 — `Dashboard.module.css` has no `aside` selector, so the box model is unchanged) | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-21 | UI | FR-11, AC-21, §3.1/§3.3 ui-spec | Requester Dashboard renders Attention Required, Recently Updated, and Resolved sections | Renders all 3 sections with `Total: N` count badges, up to 5 rows, and drill-down URLs (`/tickets?currentStatus=WAITING_FOR_REQUESTER,REOPENED`, `/tickets`, `/tickets?currentStatus=RESOLVED,CLOSED`) | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| UI-22 | UNIT | §1 ui-spec | Shared 3-letter month date formatter (`formatDate`, `formatDateTime`) | Formats all months strictly as 3-letter English abbreviations (`Sep`, never `Sept`) | `client/tests/lab-04/dateFormat.test.ts` | Pass |
+| UI-23 | UI | §2.3 ui-spec, FR-12 | Staff Queue `<select>` synthetic option for multi-status/alias drill-downs and `focus=search` auto-focus | Renders matching `<option>` for `IN_PROGRESS,REOPENED` and `open-work`, and focuses the search input when `focus=search` is present | `client/tests/lab-03/StaffTicketQueue.test.tsx` | Pass |
+| UI-15 | UI | §3 ui-spec (Lab 3 Change Password), §8 ui-spec (no overlap/clipping) | The always-visible password-complexity hint renders fully **below** the New Password input, not over its bottom border | The hint follows the input in DOM order and is the middle element of the New Password field group (the wrapper holding that input precedes it, the Confirm New Password group follows it); `ChangePasswordPage.module.css` `.hint` authors only positive, token-based margins — no negative margin, no `position: absolute/fixed`, no fixed height; on a validation failure the hint is still rendered below the field, is neither nested in nor replaced by the error, and stays in the input's `aria-describedby` | `client/tests/lab-03/ChangePassword.test.tsx` | Pass |
+| RESP-01 | RESP | §2.5, §3.5 ui-spec | Dashboard card grid reflow at 1024/768/375px widths | Cards wrap/stack per spec; no horizontal scroll | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
+| RESP-02 | RESP | AC-19, §2.5 ui-spec | Responsive rules for the two new sections | Authored CSS stacks the second content row to a single column at ≤1023px, wraps rows, and declares no fixed pixel width/min-width on the new row or panel classes; the live 390/768/1440 no-overflow measurement is executed by the Playwright suites (E2E-03 / E2E-06 / the scripted walkthrough), not by jsdom | `client/tests/lab-04/StaffDashboard.test.tsx` (authored CSS) + `e2e/lab-04/dashboards.spec.ts` (live reflow) | Pass |
+| E2E-03 | E2E | AC-02, AC-21, FR-12 | Drill-down from every dashboard card/row/section to correct filtered destination | URL/query params match §2.3/§3.3 ui-spec mapping | `e2e/lab-04/dashboards.spec.ts` | Pass |
+
+**Implementation Note (`fix/lab4-dashboard-gap-fix`, 2026-10-28).** `API-42`…`API-45`, `UI-11`…`UI-14`
+and `RESP-02` were added after Feature 7 was merged, when the shipped IT Staff Dashboard was
+re-checked against the assignment's dashboard requirements (`specification.md` FR-17/FR-18/FR-19,
+AC-15…AC-19). The gaps and how each is closed:
+
+1. **GAP A — no "My Actions Taken" section.** Covered by `API-42`/`API-43`/`API-45` (server) and
+   `UI-11` (panel).
+2. **GAP B — no "Urgent Tickets" panel.** Covered by `API-44`/`API-45` and `UI-12`; `UI-14` proves
+   the panel's `View all urgent` destination actually filters, which required seeding the queue's IT
+   Priority filter from the `priority` query parameter (the queue already did this for
+   `status`/`owner`).
+3. **GAP C — cross-owner access returns `404`, not `403`.** No behaviour change and therefore no new
+   test: this is the deliberate no-leak rule now written down as BR-16, and it is already asserted
+   by `SEC-07` and `API-36` in `server/tests/lab-03/authorization.api.test.ts` (`AUTH-05` above).
+4. **GAP D — `422 INVALID_OWNER` had no UI-level coverage.** `UI-13` drives the rejection through the
+   real ownership control. The dropdown shows only active staff, which is why the rejection is only
+   reproducible from a stale picker; the test simulates exactly that and asserts the friendly message,
+   the unchanged owner/selection, and a usable control afterwards. No server rule and no dropdown
+   filter was changed.
+
+`UI-11`/`UI-12` follow the existing per-section state pattern (`UI-08`): each section issues its own
+`GET /api/dashboard/staff` and keeps its own loading/error state, so a failure in one section cannot
+blank the others (`specification.md` §11 decision 9).
+
+**Result of writing `UI-13` first (GAP D):** the test **passed against the unmodified
+`StaffTicketDetailPage`**, so the shipped ownership control already satisfied FR-19/BR-17 — the
+server's `error.message` was already rendered in `owner-error` (`role="alert"`, `aria-describedby`
+bound to the picker), `selectedOwner` and the `/assign` failure path already left the displayed owner
+untouched, and `ownerBusy` was already cleared in a `finally`. No production code was changed for
+GAP D; the gap was missing UI-level coverage, not a defect. The Test-DD expectation that the new
+test would fail first was therefore not met here, and that is recorded rather than hidden.
+
+**KL-01 (known flakiness) observed while verifying this branch:** the first `npx vitest run
+tests/lab-04/staff-dashboard.api.test.ts` of the session failed `AUTH-03 … answers unauthenticated
+callers with 401` with supertest's `Parse Error: Expected HTTP/, RTSP/ or ICE/`; the identical re-run
+passed 18/18, and the full server suite then passed 638/638 on its first run. Per KL-01 (§8) the
+single red run is treated as the documented harness flake, both outcomes are recorded, and no test
+was changed or skipped.
+
+**Implementation Note (`fix/lab4-09-change-password-layout-fix`, 2026-10-28).** `UI-15` was added
+after a review of the shipped "Set a new password" screen found the always-visible complexity hint
+overlapping the New Password input. The cause was local, not shared: the hint is a sibling *outside*
+the `Field` wrapper (which owns the 4px label→input gap), and `ChangePasswordPage.module.css`
+pulled it upward with `margin: calc(-1 * var(--space-2)) 0 var(--space-4)`. The fix replaces that
+negative top margin with `var(--space-1)` (4px, the same gap `Field` uses internally), leaving the
+label/input/hint/error order and every validation rule, route and API call untouched; the shared
+`Field` component was **not** modified, so no other screen changes. The test was written first and
+failed for the intended reason (the negative margin) before the fix; jsdom performs no layout, so it
+pins DOM order and the authored spacing rather than measuring overlap.
+
+## 4. Migration & Regression (Labs 1–3)
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| MIGRATION-01 | MIGRATION | §7.5 spec | Migration applied against seeded Lab-3-shaped DB snapshot | Zero data loss; all existing Tickets/Users/Comments/Notes/Attachments intact | `server/tests/lab-04/migration.test.ts` | Pass |
+| MIGRATION-02 | MIGRATION | §7.5 spec | Legacy Ticket with zero Actions Taken | Renders empty state; dashboard counts unaffected; not blocked from any transition not gated by BR-09 | `server/tests/lab-04/migration.test.ts` | Pass |
+| MIGRATION-03 | MIGRATION | §7.6 spec | Seed script run twice in sequence | No duplicate/erroring rows (idempotent) | `server/tests/lab-04/migration.test.ts` | Pass |
+| REGRESSION-01 | API | AC-12 | Full Lab 2/3 auth test suite re-run | All pass unchanged | `server/tests/lab-03/auth.api.test.ts`, `server/tests/lab-03/authorization.api.test.ts` | Pass |
+| REGRESSION-02 | API | AC-12 | Public Comments, Internal Notes, Attachments endpoints re-run | All pass unchanged | `server/tests/lab-02/ticket-detail.api.test.ts`, `server/tests/lab-02/attachments.api.test.ts`, `server/tests/lab-03/comments-notes.api.test.ts` | Pass |
+| REGRESSION-03 | API | AC-12 | Administrator user-management endpoints re-run | All pass unchanged | `server/tests/lab-03/users-admin.api.test.ts` | Pass |
+| REGRESSION-04 | UI | AC-12 | My Tickets / Ticket Detail component suites re-run | All pass unchanged | `client/tests/lab-02/MyTickets.test.tsx`, `client/tests/lab-02/RequesterTicketDetail.test.tsx`, `client/tests/lab-03/StaffTicketQueue.test.tsx`, `client/tests/lab-03/StaffTicketDetail.test.tsx` | Pass |
+| E2E-04 | E2E | AC-12 | Representative end-to-end regression across all three roles on the merged Lab 4 codebase — `e2e/lab-03/` (authentication + forced password change, Requester create/comment/My-Tickets flow, IT Staff queue/claim/priority/status/comment/note flow, Administrator user management incl. both guard rules, responsive + screenshot pass) plus the scripted three-role walkthrough (`e2e/walkthrough/regression-walkthrough.spec.ts` via `playwright.walkthrough.config.ts`) | Full flow completes without error across all three roles | `e2e/lab-03/authentication.spec.ts`, `e2e/lab-03/staff-ticket-flow.spec.ts`, `e2e/lab-03/user-administration.spec.ts`, `e2e/lab-03/responsive.spec.ts`, `e2e/walkthrough/regression-walkthrough.spec.ts` | Pass |
+
+## 5. Cross-Cutting: Auth, Concurrency, Safe Failure, Performance
+
+| Test ID | Type | Requirement/AC | What It Tests | Expected Result | Automated Test File | Final |
+|---|---|---|---|---|---|---|
+| AUTH-04 | AUTH | handout §4.3, BR-15 | Role × endpoint coverage for all new endpoints (Requester/IT Staff/Administrator), implemented **distributed across suites** rather than as one matrix file: the §2.1 transition matrix is swept exhaustively per (fromStatus × role × targetStatus) by WORKFLOW-01; Actions Taken role denials (Requester create/read-voided/edit, non-author edit, void-un-void) by API-07/API-31/API-38/API-40/API-41; dashboard role denials by AUTH-03 and the requester suite's IT-Staff 403; §2.2's `NOT_TICKET_OWNER` denials in the workflow suite | Every disallowed combination returns `401`/`403`, never `200` | `server/tests/lab-04/ticket-workflow.api.test.ts` (WORKFLOW-01, AUTH-01, §2.2 denials), `server/tests/lab-04/actions-taken.api.test.ts` (API-07/31/38/40/41), `server/tests/lab-04/staff-dashboard.api.test.ts` (AUTH-03), `server/tests/lab-04/requester-dashboard.api.test.ts` (403 FORBIDDEN_ROLE for IT Staff) | Pass |
+| API-27 | API | BR-15 | Direct API call bypassing UI for every write endpoint — by construction every Lab 4 API suite is a direct Supertest call with no UI in the loop, so BR-15's "the server decides" guarantee is what each role-denial assertion exercises (e.g. API-07/API-38: Requester `POST`/`PATCH` straight against the API; AUTH-01: Requester `PATCH /status` to `RESOLVED`) | Server-side checks still enforced identically to UI-mediated calls | `server/tests/lab-04/actions-taken.api.test.ts`, `server/tests/lab-04/ticket-workflow.api.test.ts` (no separate authorization-matrix file — see AUTH-04) | Pass |
+| PERF-01 | PERF | §6.2 handout | Dashboard endpoints respond under load-free baseline | `GET /api/dashboard/staff` and `/requester` respond in <300ms against seeded dataset (smoke, not load test) | `server/tests/lab-04/perf-smoke.test.ts` | Pass |
+| E2E-05 | E2E | FR-15, AC-11, AC-14 | Rapid double-click on Actions Taken submit and on the status-transition button in the real browser | Only one network write and one persisted record/transition results in each case | `e2e/lab-04/lab04-flows.spec.ts` | Pass |
+| E2E-06 | E2E | AC-13, AC-19, §1/§8 ui-spec | Automated `@axe-core/playwright` WCAG 2.1 A/AA scan + 0px horizontal overflow + computed Zen Green palette across all 7 major screens at Desktop (`1440×900`), Tablet (`820×1180`), and Mobile (`390×844`) | Zero serious/critical axe violations across all 21 screen×viewport scans (`docs/lab-04/axe-report.json`); 0px overflow; exact palette tokens | `e2e/lab-04/a11y-axe.spec.ts` | Pass |
+| UI-16 | STYLE | AC-13, §8 ui-spec (shared Field) | The shared `Field` focus ring covers **every** editable control state and applies immediately: `Field.module.css` declares the same 2px `box-shadow: 0 0 0 2px var(--focus-ring-color)` ring for `.defaultControl:focus`, `.invalidControl:focus`, `.selectControl:focus` and `.textareaControl:focus`; every `outline: none` in the file is paired with a replacement box-shadow or belongs to the documented readonly/disabled no-ring states; `.control` authors **no** `box-shadow`/`border-color` transition, so an instant read after focus never sees the transparent start value (the trap `e2e/lab-03/responsive.spec.ts` RESP-04 documents) | CSS-source level (jsdom has no layout/`:focus` cascade): coverage selectors present, no bare `outline: none`, no ring transition; the real-browser colour check stays with RESP-04 | `client/tests/lab-04/FocusRing.test.tsx` | Pass |
+
+---
+
+## 6. Traceability Matrix (Acceptance Criteria → Tests)
+
+| AC | Covered By |
+|---|---|
+| AC-01 | API-01, API-03, E2E-01 |
+| AC-02 | API-22, API-23, AUTH-03, E2E-03 |
+| AC-03 | API-16, E2E-02 |
+| AC-04 | API-15 |
+| AC-05 | API-21 |
+| AC-06 | API-07, API-38 |
+| AC-07 | API-04, E2E-01 |
+| AC-08 | API-17 |
+| AC-09 | API-18, API-19, API-20 |
+| AC-10 | UI-07 |
+| AC-11 | API-14, API-14b, UI-02, E2E-05 |
+| AC-12 | REGRESSION-01, REGRESSION-02, REGRESSION-03, REGRESSION-04, E2E-04, MIGRATION-01, MIGRATION-02, MIGRATION-03 |
+| AC-13 | UI-16, UI-18, UI-20, E2E-06 |
+| AC-14 | API-32, E2E-05 |
+| AC-15 | API-42, API-43, API-45, UI-11 |
+| AC-16 | API-44, API-45, UI-12, UI-14 |
+| AC-17 | UI-11, UI-12 |
+| AC-18 | UI-13 |
+| AC-19 | RESP-02, E2E-03, E2E-06 |
+| AC-20 | UI-19 |
+| AC-21 | API-46, UI-21, E2E-03 |
+
+---
+
+## 7. Execution Notes
+
+- All `API`/`UNIT`/`MIGRATION` tests run against the shared development PostgreSQL database named by `DATABASE_URL` in `server/.env`. Every suite re-runs the idempotent `seed()` in `beforeAll` and all suites share one lazy `PrismaClient` singleton under Vitest's single-fork pool (`server/vitest.config.ts`). There is deliberately **no per-suite database isolation today** — see §8 (KL-01) for the flakiness this harness design can produce under back-to-back file execution and its remediation plan.
+- `UI` tests use React Testing Library with mocked API responses (no live network).
+- **`fix/lab4-10-focus-and-a11y-polish` (2026-10-30) — fail-first evidence.** `UI-16`…`UI-20` were
+  written before the fixes and run against the unmodified code: **7 of 76 failed for the intended
+  reasons** (UI-16: `.invalidControl:focus`/`.selectControl:focus` absent from the ring rule and
+  `.control` transitioning `border-color`/`box-shadow`; UI-17: `['skeletonNarrow','skeletonWide',
+  'skeletonBadge','row']` undefined; UI-18: exactly 1 dangling describedby id
+  (`action-followUpNote-error`); UI-19: no `+1 voided shown` label; UI-20: an `<aside>` still in the
+  DOM on both dashboards). After the fixes: `cd client && npx vitest run` → **418/418 in 20 files**,
+  `cd client && npx tsc --noEmit` → clean. No Playwright run (its global setup resets the dev
+  database and rewrites tracked `artifacts/` PNGs), so rendered pixels and the real-browser focus
+  ring were left to the manual visual pass.
+- `E2E` tests run against the local dev stack via Playwright: `playwright.global-setup.ts` resets the database (`prisma migrate reset --force --skip-seed`) and re-seeds it before every run, then starts the API (3000) + Vite (5173) dev servers, executed in CI on every PR into `lab4-staging` and again before merge to `main`.
+- Final "Pass/Fail" column and CI run links are updated in this file as the last step before submission, alongside the console/log output referenced in Part 3 of the submission PDF.
+
+---
+
+## 8. Known Limitations (documented, not fixed)
+
+### KL-01 — Intermittent server-suite flakiness under the shared-database harness
+
+**Status:** Documented and accepted for this submission (`feature/lab4-07-final-hardening-regression`).
+This is a pre-existing harness design issue, not a defect in application code: it is reproducible on a
+clean `lab4-staging` tip and appears in no single suite when that suite is run on its own.
+
+**Design in place:** all server suites share one PostgreSQL database (`DATABASE_URL` in `server/.env`),
+every suite re-runs the idempotent `seed()` in `beforeAll`, all suites share one lazy `PrismaClient`
+singleton and call `prisma.$disconnect()` in `afterAll`, and Vitest runs everything in a single fork
+(`server/vitest.config.ts` → `poolOptions.forks.singleFork`). (This corrects §7's earlier claim of an
+isolated `.env.test` database reset per suite — no such isolation exists today.)
+
+**Observed evidence (`feature/lab4-07`, ~15 consecutive full-suite runs, 7 failures ≈ 25–40%):**
+- `lab-03/users-admin.api.test.ts` — a `PATCH` with `role: 7` returned `404` instead of `422`; a
+  concurrent-demotion test returned `[200, 403]` instead of `[200, 409]`.
+- `lab-03/authorization.api.test.ts` — `beforeAll` fixture got `404 {"error":"not found"}`, a
+  route-not-found-shaped body that does not exist anywhere in `server/src`.
+- `lab-02/create-ticket.api.test.ts` — the "returns 401 without a session" test and a validation test
+  failed together.
+
+**Ruled out:** forcing sequential file execution (`fileParallelism: false`) did not change the rate
+(still 2/8 failed), so this is not file-level parallelism; `seed()` is purely additive `upsert` (no
+deletes), so leftover seeded rows do not explain it.
+
+**Characterisation:** the failures only appear when files run back-to-back against the shared database
+and shared in-process app/module state; symptoms differ run to run (false `404`s, a `401` fixture
+failing, >5 s test timeouts under bcrypt-heavy fixtures). No single deterministic cause was isolated
+within the time budget.
+
+**Recommended remediation (for a future branch):** give each test file database isolation — e.g. a
+fresh Postgres schema per file, or wrap each file in a transaction that is rolled back — and/or remove
+the shared-client `$disconnect()` coupling; additionally raise `testTimeout` above the default 5 s.
+Until then, treat a single red server run as **retry-first**: re-run once before investigating.

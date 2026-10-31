@@ -36,8 +36,8 @@
   color: #FFFFFF;
 
   &:hover {
-    background-color: #005a32;
-    border-color: #005a32;
+    background-color: var(--color-secondary-green);
+    border-color: var(--color-secondary-green);
   }
 }
 
@@ -131,4 +131,10 @@
   color: var(--color-disabled-text);
   cursor: not-allowed;
   pointer-events: none;  /* prevents hover effect entirely */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
 }

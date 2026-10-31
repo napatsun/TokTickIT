@@ -2,10 +2,10 @@
  * Dialog — the application's single modal primitive (ui-spec.md §7, §9).
  *
  * Every confirmation in the app is built on this component (ConfirmDialog) or
- * renders through it directly (StatusChangeConfirm, ResolveMarkConfirm,
- * RemoveAttachmentConfirm, the Administrator Create/Edit User modals), so there
- * is exactly one overlay tint, one surface treatment, and one set of modal
- * keyboard behaviours in the product.
+ * renders through it directly (StatusChangeConfirm, RemoveAttachmentConfirm,
+ * the Administrator Create/Edit User modals), so there is exactly one overlay
+ * tint, one surface treatment, and one set of modal keyboard behaviours in the
+ * product.
  *
  * Behaviour (§7 states, §9 accessibility):
  *   - Escape closes the dialog, unless a request is in flight (`busy`).

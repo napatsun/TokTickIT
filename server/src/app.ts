@@ -14,10 +14,15 @@ import {
 import { generateTicketNumber } from "./services/ticket-number.js";
 import { staffRouter } from "./routes/staff-tickets.js";
 import { adminRouter } from "./routes/admin-users.js";
+import { actionsTakenRouter } from "./routes/actions-taken.js";
+import { ticketWorkflowRouter } from "./routes/ticket-workflow.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 import { toContentDto, validateContent } from "./lib/content.js";
+import { allowedTransitionsFor, hasResolvableAction } from "./lib/ticketWorkflow.js";
 import { upload, UnsupportedMimeTypeError } from "./middleware/upload.js";
 import { saveAttachmentFile, generateSafeFileName, readAttachmentFile, getAttachmentFilePath } from "./services/attachmentStorage.js";
 import { findOwnedTicket, findOwnedAttachment } from "./lib/ownership.js";
+import { isTicketStatus } from "./lib/statusTransitions.js";
 
 // The Express app is exported separately from app.listen() (see index.ts) so
 // Supertest can import `app` without opening a port. Do not merge these files.
@@ -61,6 +66,36 @@ app.use(
   requireRole(["ADMINISTRATOR"]),
   adminRouter,
 );
+
+// ─── Actions Taken (api-spec.md §1) ───────────────────────────────────
+// The documented paths are POST/GET `/api/tickets/:ticketId/actions` and
+// PATCH `/api/tickets/:ticketId/actions/:actionId`, so the router is mounted at
+// `/api/tickets`. `requireAuth` + `enforcePasswordChange` are attached per route
+// inside it rather than here: §1.2's read path is open to every role while
+// §1.1/§1.3's write paths are IT Staff/Administrator only, and a mount-level
+// guard would also re-run for the Requester `:ticketNumber` routes registered
+// further down (same prefix). Router middleware only runs on a matching route,
+// so unrelated `/api/tickets*` requests fall through untouched.
+app.use("/api/tickets", actionsTakenRouter);
+
+// ─── Ticket Workflow (api-spec.md §2) ─────────────────────────────────
+// `PATCH /api/tickets/:ticketId/status` and
+// `POST /api/tickets/:ticketId/requester-confirmation`. Deliberately NOT behind
+// a mount-level role guard: the status transition is reachable by every role
+// (a Requester cancels/reopens their own Ticket per §5.1) and the workflow
+// library authorizes each request against the role matrix server-side (BR-15).
+// Those paths share the `/api/tickets` prefix with the Actions Taken router
+// above, so requests that match no route there fall through to this one.
+app.use("/api/tickets", ticketWorkflowRouter);
+
+// ─── Dashboards (api-spec.md §3) ────────────────────────────────────────
+// `GET /api/dashboard/staff` (IT Staff/Administrator) and
+// `GET /api/dashboard/requester` (Requester). Read-only aggregates, so there is
+// no CSRF surface; the two audiences differ, so the role guard lives per route
+// inside the router and answers with §3's documented `FORBIDDEN_ROLE` code
+// (AUTH-03) rather than a mount-level `requireRole` — which would emit Lab 3's
+// generic `FORBIDDEN` before the handler could.
+app.use("/api/dashboard", dashboardRouter);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -466,18 +501,36 @@ app.get(
       }
     }
 
-    // currentStatus: optional, one of NEW (Lab 2)
+    // currentStatus: optional status filter.
+    //
+    // Lab 2 shipped it restricted to NEW (the only status a Requester's ticket
+    // could hold). Lab 4 (ui-spec.md §3.3) widens the SAME parameter to the
+    // full TicketStatus enum — plus comma-separated multi-value lists and the
+    // `open-work` alias — so the Requester Dashboard's cards can drill down to
+    // exactly the status set each card counts (FR-12). Single-value behavior
+    // and validation errors are unchanged in shape.
     let currentStatus: string | null = null;
+    let currentStatusList: string[] | null = null;
     if (req.query.currentStatus != null && req.query.currentStatus !== "") {
-      const raw = String(req.query.currentStatus).trim().toUpperCase();
-      if (raw !== "NEW") {
-        fieldErrors.currentStatus = "currentStatus must be NEW.";
+      const raw = String(req.query.currentStatus).trim();
+      if (raw.toLowerCase() === "open-work") {
+        // BR-14's open-work set — same alias the staff queue accepts (ui-spec.md §1).
+        currentStatusList = ["NEW", "OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "REOPENED"];
       } else {
-        currentStatus = raw;
+        const values = raw
+          .split(",")
+          .map((entry) => entry.trim().toUpperCase())
+          .filter((entry) => entry.length > 0);
+        const unique = [...new Set(values)];
+        if (unique.length === 0 || !unique.every((entry) => isTicketStatus(entry))) {
+          fieldErrors.currentStatus = "currentStatus must be a valid ticket status.";
+        } else if (unique.length === 1) {
+          currentStatus = unique[0];
+        } else {
+          currentStatusList = unique;
+        }
       }
     }
-
-    // sortBy: default createdAt
     let sortBy: string = "createdAt";
     if (req.query.sortBy != null && req.query.sortBy !== "") {
       const raw = String(req.query.sortBy).trim();
@@ -542,7 +595,9 @@ app.get(
     if (requestedPriority != null) {
       where.requestedPriority = requestedPriority;
     }
-    if (currentStatus != null) {
+    if (currentStatusList) {
+      where.status = { in: currentStatusList };
+    } else if (currentStatus != null) {
       where.status = currentStatus;
     }
 
@@ -719,6 +774,11 @@ app.get(
         removedReason: a.removedReason,
       }));
 
+    // Lab 4 §5.1/ui-spec §5: the Requester's own workflow inputs. The role-aware
+    // list already has BR-10's reopen window applied, so the control can render
+    // "hidden, not disabled" for anything the Requester may not do right now.
+    const hasActionsWithResult = await hasResolvableAction(ticket.id);
+
     // Success — return 200 per api-spec §6
     res.status(200).json({
       ticket: {
@@ -738,6 +798,18 @@ app.get(
         // FR-15 / BR-05: separate from `currentStatus` on purpose.
         requesterMarkedResolved: ticket.requesterMarkedResolved,
         requesterMarkedResolvedAt: ticket.requesterMarkedResolvedAt?.toISOString() ?? null,
+        // Lab 4 §7.2 / §5.1 — the Requester workflow control's inputs.
+        version: ticket.version,
+        resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
+        requesterConfirmedResolved: ticket.requesterConfirmedResolved,
+        requesterConfirmedResolvedAt:
+          ticket.requesterConfirmedResolvedAt?.toISOString() ?? null,
+        hasActionsWithResult,
+        allowedStatusTransitions: allowedTransitionsFor(
+          "REQUESTER",
+          ticket.status,
+          ticket.resolvedAt,
+        ),
       },
       attachments: { active, removed },
     });

@@ -35,6 +35,13 @@ export interface OwnedTicket {
   requesterMarkedResolved: boolean;
   requesterMarkedResolvedAt: Date | null;
   resolutionSummary: string | null;
+  // Lab 4 §7.2 workflow fields (additive). `findOwnedTicket` selects all scalar
+  // columns, so these are already present on the row; they are named here so the
+  // Requester Ticket Detail handler can project the workflow control's inputs.
+  requesterConfirmedResolved: boolean;
+  requesterConfirmedResolvedAt: Date | null;
+  resolvedAt: Date | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
   requester: { id: string; fullName: string };

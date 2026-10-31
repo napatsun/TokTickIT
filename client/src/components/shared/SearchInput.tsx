@@ -20,6 +20,16 @@ interface SearchInputProps {
   placeholder?: string;
   /** Unique id for the input element. */
   id?: string;
+  /**
+   * Bump this to force-clear the input and cancel any pending debounce — used
+   * by a page's "Clear filters" action.
+   *
+   * Needed because the parent's `value` is the *debounced* term: while a term is
+   * still within the 300ms debounce window the parent value is still "", so the
+   * [value] sync effect below cannot tell that a search is pending and a stale
+   * term would re-apply after the user has already cleared the filters.
+   */
+  resetSignal?: number;
 }
 
 const DEBOUNCE_MS = 300;
@@ -29,6 +39,7 @@ export default function SearchInput({
   onSearch,
   placeholder = "Search by ticket number or summary…",
   id,
+  resetSignal,
 }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -50,6 +61,21 @@ export default function SearchInput({
       lastSyncedValue.current = value;
     }
   }, [value]);
+
+  // External reset ("Clear filters"): cancel any pending debounce and drop the
+  // local text, so a term typed just before the clear can never re-apply.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setLocalValue(value);
+    lastSyncedValue.current = value;
+    // Keyed on resetSignal only: `value` is read at the moment the reset is
+    // requested rather than tracked as a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   // Cleanup debounce on unmount
   useEffect(() => {

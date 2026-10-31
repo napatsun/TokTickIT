@@ -625,16 +625,17 @@ test.describe("RESP-05 — App Shell navigation and Requester Ticket Detail resp
 
       await expectNoTextOverlap(page, `App Shell @ ${viewport.name}px`);
 
-      // ─── Ticket Detail: the "appears resolved" marker ────────────────
+      // ─── Ticket Detail: the Requester workflow control ───────────────
+      // Lab 4 §5: the advisory "looks resolved" acknowledgement and the
+      // (BR-10 window-eligible) reopen transition now live in the shared
+      // TicketWorkflowControls, replacing Lab 3's separate marker section.
       await page.goto(`/tickets/${MARKED_TICKET}`);
       await expect(page.getByLabel("Ticket No.")).toHaveValue(MARKED_TICKET);
-      await expect(page.getByTestId("requester-resolved-badge")).toContainText(
-        /You marked this as resolved on/i,
-      );
+      await expect(page.getByTestId("requester-confirmation-button")).toBeVisible();
+      await expect(page.getByTestId("workflow-transition-REOPENED")).toBeVisible();
       await expect(page.getByTestId("public-comments-panel")).toBeVisible();
-      // BR-05/BR-20: the marker is a distinct element from the formal Status
-      // badge, which still shows the real ticket status.
-      await expect(page.getByText("Resolved", { exact: true })).toBeVisible();
+      // The authoritative Status badge still shows the real ticket status.
+      await expect(page.getByRole("status").filter({ hasText: /^Resolved$/ })).toBeVisible();
 
       await expectNoHorizontalOverflow(
         page,
@@ -647,13 +648,13 @@ test.describe("RESP-05 — App Shell navigation and Requester Ticket Detail resp
         fullPage: true,
       });
 
-      // ─── Ticket Detail: Public Comments + the resolve action ──────────
+      // ─── Ticket Detail: Public Comments + the advisory control ────────
       await page.goto(`/tickets/${OPEN_TICKET}`);
       await expect(page.getByLabel("Ticket No.")).toHaveValue(OPEN_TICKET);
       await expect(page.getByTestId("comment-item").first()).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /problem appears resolved/i }),
-      ).toBeVisible();
+      // TKT-2026-000006 is seeded requesterConfirmedResolved = true, so the
+      // advisory control renders its confirmed note instead of the button.
+      await expect(page.getByTestId("requester-confirmation-done")).toBeVisible();
 
       await expectNoHorizontalOverflow(
         page,
@@ -662,7 +663,7 @@ test.describe("RESP-05 — App Shell navigation and Requester Ticket Detail resp
       await expectNoClipping(page, `Requester Ticket Detail (comments) @ ${viewport.name}px`);
       await expectNoTextOverlap(page, `Requester Ticket Detail (comments) @ ${viewport.name}px`);
       await page.screenshot({
-        path: path.join(REQUESTER_DETAIL_DIR, `requester-resolve-mark-${viewport.name}.png`),
+        path: path.join(REQUESTER_DETAIL_DIR, `requester-workflow-${viewport.name}.png`),
         fullPage: true,
       });
     });

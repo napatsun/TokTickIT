@@ -382,6 +382,8 @@ async function createStaffTicket(
       itPriority: true,
       ownerId: true,
       requestedPriority: true,
+      // Lab 4 (BR-12): the status route now requires the optimistic-concurrency token.
+      version: true,
     },
   });
 }
@@ -404,8 +406,31 @@ function setItPriority(client: SessionClient, id: number, itPriority: unknown) {
   });
 }
 
-function setStatus(client: SessionClient, id: number, status: unknown) {
-  return csrf(client, client.agent.patch(`/api/staff/tickets/${id}/status`)).send({ status });
+// Lab 4 re-points this route at the shared workflow logic (BR-07/BR-09/BR-10/
+// BR-12), so the body is api-spec.md §2.1's hardened `{ targetStatus, version }`.
+function setStatus(
+  client: SessionClient,
+  id: number,
+  targetStatus: unknown,
+  version: unknown,
+) {
+  return csrf(client, client.agent.patch(`/api/staff/tickets/${id}/status`)).send({
+    targetStatus,
+    version,
+  });
+}
+
+/** BR-09: a resolve target needs at least one non-voided ActionTaken with a result. */
+async function seedResolvableAction(ticketId: number, performedById: string) {
+  await prisma.actionTaken.create({
+    data: {
+      ticketId,
+      actionDateTime: new Date(),
+      description: "Seeded action so BR-09's resolution gate is satisfied.",
+      result: "Work completed and verified.",
+      performedById,
+    },
+  });
 }
 
 async function storedTicket(id: number) {
@@ -686,14 +711,14 @@ describe("API-24 — update IT Priority (AC-09, BR-14, BR-15)", () => {
 
 // ─── API-25 — disallowed transition ─────────────────────────────────────
 
-describe("API-25 — disallowed status transition (AC-10, BR-19)", () => {
-  it("rejects NEW → CLOSED with 409 INVALID_TRANSITION and leaves status unchanged", async () => {
+describe("API-25 — disallowed status transition (AC-10, BR-07)", () => {
+  it("rejects NEW → CLOSED with 409 INVALID_STATUS_TRANSITION and leaves status unchanged", async () => {
     const ticket = await createStaffTicket({ status: "NEW" });
 
-    const res = await setStatus(staffClientA, ticket.id, "CLOSED");
+    const res = await setStatus(staffClientA, ticket.id, "CLOSED", ticket.version);
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("INVALID_TRANSITION");
+    expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
     expect(res.body.error.from).toBe("NEW");
     expect(res.body.error.to).toBe("CLOSED");
     expect(res.body.error.allowed).toEqual(allowedStatusTransitions("NEW"));
@@ -705,28 +730,25 @@ describe("API-25 — disallowed status transition (AC-10, BR-19)", () => {
   it("rejects a transition out of the terminal CANCELLED status", async () => {
     const ticket = await createStaffTicket({ status: "CANCELLED" });
 
-    const res = await setStatus(staffClientA, ticket.id, "OPEN");
+    const res = await setStatus(staffClientA, ticket.id, "OPEN", ticket.version);
 
     expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe("INVALID_TRANSITION");
+    expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
     expect(res.body.error.allowed).toEqual([]);
   });
 
   it("returns 422 for a value that is not a ticket status at all", async () => {
     const ticket = await createStaffTicket({ status: "OPEN" });
 
-    const res = await setStatus(staffClientA, ticket.id, "PENDING");
+    const res = await setStatus(staffClientA, ticket.id, "PENDING", ticket.version);
 
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
 
     const stored = await storedTicket(ticket.id);
     expect(stored?.status).toBe("OPEN");
-  });
-
-  it("returns 404 for a non-existent ticket", async () => {
-    const res = await setStatus(staffClientA, 9_999_999, "OPEN");
-
+  });  it("returns 404 for a non-existent ticket", async () => {
+    const res = await setStatus(staffClientA, 9_999_999, "OPEN", 0);
     expect(res.status).toBe(404);
   });
 });
@@ -756,26 +778,29 @@ describe("API-26 — every permitted transition in ui-spec.md §6.1 (parameteriz
 
   it.each(PERMITTED_CASES)("$from → $to is permitted (200)", async ({ from, to }) => {
     const ticket = await createStaffTicket({ status: from });
+    // BR-09: resolving is gated on a live Actions Taken entry with a result.
+    if (to === "RESOLVED") await seedResolvableAction(ticket.id, staffA.id);
 
-    const res = await setStatus(staffClientA, ticket.id, to);
+    const res = await setStatus(staffClientA, ticket.id, to, ticket.version);
 
     expect(res.status).toBe(200);
     expect(res.body.ticket.status).toBe(to);
     expect(res.body.ticket.allowedStatusTransitions).toEqual(allowedStatusTransitions(to));
+    expect(res.body.ticket.version).toBe(ticket.version + 1);
 
     const stored = await storedTicket(ticket.id);
     expect(stored?.status).toBe(to);
   });
 
   it.each(BLOCKED_CASES)(
-    "$from → $to is blocked (409 INVALID_TRANSITION)",
+    "$from → $to is blocked (409 INVALID_STATUS_TRANSITION)",
     async ({ from, to }) => {
       const ticket = await createStaffTicket({ status: from });
 
-      const res = await setStatus(staffClientA, ticket.id, to);
+      const res = await setStatus(staffClientA, ticket.id, to, ticket.version);
 
       expect(res.status).toBe(409);
-      expect(res.body.error.code).toBe("INVALID_TRANSITION");
+      expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
       expect(res.body.error.from).toBe(from);
       expect(res.body.error.to).toBe(to);
       expect(res.body.error.allowed).toEqual(allowedStatusTransitions(from));

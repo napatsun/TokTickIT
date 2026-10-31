@@ -1,0 +1,592 @@
+/**
+ * StaffDashboard — ui-spec.md §2 (IT Staff Dashboard, FR-10, FR-12, FR-13)
+ *
+ * Route: /dashboard for an IT_STAFF/ADMINISTRATOR session (the single
+ * /dashboard route renders this component or RequesterDashboard by role —
+ * §2.4 "Forbidden" row: there is no separate route to guard, and the API
+ * independently answers 403 FORBIDDEN_ROLE for a Requester session, so no
+ * staff data can reach a Requester's browser regardless of routing).
+ *
+ * Layout (§2.1):
+ *   - Welcome row + manual Refresh (busy state on the button only).
+ *   - 5 metric cards: New, Open, In Progress (incl. Reopened, BR-14), Waiting
+ *     for Requester, My Assigned. The first four render a delta chip with an
+ *     icon AND text (never colour alone, §8); My Assigned has no delta key in
+ *     the API response (§3.1) and renders none.
+ *   - My Recent Tickets (≤5 rows: code, title, status badge, updated time) with
+ *     a "View all" link to the unfiltered queue.
+ *   - Quick Actions: Search Tickets, My Queue. (ui-spec §2.1 also lists
+ *     "Create Ticket" → /tickets/new, but that route is Requester-only in the
+ *     shipped app — IT Staff cannot create Tickets — so the affordance is
+ *     omitted rather than shipped as a dead end; confirmed with the course
+ *     staff during implementation.)
+ *   - Second content row (FR-17/FR-18, added 2026-10-28): My Actions Taken
+ *     (the CURRENT user's 5 newest non-voided entries + "My follow-ups
+ *     needed" count) and Urgent Tickets (the 5 longest-waiting IT Priority =
+ *     URGENT open-work Tickets across the whole queue, with a "View all
+ *     urgent" link). Both are the assignment's "current-user actions taken"
+ *     and "recent or urgent tickets" requirements, which the Feature 7
+ *     dashboard was missing.
+ *
+ * Drill-downs (§2.3) filter on EXACTLY the status set each card counts
+ * (§1's rule): the In Progress card carries the multi-value
+ * status=IN_PROGRESS,REOPENED list, My Assigned carries owner=me plus the
+ * full open-work list, because the queue's owner=me filter alone would include
+ * the user's Closed/Cancelled tickets, which the card never counts.
+ *
+ * States (§2.4):
+ *   - Loading: skeleton cards + rows, no layout shift.
+ *   - Zero values render as a real "0" card (AC-10).
+ *   - Safe failure is PER CARD GROUP (§2.4: "an inline error state per card
+ *     group"; tests.md UI-08: "only failed section shows retry; others show
+ *     data"). The endpoint is one resource, so each group issues its own
+ *     request for the same URL and keeps its own loading/error state: a
+ *     failure (or a Retry) in one group never blanks or blocks the other.
+ *     The cost is one GET per section (four per view) — accepted because the
+ *     per-section partial-failure behaviour is a documented, graded
+ *     requirement (`specification.md` §11 decision 9).
+ *   - Refresh re-fetches all four sections.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Badge from "../components/shared/Badge";
+import Button from "../components/shared/Button";
+import { apiClient } from "../lib/apiClient";
+import { useAuth } from "../hooks/useAuth";
+import styles from "./Dashboard.module.css";
+
+// ─── Types (api-spec.md §3.1 response shape) ─────────────────────────────
+
+interface RecentTicket {
+  id: number;
+  code: string;
+  title: string;
+  status: string;
+  updatedAt: string;
+}
+
+interface MyActionItem {
+  id: string;
+  ticketId: number;
+  ticketNumber: string;
+  description: string;
+  actionDateTime: string;
+  followUpRequired: boolean;
+}
+
+interface UrgentTicket {
+  id: number;
+  ticketNumber: string;
+  title: string;
+  status: string;
+  itPriority: string;
+  ownerName: string | null;
+}
+
+interface StaffDashboardPayload {
+  generatedAt: string;
+  timezone: string;
+  counts: {
+    new: number;
+    open: number;
+    inProgress: number;
+    waitingForRequester: number;
+    myAssigned: number;
+  };
+  deltas: {
+    new: number;
+    open: number;
+    inProgress: number;
+    waitingForRequester: number;
+  };
+  recentTickets: RecentTicket[];
+  /** FR-17: the current user's newest non-voided Actions Taken. */
+  myActions: {
+    followUpCount: number;
+    items: MyActionItem[];
+  };
+  /** FR-18: the whole queue's oldest active URGENT Tickets. */
+  urgentTickets: UrgentTicket[];
+}
+
+type GroupState = "loading" | "ready" | "error";
+
+// ─── Drill-down destinations (ui-spec.md §2.3, verbatim sets) ────────────
+
+const OPEN_WORK_QUERY = "NEW,OPEN,IN_PROGRESS,WAITING_FOR_REQUESTER,REOPENED";
+
+interface MetricCard {
+  key: string;
+  label: string;
+  value: number;
+  /** §3.1: only the four status cards carry a delta; My Assigned does not. */
+  delta: number | null;
+  /** The queue URL whose status set equals this card's count. */
+  to: string;
+}
+
+import { formatDate } from "../lib/dateFormat";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function formatRelative(isoString: string): string {
+  return formatDate(isoString);
+}
+
+/** Delta chip text + icon pair — meaning is carried by icon AND text (§8). */
+function deltaChip(delta: number): { icon: string; text: string } {
+  if (delta > 0) return { icon: "▲", text: `+${delta} from yesterday` };
+  if (delta < 0) return { icon: "▼", text: `${delta} from yesterday` };
+  return { icon: "•", text: "no change from yesterday" };
+}
+
+/** CSS-module class for a delta direction (colour is supplementary to icon+text). */
+function deltaClass(delta: number): string {
+  if (delta > 0) return "deltaUp";
+  if (delta < 0) return "deltaDown";
+  return "deltaFlat";
+}
+
+/** One GET of the dashboard resource, or null on any failure. */
+async function fetchPayload(): Promise<StaffDashboardPayload | null> {
+  try {
+    const response = await apiClient("/api/dashboard/staff");
+    if (!response.ok) return null;
+    return (await response.json()) as StaffDashboardPayload;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────
+
+export default function StaffDashboard() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Per-group state — the partial-failure unit (§2.4 / UI-08).
+  const [metricsState, setMetricsState] = useState<GroupState>("loading");
+  const [recentState, setRecentState] = useState<GroupState>("loading");
+  const [myActionsState, setMyActionsState] = useState<GroupState>("loading");
+  const [urgentState, setUrgentState] = useState<GroupState>("loading");
+  const [counts, setCounts] = useState<StaffDashboardPayload["counts"] | null>(null);
+  const [deltas, setDeltas] = useState<StaffDashboardPayload["deltas"] | null>(null);
+  const [recent, setRecent] = useState<RecentTicket[] | null>(null);
+  const [myActions, setMyActions] = useState<StaffDashboardPayload["myActions"] | null>(null);
+  const [urgent, setUrgent] = useState<UrgentTicket[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchMetrics = useCallback(async () => {
+    setMetricsState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setCounts(payload.counts);
+      setDeltas(payload.deltas);
+      setMetricsState("ready");
+    } else {
+      setMetricsState("error");
+    }
+  }, []);
+
+  const fetchRecent = useCallback(async () => {
+    setRecentState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setRecent(payload.recentTickets);
+      setRecentState("ready");
+    } else {
+      setRecentState("error");
+    }
+  }, []);
+
+  const fetchMyActions = useCallback(async () => {
+    setMyActionsState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setMyActions(payload.myActions);
+      setMyActionsState("ready");
+    } else {
+      setMyActionsState("error");
+    }
+  }, []);
+
+  const fetchUrgent = useCallback(async () => {
+    setUrgentState("loading");
+    const payload = await fetchPayload();
+    if (payload) {
+      setUrgent(payload.urgentTickets);
+      setUrgentState("ready");
+    } else {
+      setUrgentState("error");
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([fetchMetrics(), fetchRecent(), fetchMyActions(), fetchUrgent()]);
+    setRefreshing(false);
+  }, [fetchMetrics, fetchRecent, fetchMyActions, fetchUrgent]);
+
+  useEffect(() => {
+    void refreshAll();
+  }, [refreshAll]);
+
+  const firstName = (user?.name ?? "").split(" ")[0];
+
+  // Metric card definitions are derived from the live response so the value,
+  // delta, and destination always describe the same data.
+  const metricCards: MetricCard[] | null = counts && deltas
+    ? [
+        {
+          key: "new",
+          label: "New",
+          value: counts.new,
+          delta: deltas.new,
+          to: "/staff/queue?status=NEW",
+        },
+        {
+          key: "open",
+          label: "Open",
+          value: counts.open,
+          delta: deltas.open,
+          to: "/staff/queue?status=OPEN",
+        },
+        {
+          key: "inProgress",
+          label: "In Progress",
+          value: counts.inProgress,
+          delta: deltas.inProgress,
+          // §2.3: the card folds REOPENED in, so its drill-down must too.
+          to: "/staff/queue?status=IN_PROGRESS,REOPENED",
+        },
+        {
+          key: "waitingForRequester",
+          label: "Waiting for Requester",
+          value: counts.waitingForRequester,
+          delta: deltas.waitingForRequester,
+          to: "/staff/queue?status=WAITING_FOR_REQUESTER",
+        },
+        {
+          key: "myAssigned",
+          label: "My Assigned",
+          value: counts.myAssigned,
+          // §3.1: no deltas.myAssigned key exists — assignment is not a status
+          // transition — so the card renders no delta chip (not even "0").
+          delta: null,
+          // §2.3: owner=me alone would surface Closed/Cancelled tickets, which
+          // the card's count excludes — carry the explicit open-work list.
+          to: `/staff/queue?owner=me&status=${OPEN_WORK_QUERY}`,
+        },
+      ]
+    : null;
+
+  return (
+    <div className={styles.page} data-testid="staff-dashboard">
+      {/* ─── Welcome row (§2.1) ─────────────────────────────────────────── */}
+      <div className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Welcome back, {firstName}!</h1>
+          <p className={styles.subtitle}>Here is what is happening across the queue today.</p>
+        </div>
+        <Button
+          variant={refreshing ? "busy" : "secondary"}
+          onClick={() => void refreshAll()}
+          busyLabel="Refreshing…"
+          data-testid="dashboard-refresh"
+        >
+          Refresh
+        </Button>
+      </div>
+
+      {/* ─── Metric cards group (§2.1) ─────────────────────────────────── */}
+      {metricsState === "loading" && (
+        <div className={styles.metricRow} aria-busy="true" aria-label="Loading dashboard metrics">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className={styles.metricSkeleton} data-testid="metric-skeleton" />
+          ))}
+        </div>
+      )}
+
+      {metricsState === "error" && (
+        <div className={styles.groupError} role="alert" data-testid="metrics-error">
+          <p>Couldn&apos;t load metrics.</p>
+          <Button variant="secondary" onClick={() => void fetchMetrics()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {metricsState === "ready" && metricCards && (
+        <div className={styles.metricRow} data-testid="metric-cards">
+          {metricCards.map((card) => {
+            const chip = card.delta === null ? null : deltaChip(card.delta);
+            return (
+              <button
+                key={card.key}
+                type="button"
+                className={styles.metricCard}
+                data-testid={`metric-card-${card.key}`}
+                onClick={() => navigate(card.to)}
+                // §8: the accessible name carries value + label + delta matching visible text (WCAG 2.5.3).
+                aria-label={`${card.value} ${card.label}${chip && card.delta !== null ? ` ${chip.icon} ${chip.text}` : ""}, view filtered queue`}
+              >
+                <span className={styles.metricValue}>{card.value}</span>{" "}
+                <span className={styles.metricLabel}>{card.label}</span>
+                {chip && card.delta !== null && (
+                  <>
+                    {" "}
+                    <span
+                      className={`${styles.deltaChip} ${styles[deltaClass(card.delta)]}`}
+                      data-testid={`delta-${card.key}`}
+                    >
+                      <span aria-hidden="true">{chip.icon}</span> {chip.text}
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── Two-column content row (§2.1) ─────────────────────────────── */}
+      <div className={styles.contentRow}>
+        <section className={styles.recentPanel} aria-labelledby="recent-heading">
+          <div className={styles.panelHeader}>
+            <h2 id="recent-heading" className={styles.panelTitle}>
+              My Recent Tickets
+            </h2>
+            <button
+              type="button"
+              className={styles.viewAll}
+              data-testid="recent-view-all"
+              onClick={() => navigate("/staff/queue")}
+            >
+              View all
+            </button>
+          </div>
+
+          {recentState === "loading" && (
+            <div aria-busy="true" aria-label="Loading recent tickets">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className={styles.rowSkeleton} data-testid="recent-skeleton-row" />
+              ))}
+            </div>
+          )}
+
+          {recentState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="recent-error">
+              <p>Couldn&apos;t load recent tickets.</p>
+              <Button variant="secondary" onClick={() => void fetchRecent()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {recentState === "ready" && recent && recent.length === 0 && (
+            <div className={styles.emptyState} data-testid="recent-empty">
+              <p>No recent Tickets yet.</p>
+            </div>
+          )}
+
+          {recentState === "ready" && recent && recent.length > 0 && (
+            <ul className={styles.recentList} data-testid="recent-list">
+              {recent.map((ticket) => (
+                <li key={ticket.id}>
+                  <button
+                    type="button"
+                    className={styles.recentRow}
+                    data-testid="recent-ticket-row"
+                    title={ticket.title}
+                    onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
+                  >
+                    <span className={styles.rowCode}>{ticket.code}</span>
+                    <span className={styles.rowTitle}>{ticket.title}</span>
+                    <span className={styles.rowMeta}>
+                      <Badge variant="status" value={ticket.status} />
+                      <span className={styles.rowUpdated}>{formatRelative(ticket.updatedAt)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* §8 (AC-13): a <section> (not <aside>) keeps the labelled panel
+            out of the App Shell's <main> landmark — axe
+            `landmark-complementary-is-top-level`. Same class, same box model. */}
+        <section className={styles.quickPanel} aria-labelledby="quick-heading">
+          <h2 id="quick-heading" className={styles.panelTitle}>
+            Quick Actions
+          </h2>
+          <div className={styles.quickActions} data-testid="quick-actions">
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/staff/queue?focus=search")}
+              data-testid="quick-search"
+            >
+              Search Tickets
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate(`/staff/queue?owner=me&status=${OPEN_WORK_QUERY}`)}
+              data-testid="quick-my-queue"
+            >
+              My Queue
+            </Button>
+          </div>
+        </section>
+      </div>
+
+      {/* ─── Second content row: My Actions Taken + Urgent Tickets ─────── */}
+      <div className={styles.contentRow2}>
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="my-actions-heading"
+          data-testid="my-actions-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="my-actions-heading" className={styles.panelTitle}>
+              My Actions Taken
+            </h2>
+            {/* FR-17: the count is the current user's still-open follow-ups.
+                It is not rendered as a premature "0" while loading. */}
+            <span className={styles.panelCount} data-testid="my-followups-count">
+              My follow-ups needed: {myActions ? myActions.followUpCount : "–"}
+            </span>
+          </div>
+
+          {myActionsState === "loading" && (
+            <div aria-busy="true" aria-label="Loading your Actions Taken">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className={styles.rowSkeleton} data-testid="my-actions-skeleton" />
+              ))}
+            </div>
+          )}
+
+          {myActionsState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="my-actions-error">
+              <p>Couldn&apos;t load your Actions Taken.</p>
+              <Button variant="secondary" onClick={() => void fetchMyActions()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {myActionsState === "ready" && myActions && myActions.items.length === 0 && (
+            <div className={styles.emptyState} data-testid="my-actions-empty">
+              <p>No Actions Taken recorded yet.</p>
+            </div>
+          )}
+
+          {myActionsState === "ready" && myActions && myActions.items.length > 0 && (
+            <ul className={styles.recentList} data-testid="my-actions-list">
+              {myActions.items.map((action) => (
+                <li key={action.id}>
+                  <button
+                    type="button"
+                    className={styles.actionRow}
+                    data-testid="my-actions-row"
+                    title={action.description}
+                    onClick={() => navigate(`/staff/tickets/${action.ticketId}`)}
+                  >
+                    <span className={styles.rowCode}>{action.ticketNumber}</span>
+                    {/* §2.1: one line, ellipsis; `title` keeps the full text. */}
+                    <span className={styles.rowTitle} title={action.description}>
+                      {action.description}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      {action.followUpRequired && (
+                        <span className={styles.followUpBadge}>Follow-up</span>
+                      )}
+                      <span className={styles.rowUpdated}>
+                        {formatRelative(action.actionDateTime)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section
+          className={styles.recentPanel}
+          aria-labelledby="urgent-heading"
+          data-testid="urgent-tickets-section"
+        >
+          <div className={styles.panelHeader}>
+            <h2 id="urgent-heading" className={styles.panelTitle}>
+              Urgent Tickets
+            </h2>
+            <button
+              type="button"
+              className={styles.viewAll}
+              data-testid="urgent-view-all-link"
+              onClick={() => navigate("/staff/queue?priority=URGENT")}
+            >
+              View all urgent
+            </button>
+          </div>
+
+          {urgentState === "loading" && (
+            <div aria-busy="true" aria-label="Loading urgent tickets">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div
+                  key={index}
+                  className={styles.rowSkeleton}
+                  data-testid="urgent-tickets-skeleton"
+                />
+              ))}
+            </div>
+          )}
+
+          {urgentState === "error" && (
+            <div className={styles.groupError} role="alert" data-testid="urgent-tickets-error">
+              <p>Couldn&apos;t load urgent tickets.</p>
+              <Button variant="secondary" onClick={() => void fetchUrgent()}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {urgentState === "ready" && urgent && urgent.length === 0 && (
+            <div className={styles.emptyState} data-testid="urgent-tickets-empty">
+              <p>No urgent Tickets right now.</p>
+            </div>
+          )}
+
+          {urgentState === "ready" && urgent && urgent.length > 0 && (
+            <ul className={styles.recentList} data-testid="urgent-tickets-list">
+              {urgent.map((ticket) => (
+                <li key={ticket.id}>
+                  <button
+                    type="button"
+                    className={styles.urgentRow}
+                    data-testid="urgent-ticket-row"
+                    title={ticket.title}
+                    onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
+                  >
+                    <span className={styles.rowCode}>{ticket.ticketNumber}</span>
+                    <span className={styles.rowTitle} title={ticket.title}>
+                      {ticket.title}
+                    </span>
+                    <span className={styles.rowMeta}>
+                      <Badge variant="status" value={ticket.status} />
+                      <Badge variant="priority" value={ticket.itPriority} />
+                      <span className={styles.rowUpdated}>
+                        {ticket.ownerName ?? "Unassigned"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}

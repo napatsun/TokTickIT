@@ -389,15 +389,30 @@ describe("GET /api/tickets", () => {
       expect(res.body.error.fieldErrors).toHaveProperty("sortDir");
     });
 
+    // Lab 4 (ui-spec.md §3.3, api-spec.md §3.2's drill-down needs): the
+    // `currentStatus` filter now accepts the full TicketStatus enum — plus
+    // comma-separated lists and the open-work alias — so the Requester
+    // Dashboard's cards can drill down to exactly the statuses they count.
+    // A non-enum value is still a 400 with the same field error shape.
     it("returns 400 for invalid currentStatus", async () => {
       const res = await get(
-        "/api/tickets?currentStatus=CLOSED",
+        "/api/tickets?currentStatus=NOT_A_STATUS",
         clientA,
       );
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
       expect(res.body.error.fieldErrors).toHaveProperty("currentStatus");
+    });
+
+    it("accepts the full status enum as currentStatus (Lab 4 widening)", async () => {
+      for (const status of ["NEW", "CLOSED", "RESOLVED", "IN_PROGRESS"]) {
+        const res = await get(`/api/tickets?currentStatus=${status}`, clientA);
+        expect(res.status).toBe(200);
+        for (const ticket of res.body.tickets) {
+          expect(ticket.currentStatus).toBe(status);
+        }
+      }
     });
   });
 

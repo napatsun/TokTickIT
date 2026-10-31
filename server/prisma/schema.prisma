@@ -75,6 +75,11 @@ model User {
   internalNotes       InternalNote[]
   uploadedAttachments Attachment[]    @relation("UploadedBy")
   removedAttachments  Attachment[]    @relation("RemovedBy")
+  // Lab 4 (§7.4): User 1 — N ActionTaken via performedById / editedById, and
+  // User 1 — N TicketStatusHistory via changedById.
+  actionsPerformed    ActionTaken[]   @relation("ActionTakenPerformedBy")
+  actionsEdited       ActionTaken[]   @relation("ActionTakenEditedBy")
+  statusChanges       TicketStatusHistory[] @relation("TicketStatusChangedBy")
 }
 
 model RelatedSystem {
@@ -107,6 +112,20 @@ model Ticket {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
+  // ─── Lab 4 §7.2 additions (all additive: defaulted or nullable) ──────────
+  // BR-08 / FR-08: advisory "looks resolved" acknowledgement from the owning
+  // Requester. Stored, but it NEVER changes `status` on its own.
+  requesterConfirmedResolved   Boolean   @default(false)
+  requesterConfirmedResolvedAt DateTime?
+  // §7.2: set when status → RESOLVED; drives BR-10's REOPEN_WINDOW_DAYS (7).
+  // Survives a later RESOLVED → CLOSED unchanged, and is overwritten with a
+  // fresh timestamp the next time the Ticket enters RESOLVED again.
+  resolvedAt        DateTime?
+  // BR-12 / FR-16 / Decision B: optimistic-concurrency token. Incremented ONLY
+  // on a successful status transition (never by requester-confirmation or by a
+  // write that leaves `status` untouched). `updatedAt` is NOT used for this.
+  version           Int               @default(0)
+
   requester      User            @relation("RequesterTickets", fields: [requesterId], references: [id], onDelete: Restrict)
   owner          User?           @relation("OwnerTickets", fields: [ownerId], references: [id], onDelete: Restrict)
   category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
@@ -114,12 +133,93 @@ model Ticket {
   attachments    Attachment[]
   publicComments PublicComment[]
   internalNotes  InternalNote[]
+  // Lab 4 §7.4: Ticket 1 — N ActionTaken and Ticket 1 — N TicketStatusHistory.
+  actionsTaken   ActionTaken[]
+  statusHistory  TicketStatusHistory[]
 
   @@index([requesterId])
   @@index([requesterId, createdAt])
   @@index([ownerId])
   @@index([status])
   @@index([summary])
+}
+
+// ─── Lab 4 ───────────────────────────────────────────────
+
+// Lab 4 §7.1 — Actions Taken: the durable record of the work actually performed
+// against a Ticket.
+//
+// BR-01: `ticketId` is required, immutable after creation, and indexed.
+// BR-02: `performedById` may differ from the Ticket's ownerId (any active IT
+//        Staff/Administrator may author an entry; the Ticket Owner coordinates).
+// BR-03: `performedById` is always set from the authenticated session, never
+//        from client input (enforced at the API layer).
+// BR-04: `actionDateTime` is the business-meaningful action time (server time at
+//        creation, backdatable, never in the future). It is the PRIMARY sort key
+//        for FR-03; `createdAt` and `id` are only tie-breakers so repeated
+//        identical queries are deterministically ordered.
+// BR-05: `followUpNote` is required iff followUpRequired = true (API layer).
+// BR-06: `attachmentNotes` is a free-text pointer only; it creates/validates no
+//        file attachment of its own.
+// BR-11: entries are append-only. They are never hard-deleted; an Administrator
+//        soft-deletes with `isVoided` + `voidReason`, and a voided entry is then
+//        permanently frozen (no further edit, by anyone).
+//        15 minutes after creation only an Administrator may still edit, and
+//        every edit records the `editedAt`/`editedById` audit pair.
+model ActionTaken {
+  id               String   @id @default(cuid())
+  // Int, not String: «Ticket.id» is an autoincrement integer in this codebase
+  // (Labs 1–3), and a foreign key must match the referenced column's type.
+  ticketId         Int
+  actionDateTime   DateTime
+  description      String   @db.Text
+  result           String   @db.Text
+  performedById    String
+  followUpRequired Boolean  @default(false)
+  followUpNote     String?  @db.Text
+  attachmentNotes  String?  @db.Text
+  isVoided         Boolean  @default(false)
+  voidReason       String?
+  createdAt        DateTime @default(now())
+  editedAt         DateTime?
+  editedById       String?
+
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  performedBy User   @relation("ActionTakenPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+  editedBy    User?  @relation("ActionTakenEditedBy", fields: [editedById], references: [id], onDelete: Restrict)
+
+  // Serves the FR-03 list query's leading ticketId predicate + actionDateTime
+  // sort (`ORDER BY actionDateTime ASC, createdAt ASC, id ASC`); no separate
+  // index on the rare tie-break columns is needed for correctness.
+  @@index([ticketId, actionDateTime])
+  @@index([performedById])
+}
+
+// Lab 4 §7.3 — TicketStatusHistory: append-only audit trail of status
+// transitions. Exactly one row is written per successful transition.
+//
+// BR-07: makes the transition matrix enforceable and auditable after the fact.
+// BR-13 / Decision C: dashboard "delta vs. yesterday" values are computed LIVE
+// from this table (never from a cached counter), which is why it carries the
+// composite indexes on `changedAt` below.
+// `fromStatus`/`toStatus` use the existing TicketStatus enum: the DB then
+// rejects any value outside §5.1's canonical set, and the two status columns
+// keep the same storage contract as `Ticket.status`.
+model TicketStatusHistory {
+  id          String       @id @default(cuid())
+  ticketId    Int
+  fromStatus  TicketStatus
+  toStatus    TicketStatus
+  changedById String
+  changedAt   DateTime     @default(now())
+  note        String?
+
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  changedBy User   @relation("TicketStatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, changedAt])
+  @@index([toStatus, changedAt])
+  @@index([fromStatus, changedAt])
 }
 
 // Lab 3 (FR-14, BR-16/17/18): a Public Comment on a Ticket, append-only.

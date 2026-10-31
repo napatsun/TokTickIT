@@ -30,9 +30,12 @@ import Button from "../components/shared/Button";
 import Field from "../components/shared/Field";
 import PublicCommentsPanel from "../components/ticket-detail/PublicCommentsPanel";
 import InternalNotesPanel from "../components/ticket-detail/InternalNotesPanel";
-import StatusChangeConfirm, {
-  STATUS_LABELS,
-} from "../components/ticket-detail/StatusChangeConfirm";
+import ActionsTakenPanel from "../components/ticket-detail/ActionsTakenPanel";
+import { AuthContext } from "../contexts/AuthContext";
+import { useContext } from "react";
+import TicketWorkflowControls, {
+  type WorkflowTicketState,
+} from "../components/ticket-detail/TicketWorkflowControls";
 import { apiClient } from "../lib/apiClient";
 import styles from "./StaffTicketDetailPage.module.css";
 
@@ -55,6 +58,12 @@ interface StaffTicket {
   requesterMarkedResolved: boolean;
   requesterMarkedResolvedAt: string | null;
   resolutionSummary: string | null;
+  // Lab 4 §7.2 workflow fields.
+  version: number;
+  resolvedAt: string | null;
+  requesterConfirmedResolved: boolean;
+  requesterConfirmedResolvedAt: string | null;
+  hasActionsWithResult: boolean;
   allowedStatusTransitions: string[];
 }
 
@@ -84,18 +93,9 @@ type PageStatus = "loading" | "ready" | "not-found" | "forbidden" | "error";
 
 const IT_PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
-/** §6.3: these transitions must be confirmed before they are applied. */
-const CONFIRMATION_REQUIRED = ["RESOLVED", "CLOSED", "CANCELLED"];
+import { formatDate } from "../lib/dateFormat";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -113,6 +113,14 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 export default function StaffTicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // §4: the Actions Taken panel is role-aware; the authenticated user drives
+  // its Requester/IT Staff/Administrator behaviour (BR-15 defence in depth —
+  // hiding controls here is never the authorization check itself).
+  // Read through a null-guarded context (not useAuth, which throws outside a
+  // provider) so the panel simply renders once the session identity exists —
+  // the real app always mounts these routes inside <AuthProvider>.
+  const auth = useContext(AuthContext);
+  const user = auth?.user ?? null;
 
   const [ticket, setTicket] = useState<StaffTicket | null>(null);
   const [attachments, setAttachments] = useState<{
@@ -133,12 +141,8 @@ export default function StaffTicketDetailPage() {
   const [priorityError, setPriorityError] = useState<string | null>(null);
   const [prioritySaved, setPrioritySaved] = useState(false);
 
-  // Status control
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [statusBusy, setStatusBusy] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [statusSaved, setStatusSaved] = useState(false);
-  const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
+  // Status control (Lab 4): the shared TicketWorkflowControls owns its own
+  // busy/success/conflict micro-state; this page only merges its result.
 
   // ─── Load ─────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
@@ -168,7 +172,6 @@ export default function StaffTicketDetailPage() {
 
       setTicket(data.ticket);
       setAttachments(data.attachments ?? { active: [], removed: [] });
-      setSelectedStatus("");
       setPageStatus("ready");
     } catch {
       setPageStatus("error");
@@ -178,6 +181,31 @@ export default function StaffTicketDetailPage() {
   useEffect(() => {
     void fetchDetail();
   }, [fetchDetail]);
+
+  /**
+   * Quiet refresh of the ticket state after an Actions Taken mutation: same
+   * endpoint as `fetchDetail` but without the skeleton reset, so the page
+   * doesn't flash while the user is working. Keeps the workflow control's
+   * BR-09 flag (`hasActionsWithResult`) in sync with the panel's writes —
+   * the Resolved button re-enables (or disables after a void) without a
+   * page reload.
+   */
+  const refreshTicketState = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await apiClient(`/api/staff/tickets/${id}`);
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        ticket: StaffTicket;
+        attachments: { active: AttachmentItem[]; removed: RemovedAttachmentItem[] };
+      };
+      setTicket(data.ticket);
+      setAttachments(data.attachments ?? { active: [], removed: [] });
+    } catch {
+      // Best-effort refresh: the server re-validates BR-09 on the actual
+      // transition request, so a failed refresh must not surface an error.
+    }
+  }, [id]);
 
   // Owner picker for Reassign (BR-12: active IT Staff/Administrator only).
   useEffect(() => {
@@ -283,48 +311,26 @@ export default function StaffTicketDetailPage() {
     }
   }
 
-  // ─── Status ───────────────────────────────────────────────────────────
-  async function applyStatus(next: string) {
-    if (!id) return;
-    setStatusBusy(true);
-    setStatusError(null);
-    setStatusSaved(false);
-
-    try {
-      const response = await apiClient(`/api/staff/tickets/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: next }),
-      });
-
-      if (!response.ok) {
-        setStatusError(await readErrorMessage(response, "Couldn't change the status."));
-        return;
-      }
-
-      const data = (await response.json()) as { ticket: StaffTicket };
-      setTicket(data.ticket);
-      setSelectedStatus("");
-      setStatusSaved(true);
-      setConfirmStatus(null);
-    } catch {
-      setStatusError("Couldn't change the status. Please try again.");
-    } finally {
-      setStatusBusy(false);
-    }
-  }
-
-  function requestStatusChange() {
-    if (!selectedStatus) return;
-    setStatusError(null);
-    setStatusSaved(false);
-
-    if (CONFIRMATION_REQUIRED.includes(selectedStatus)) {
-      setConfirmStatus(selectedStatus);
-      return;
-    }
-    void applyStatus(selectedStatus);
-  }
+  // ─── Status (Lab 4 shared workflow control) ─────────────────────────────
+  // The control PATCHes `/api/tickets/:id/status` itself and hands back the
+  // server-confirmed workflow slice; merge only those columns so the rest of the
+  // page's data stays intact (the transition response is intentionally a
+  // workflow projection, not the full staff detail).
+  const handleTicketUpdated = useCallback((next: WorkflowTicketState) => {
+    setTicket((current) =>
+      current
+        ? {
+            ...current,
+            status: next.status,
+            version: next.version,
+            resolvedAt: next.resolvedAt,
+            requesterConfirmedResolved: next.requesterConfirmedResolved,
+            requesterConfirmedResolvedAt: next.requesterConfirmedResolvedAt,
+            allowedStatusTransitions: next.allowedStatusTransitions,
+          }
+        : current,
+    );
+  }, []);
 
   // ─── Render: page states ──────────────────────────────────────────────
   if (pageStatus === "loading") {
@@ -545,69 +551,29 @@ export default function StaffTicketDetailPage() {
         </div>
       </section>
 
-      {/* 3. Status */}
+      {/* 3. Status / Workflow (Lab 4, ui-spec.md §5) */}
       <section className={styles.section} data-testid="status-control">
         <h2 className={styles.sectionTitle}>Status</h2>
 
-        <div className={styles.controlHeaderRow}>
-          <span className={styles.controlLabel}>Current Status</span>
-          <Badge variant="status" value={ticket.status} />
-        </div>
-
-        {/* Only the permitted next states from ui-spec.md §6.1 are offered. */}
-        <div className={styles.controlActions}>
-          <label className={styles.inlineLabel} htmlFor="change-status">
-            Change Status
-            <select
-              id="change-status"
-              className={styles.select}
-              value={selectedStatus}
-              onChange={(event) => {
-                setSelectedStatus(event.target.value);
-                setStatusSaved(false);
-              }}
-              disabled={statusBusy || ticket.allowedStatusTransitions.length === 0}
-              aria-invalid={statusError ? true : undefined}
-              aria-describedby={statusError ? "status-error" : undefined}
-            >
-              <option value="">Select a status…</option>
-              {ticket.allowedStatusTransitions.map((status) => (
-                <option key={status} value={status}>
-                  {STATUS_LABELS[status] ?? status}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <Button
-            variant="secondary"
-            onClick={requestStatusChange}
-            disabled={statusBusy || selectedStatus === ""}
-          >
-            Change Status
-          </Button>
-        </div>
-
-        {ticket.allowedStatusTransitions.length === 0 && (
-          <p className={styles.mutedText}>
-            This ticket is in a terminal status and cannot be moved.
-          </p>
-        )}
-
-        {statusError && (
-          <div
-            className={styles.inlineError}
-            role="alert"
-            id="status-error"
-            data-testid="status-error"
-          >
-            {statusError}
+        {user ? (
+          <TicketWorkflowControls
+            ticketId={ticket.id}
+            currentUser={user}
+            currentStatus={ticket.status}
+            version={ticket.version}
+            resolvedAt={ticket.resolvedAt}
+            allowedTransitions={ticket.allowedStatusTransitions}
+            hasActionsWithResult={ticket.hasActionsWithResult}
+            requesterConfirmedResolved={ticket.requesterConfirmedResolved}
+            requesterConfirmedResolvedAt={ticket.requesterConfirmedResolvedAt}
+            onTicketUpdated={handleTicketUpdated}
+            onReload={fetchDetail}
+          />
+        ) : (
+          <div className={styles.controlHeaderRow}>
+            <span className={styles.controlLabel}>Current Status</span>
+            <Badge variant="status" value={ticket.status} />
           </div>
-        )}
-        {statusSaved && (
-          <p className={styles.inlineSuccess} role="status" data-testid="status-success">
-            Status updated.
-          </p>
         )}
       </section>
 
@@ -616,6 +582,16 @@ export default function StaffTicketDetailPage() {
 
       {/* 6. Internal Notes — visually distinct, IT-only (§6.6) */}
       <InternalNotesPanel notesPath={`/api/staff/tickets/${ticket.id}/notes`} />
+
+      {/* Lab 4 §4: Actions Taken — below Public Comments / Internal Notes.
+          Read-only for a Requester session; the panel gates its own controls. */}
+      {user && (
+        <ActionsTakenPanel
+          ticketId={ticket.id}
+          currentUser={user}
+          onActionsChanged={() => void refreshTicketState()}
+        />
+      )}
 
       {/* 7. Attachments (read-only continuity) */}
       <section className={styles.section} data-testid="staff-attachments">
@@ -635,21 +611,6 @@ export default function StaffTicketDetailPage() {
           </ul>
         )}
       </section>
-
-      {/* §6.3 confirmation for Resolved / Closed / Cancelled */}
-      {confirmStatus && (
-        <StatusChangeConfirm
-          from={ticket.status}
-          to={confirmStatus}
-          busy={statusBusy}
-          error={statusError}
-          onConfirm={() => void applyStatus(confirmStatus)}
-          onCancel={() => {
-            setConfirmStatus(null);
-            setStatusError(null);
-          }}
-        />
-      )}
     </div>
   );
 }

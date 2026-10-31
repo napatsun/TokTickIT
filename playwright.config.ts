@@ -12,7 +12,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/lab-03/**/*.spec.ts",
+  // Lab 3 regression flows plus the Lab 4 Actions Taken flow (E2E-01/E2E-05).
+  testMatch: "**/lab-{03,04}/**/*.spec.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

@@ -107,25 +107,20 @@ test.describe("E2E-04 — Requester regression + new features", () => {
     ).toBeVisible();
     await expect(composer).toHaveValue("");
 
-    // ─── Problem Appears Resolved ──────────────────────────────────────
-    const resolveButton = page.getByRole("button", {
-      name: /problem appears resolved/i,
-    });
-    await expect(resolveButton).toBeVisible();
-    await resolveButton.click();
-
-    // Exact confirmation copy from ui-spec.md §4.
-    await expect(page.getByRole("dialog")).toContainText(
-      "This tells IT Staff the issue seems fixed. IT Staff will still need to formally close the ticket. Continue?",
+    // ─── "This looks resolved to me" advisory confirmation (Lab 4 §5) ──
+    const confirmButton = page.getByTestId("requester-confirmation-button");
+    await expect(confirmButton).toBeVisible();
+    await expect(page.getByTestId("requester-confirmation-helper")).toHaveText(
+      "Your IT Staff will review and confirm.",
     );
-    await page.getByRole("button", { name: /^continue$/i }).click();
+    await confirmButton.click();
 
-    await expect(page.getByTestId("requester-resolved-badge")).toContainText(
-      /You marked this as resolved on/i,
+    await expect(page.getByTestId("requester-confirmation-done")).toContainText(
+      /You told IT Staff this looks resolved/i,
     );
-    // The action is hidden after success and the formal Status badge is
-    // unchanged (BR-05/BR-20).
-    await expect(resolveButton).toHaveCount(0);
+    // The advisory action is replaced by the confirmed note, and the formal
+    // Status badge is unchanged (BR-08).
+    await expect(confirmButton).toHaveCount(0);
     await expect(page.getByText("Waiting for Requester")).toBeVisible();
 
     // ─── Logout ────────────────────────────────────────────────────────
@@ -219,12 +214,13 @@ test.describe("E2E-05 — IT Staff queue, claim, priority, status, comments, not
     await expect(page.getByTestId("priority-success")).toBeVisible();
 
     // ─── Status transition NEW → OPEN (permitted, no dialog) ──────────
-    await page.getByLabel(/change status/i).selectOption("OPEN");
-    await page.getByRole("button", { name: /^change status$/i }).click();
-    await expect(page.getByTestId("status-success")).toBeVisible();
+    // Lab 4 §5: the control renders one button per permitted transition.
+    await expect(page.getByTestId("workflow-transition-OPEN")).toBeVisible();
+    await page.getByTestId("workflow-transition-OPEN").click();
+    await expect(page.getByTestId("workflow-success")).toBeVisible();
     await expect(
-      page.getByTestId("status-control").getByText("Open", { exact: true }),
-    ).toBeVisible();
+      page.getByTestId("status-control").locator('span[role="status"]'),
+    ).toHaveText("Open");
 
     // ─── Public Comment (visible to the Requester too, BR-04) ─────────
     const comment = `E2E staff comment ${Date.now()}`;
@@ -262,8 +258,7 @@ test.describe("E2E-05 — IT Staff queue, claim, priority, status, comments, not
     await expect(page.getByTestId("comment-item").filter({ hasText: note })).toHaveCount(0);
 
     // ─── Terminal transitions require confirmation (§6.3) ─────────────
-    await page.getByLabel(/change status/i).selectOption("CANCELLED");
-    await page.getByRole("button", { name: /^change status$/i }).click();
+    await page.getByTestId("workflow-transition-CANCELLED").click();
     await expect(page.getByTestId("status-confirm-dialog")).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).click();
     await expect(page.getByTestId("status-confirm-dialog")).toHaveCount(0);

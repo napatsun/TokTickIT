@@ -86,6 +86,11 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   const ticketIds = tickets.map((t) => t.id);
 
   if (ticketIds.length > 0) {
+    // Lab 4: "ActionTaken" and "TicketStatusHistory" also reference "Ticket"
+    // with ON DELETE RESTRICT, so they must go first or the ticket delete is
+    // rejected by the database.
+    await prisma.actionTaken.deleteMany({ where: { ticketId: { in: ticketIds } } });
+    await prisma.ticketStatusHistory.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.publicComment.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.internalNote.deleteMany({ where: { ticketId: { in: ticketIds } } });
     await prisma.attachment.deleteMany({ where: { ticketId: { in: ticketIds } } });
@@ -94,7 +99,18 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
 
   // Content authored by the user on someone else's ticket (staff fixtures on a
   // seeded ticket, for example). Internal Notes are IT-Staff-authored, so they
-  // must be cleared by author as well as by ticket.
+  // must be cleared by author as well as by ticket. Same for Lab 4's per-record
+  // author/actor references: a fixture IT Staff user who performed an action or
+  // changed a status on a seeded ticket still blocks that user's deletion.
+  await prisma.actionTaken.deleteMany({
+    where: {
+      OR: [
+        { performedById: { in: userIds } },
+        { editedById: { in: userIds } },
+      ],
+    },
+  });
+  await prisma.ticketStatusHistory.deleteMany({ where: { changedById: { in: userIds } } });
   await prisma.publicComment.deleteMany({ where: { authorId: { in: userIds } } });
   await prisma.internalNote.deleteMany({ where: { authorId: { in: userIds } } });
   await prisma.attachment.deleteMany({ where: { uploadedByRequesterId: { in: userIds } } });

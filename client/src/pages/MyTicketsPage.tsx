@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import SearchInput from "../components/shared/SearchInput";
 import Button from "../components/shared/Button";
 import Pagination from "../components/shared/Pagination";
@@ -51,12 +51,22 @@ interface TicketsResponse {
 
 export default function MyTicketsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // ─── Filter/search/sort state ─────────────────────────────────────
+  // Lab 4 (ui-spec.md §3.3): the initial status filter is seeded from the URL
+  // query param the Requester Dashboard cards arrive with — a single status or
+  // the comma-separated multi-value list / open-work alias, exactly what the
+  // widened `currentStatus` API parameter accepts. Free-text input afterwards
+  // behaves as before.
+  const initialStatus = searchParams.get("currentStatus") ?? "";
+
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [requestedPriority, setRequestedPriority] = useState("");
-  const [currentStatus, setCurrentStatus] = useState("");
+  /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
+  const [searchResetSignal, setSearchResetSignal] = useState(0);
+  const [currentStatus, setCurrentStatus] = useState(initialStatus);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
@@ -156,6 +166,7 @@ export default function MyTicketsPage() {
     setCurrentStatus("");
     setSortBy("createdAt");
     setSortDir("desc");
+    setSearchResetSignal((n) => n + 1);
     setPage(1);
   }, []);
 
@@ -199,6 +210,7 @@ export default function MyTicketsPage() {
           <SearchInput
             value={search}
             onSearch={handleSearch}
+            resetSignal={searchResetSignal}
             id="ticket-search"
           />
           <FilterControls

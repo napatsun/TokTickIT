@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { AuthProvider } from "../../src/contexts/AuthContext";
 import ChangePasswordPage, { validateNewPassword } from "../../src/pages/ChangePasswordPage";
 import { expectNoA11yViolations } from "../support/a11y";
@@ -319,5 +322,113 @@ describe("UI-10 — Change Password screen automated accessibility (ui-spec §9)
     expect(errorId).toBeDefined();
     expect(document.getElementById(errorId as string)).toHaveAttribute("role", "alert");
     expect(newPassword).toHaveAttribute("aria-invalid", "true");
+  });
+});
+
+// ─── UI-15 — the policy hint sits fully below the field ─────────────────
+
+/** Every declaration block the stylesheet authors for a selector. */
+function cssRuleBodies(css: string, selector: string): string[] {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // `[^{}]*` keeps the match inside one selector list, so grouped rules still resolve.
+  const pattern = new RegExp(`${escaped}[^{}]*\\{([^}]*)\\}`, "g");
+  return [...css.matchAll(pattern)].map((match) => match[1]);
+}
+
+function changePasswordStylesheet(): string {
+  return fs.readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "..",
+      "src",
+      "pages",
+      "ChangePasswordPage.module.css",
+    ),
+    "utf8",
+  );
+}
+
+/**
+ * UI-15 — the always-visible complexity hint must render *below* the New
+ * Password input with a normal-flow gap (ui-spec.md §3).
+ *
+ * jsdom performs no layout, so overlap itself cannot be measured here:
+ * the suite pins the two things that caused the shipped overlap — the hint's
+ * document position relative to the two field groups, and the authored
+ * spacing/positioning of its class. The rendered pixels are verified visually
+ * at 390x844 / 768x1024 / 1440x900.
+ */
+describe("UI-15 — the policy hint sits fully below the New Password field (ui-spec §3)", () => {
+  it("renders the hint after the New Password input and before the Confirm group", async () => {
+    stubFetch();
+    renderChangePassword();
+
+    const { newPassword, confirmPassword } = await ready();
+    const hint = screen.getByTestId("password-hint");
+
+    // §3: the hint follows the input in document order, so it cannot sit on
+    // the field's bottom border.
+    expect(
+      newPassword.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // …and it belongs to the New Password group: it is preceded by the wrapper
+    // that holds that input and followed by the Confirm New Password group.
+    expect(hint.previousElementSibling?.contains(newPassword)).toBe(true);
+    expect(hint.nextElementSibling?.contains(confirmPassword)).toBe(true);
+  });
+
+  it("authors no negative or overlay positioning on the hint", () => {
+    const bodies = cssRuleBodies(changePasswordStylesheet(), ".hint");
+    expect(bodies.length, ".hint must be authored").toBeGreaterThan(0);
+
+    for (const body of bodies) {
+      // The hint must sit in normal flow under the input, never on top of it.
+      expect(body).not.toMatch(/position:\s*(absolute|fixed)/);
+      expect(body).not.toMatch(/(^|[^-])height:\s*\d/);
+      expect(body).not.toMatch(/(^|[;\s])top:\s*-/);
+
+      // A negative margin is exactly what pulled the text over the input.
+      for (const declaration of body.match(/margin[^:]*:[^;]*/g) ?? []) {
+        const value = declaration.slice(declaration.indexOf(":") + 1);
+        expect(value, `negative margin in "${declaration.trim()}"`).not.toMatch(/calc\(\s*-/);
+        expect(value, `negative margin in "${declaration.trim()}"`).not.toMatch(/(^|[\s,])-\d/);
+      }
+    }
+
+    // Spacing comes from the Zen Green scale as a positive gap below the field.
+    expect(bodies.join("\n")).toMatch(/margin:\s*var\(--space-\d\)/);
+  });
+
+  it("keeps the hint below the field and linked to it when an inline error appears", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderChangePassword();
+
+    const { newPassword, confirmPassword, submit } = await ready();
+    await user.type(newPassword, "abcdefgh"); // 8 chars, no digit
+    await user.type(confirmPassword, "abcdefgh");
+    await user.click(submit);
+
+    const error = await screen.findByText(/include a letter and a number/i);
+    const hint = screen.getByTestId("password-hint");
+
+    // The error does not replace the hint, and the hint stays after the input.
+    expect(hint).toBeInTheDocument();
+    expect(
+      newPassword.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // §3: error and hint are distinct boxes — neither contains the other — so
+    // the error text cannot be drawn over the helper text.
+    expect(hint.contains(error)).toBe(false);
+    expect((error as HTMLElement).contains(hint)).toBe(false);
+    expect(hint).toHaveTextContent(/minimum 8 characters/i);
+    expect(hint).not.toHaveTextContent(/include a letter and a number/i);
+
+    // §9: both messages remain announced with the field.
+    const describedBy = (newPassword.getAttribute("aria-describedby") ?? "").split(/\s+/);
+    expect(describedBy).toContain("password-hint");
   });
 });

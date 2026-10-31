@@ -1,0 +1,78 @@
+/* ============================================================
+   TicketWorkflowControls — ui-spec.md §5 (status transition
+   control). Zen Green tokens only (§1: no new colours in Lab 4).
+   ============================================================ */
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.statusLabel {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.buttonGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Non-blocking reconciliation banner (409 STALE_VERSION / 403 race). */
+.banner {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-md);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--color-warning-text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+.error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--field-border-radius);
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  font-size: var(--font-size-md);
+}
+
+.success {
+  margin: 0;
+  color: var(--color-success);
+  font-size: var(--font-size-md);
+}
+
+/* The Requester's advisory acknowledgement: visually distinct and secondary. */
+.requesterConfirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-field-readonly-border);
+}
+
+.helper {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}

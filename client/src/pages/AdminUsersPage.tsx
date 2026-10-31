@@ -130,6 +130,8 @@ export default function AdminUsersPage() {
   const [status, setStatus] = useState<ListStatus>("loading");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"" | Role>("");
+  /** Bumped on Clear filters so SearchInput cancels a pending debounced search. */
+  const [searchResetSignal, setSearchResetSignal] = useState(0);
 
   /**
    * UNFILTERED administrator roster. Only used to answer "is this the last
@@ -491,6 +493,7 @@ export default function AdminUsersPage() {
         <SearchInput
           value={search}
           onSearch={setSearch}
+          resetSignal={searchResetSignal}
           placeholder="Search by name or email…"
           id="admin-user-search"
         />
@@ -512,16 +515,18 @@ export default function AdminUsersPage() {
           </select>
         </label>
 
-        <Button
-          variant="tertiary"
-          onClick={() => {
-            setSearch("");
-            setRoleFilter("");
-          }}
-          disabled={!hasActiveFilters}
-        >
-          Clear filters
-        </Button>
+        {hasActiveFilters && (
+          <Button
+            variant="tertiary"
+            onClick={() => {
+              setSearch("");
+              setRoleFilter("");
+              setSearchResetSignal((n) => n + 1);
+            }}
+          >
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* Toast region — success feedback for create/edit/reset (§7). */}
@@ -553,6 +558,7 @@ export default function AdminUsersPage() {
                 onClick={() => {
                   setSearch("");
                   setRoleFilter("");
+                  setSearchResetSignal((n) => n + 1);
                 }}
               >
                 Clear filters

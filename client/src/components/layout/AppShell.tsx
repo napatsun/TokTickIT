@@ -28,12 +28,26 @@ interface NavItem {
 }
 
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
+  // Lab 4 (ui-spec.md §6): a role-appropriate "Dashboard" nav item for ALL
+  // three roles, pointing at the single role-switching /dashboard route. It
+  // renders first, and its active state reuses the existing NavLink
+  // underline/bold + aria-current convention — no new style is introduced.
+  //   Requester      → Requester Dashboard (§3)
+  //   IT Staff       → IT Staff Dashboard (§2)
+  //   Administrator  → the IT Staff dashboard (per the sprint handout)
   REQUESTER: [
+    { to: "/dashboard", label: "Dashboard" },
     { to: "/tickets", label: "My Tickets", end: true },
     { to: "/tickets/new", label: "Create Ticket" },
   ],
-  IT_STAFF: [{ to: "/staff/queue", label: "Ticket Queue" }],
-  ADMINISTRATOR: [{ to: "/admin/users", label: "User Management" }],
+  IT_STAFF: [
+    { to: "/dashboard", label: "Dashboard" },
+    { to: "/staff/queue", label: "Ticket Queue" },
+  ],
+  ADMINISTRATOR: [
+    { to: "/dashboard", label: "Dashboard" },
+    { to: "/admin/users", label: "User Management" },
+  ],
 };
 
 export default function AppShell() {
@@ -89,9 +103,8 @@ export default function AppShell() {
             type="button"
             className={styles.logoutButton}
             onClick={handleLogout}
-            aria-label="Log out"
           >
-            Logout
+            Log out
           </button>
 
           {/* §11: hamburger — mobile only */}
@@ -137,9 +150,8 @@ export default function AppShell() {
           type="button"
           className={styles.mobileLogoutButton}
           onClick={handleLogout}
-          aria-label="Log out (mobile)"
         >
-          Logout
+          Log out
         </button>
       </div>
 

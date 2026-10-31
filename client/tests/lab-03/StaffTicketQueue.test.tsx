@@ -357,6 +357,70 @@ describe("UI-05 — empty and no-results states (ui-spec §5)", () => {
   });
 });
 
+// ─── UI-14 — dashboard drill-down parameters seeded into the filters ────
+
+describe("UI-14 — the queue seeds its filters from drill-down query params", () => {
+  it("applies priority=URGENT from the URL to the filter and the first request", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?priority=URGENT"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    // The Staff Dashboard's "View all urgent" link lands here; without seeding
+    // this filter the link would show the unfiltered queue (FR-18, AC-16).
+    expect(screen.getByLabelText(/^IT Priority/i)).toHaveValue("URGENT");
+    expect(lastQueueUrl()).toContain("priority=URGENT");
+  });
+
+  it("still seeds status and owner alongside priority", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?status=OPEN&owner=me&priority=HIGH"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    expect(screen.getByLabelText(/^Status/i)).toHaveValue("OPEN");
+    expect(screen.getByLabelText(/^Ownership/i)).toHaveValue("me");
+    expect(screen.getByLabelText(/^IT Priority/i)).toHaveValue("HIGH");
+  });
+
+  it("renders a matching synthetic option when seeded with a multi-status dashboard drill-down", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?status=IN_PROGRESS,REOPENED"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    const statusSelect = screen.getByLabelText(/^Status/i) as HTMLSelectElement;
+    expect(statusSelect).toHaveValue("IN_PROGRESS,REOPENED");
+    expect(statusSelect.selectedOptions[0]?.textContent).toBe("2 statuses (from dashboard)");
+  });
+
+  it("focuses the search input when navigated with ?focus=search from Quick Actions", async () => {
+    routeApi();
+    render(
+      <MemoryRouter initialEntries={["/staff/queue?focus=search"]}>
+        <StaffQueuePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId("queue-table");
+
+    const searchInput = screen.getByLabelText(/search by ticket number or summary/i);
+    expect(searchInput).toHaveFocus();
+  });
+});
+
 // ─── UI-10: automated accessibility (jest-axe) ───────────────────────────
 
 describe("UI-10 — Queue automated accessibility (ui-spec §9)", () => {
