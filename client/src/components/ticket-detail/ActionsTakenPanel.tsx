@@ -37,7 +37,7 @@
  * (never colour-only), and mobile stacked label:value rows (§7).
  */
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Button from "../shared/Button";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import { apiClient } from "../../lib/apiClient";
@@ -231,6 +231,7 @@ export default function ActionsTakenPanel({
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Void (Administrator only, §4.4)
@@ -349,7 +350,7 @@ export default function ActionsTakenPanel({
   const submitForm = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (submitting) return;
+      if (submitting || submittingRef.current) return;
       setFormError(null);
 
       // Client-side BR-04: a future Action Date/Time is rejected before the
@@ -368,6 +369,7 @@ export default function ActionsTakenPanel({
         return;
       }
 
+      submittingRef.current = true;
       setSubmitting(true);
       setFieldErrors({});
 
@@ -484,6 +486,7 @@ export default function ActionsTakenPanel({
         // §4.5: never clear the draft on a network failure.
         setFormError("Couldn't save — check your connection and try again.");
       } finally {
+        submittingRef.current = false;
         setSubmitting(false);
       }
     },

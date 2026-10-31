@@ -328,18 +328,21 @@ export default function StaffDashboard() {
                 className={styles.metricCard}
                 data-testid={`metric-card-${card.key}`}
                 onClick={() => navigate(card.to)}
-                // §8: the accessible name carries label + value, not colour.
-                aria-label={`${card.label}: ${card.value}, view filtered queue`}
+                // §8: the accessible name carries value + label + delta matching visible text (WCAG 2.5.3).
+                aria-label={`${card.value} ${card.label}${chip && card.delta !== null ? ` ${chip.icon} ${chip.text}` : ""}, view filtered queue`}
               >
-                <span className={styles.metricValue}>{card.value}</span>
+                <span className={styles.metricValue}>{card.value}</span>{" "}
                 <span className={styles.metricLabel}>{card.label}</span>
                 {chip && card.delta !== null && (
-                  <span
-                    className={`${styles.deltaChip} ${styles[deltaClass(card.delta)]}`}
-                    data-testid={`delta-${card.key}`}
-                  >
-                    <span aria-hidden="true">{chip.icon}</span> {chip.text}
-                  </span>
+                  <>
+                    {" "}
+                    <span
+                      className={`${styles.deltaChip} ${styles[deltaClass(card.delta)]}`}
+                      data-testid={`delta-${card.key}`}
+                    >
+                      <span aria-hidden="true">{chip.icon}</span> {chip.text}
+                    </span>
+                  </>
                 )}
               </button>
             );
@@ -395,8 +398,8 @@ export default function StaffDashboard() {
                     type="button"
                     className={styles.recentRow}
                     data-testid="recent-ticket-row"
+                    title={ticket.title}
                     onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
-                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.code}</span>
                     <span className={styles.rowTitle}>{ticket.title}</span>
@@ -488,7 +491,6 @@ export default function StaffDashboard() {
                     data-testid="my-actions-row"
                     title={action.description}
                     onClick={() => navigate(`/staff/tickets/${action.ticketId}`)}
-                    aria-label={`${action.ticketNumber}: ${action.description}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{action.ticketNumber}</span>
                     {/* §2.1: one line, ellipsis; `title` keeps the full text. */}
@@ -564,8 +566,8 @@ export default function StaffDashboard() {
                     type="button"
                     className={styles.urgentRow}
                     data-testid="urgent-ticket-row"
+                    title={ticket.title}
                     onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
-                    aria-label={`${ticket.ticketNumber}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.ticketNumber}</span>
                     <span className={styles.rowTitle} title={ticket.title}>

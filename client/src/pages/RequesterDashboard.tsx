@@ -231,9 +231,9 @@ export default function RequesterDashboard() {
                 type="button"
                 className={styles.metricCard}
                 onClick={() => navigate(card.to)}
-                aria-label={`${card.label}: ${card.value}, view filtered tickets`}
+                aria-label={`${card.value} ${card.label}, view filtered tickets`}
               >
-                <span className={styles.metricValue}>{card.value}</span>
+                <span className={styles.metricValue}>{card.value}</span>{" "}
                 <span className={styles.metricLabel}>{card.label}</span>
               </button>
               {/* §3.1: the explicit, screen-reader-labelled drill-down link. */}
@@ -318,7 +318,6 @@ export default function RequesterDashboard() {
                     data-testid="recent-ticket-row"
                     title={ticket.title}
                     onClick={() => navigate(`/tickets/${ticket.code}`)}
-                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.code}</span>
                     <span className={styles.rowTitle} title={ticket.title}>
@@ -413,7 +412,6 @@ export default function RequesterDashboard() {
                     data-testid="attention-required-row"
                     title={ticket.title}
                     onClick={() => navigate(`/tickets/${ticket.code}`)}
-                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.code}</span>
                     <span className={styles.rowTitle} title={ticket.title}>
@@ -488,7 +486,6 @@ export default function RequesterDashboard() {
                     data-testid="resolved-work-row"
                     title={ticket.title}
                     onClick={() => navigate(`/tickets/${ticket.code}`)}
-                    aria-label={`${ticket.code}: ${ticket.title}, open ticket detail`}
                   >
                     <span className={styles.rowCode}>{ticket.code}</span>
                     <span className={styles.rowTitle} title={ticket.title}>
