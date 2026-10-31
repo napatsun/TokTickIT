@@ -136,6 +136,15 @@ Tests 587 passed (587)
 
 ---
 
+### PR #71 — `Fix/lab4 10 focus and a11y polish`
+🔗 https://github.com/napatsun/TokTickIT/pull/71
+
+**Reviewer 1:** เรียบร้อยครบถ้วนทั้งหมดเเล้ว เก่งมากครับ good catch กับ fix ต่างๆที่นำมาปรับแก้ approve ครับ
+
+**สถานะ:** Approved by Reviewer 1 — Merged into `lab4-staging`
+
+---
+
 ## Part 2 — Pull Requests I Reviewed for My Partners
 
 ---
