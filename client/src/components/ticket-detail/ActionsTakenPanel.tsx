@@ -119,17 +119,9 @@ const FIELD_ORDER: FieldName[] = [
   "attachmentNotes",
 ];
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+import { formatDateTime } from "../../lib/dateFormat";
 
-function formatDateTime(isoString: string): string {
-  return new Date(isoString).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 /** §4.2 "Edited {relativeTime} by {editor}" — coarse, test-stable units. */
 export function formatRelativeTime(isoString: string, now: number = Date.now()): string {

@@ -65,15 +65,9 @@ interface MetricCard {
   to: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
+import { formatDate } from "../lib/dateFormat";
 
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
 /** One GET of the dashboard resource, or null on any failure. */
 async function fetchPayload(): Promise<RequesterDashboardPayload | null> {

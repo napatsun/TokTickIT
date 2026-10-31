@@ -65,20 +65,9 @@ export interface ContentThreadProps {
   textareaId: string;
 }
 
+import { formatDateTime } from "../../lib/dateFormat";
+
 export const MAX_CONTENT_LENGTH = 2000;
-
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-function formatDateTime(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 
 // ─── Component ──────────────────────────────────────────────────────────

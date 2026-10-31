@@ -46,19 +46,12 @@ interface AttachmentSectionProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
+import { formatDate } from "../../lib/dateFormat";
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 // ─── Component ──────────────────────────────────────────────────────────

@@ -126,14 +126,12 @@ interface MetricCard {
   to: string;
 }
 
+import { formatDate } from "../lib/dateFormat";
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function formatRelative(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatDate(isoString);
 }
 
 /** Delta chip text + icon pair — meaning is carried by icon AND text (§8). */

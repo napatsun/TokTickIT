@@ -80,16 +80,9 @@ interface TicketDetailResponse {
   };
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────
+import { formatDate } from "../lib/dateFormat";
 
-function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// ─── Helpers ────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

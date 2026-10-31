@@ -82,15 +82,7 @@ const OWNER_OPTIONS = [
   { value: "me", label: "Mine" },
 ];
 
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { formatDate } from "../lib/dateFormat";
 
 // ─── Component ──────────────────────────────────────────────────────────
 
