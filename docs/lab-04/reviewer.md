@@ -121,20 +121,16 @@ Tests 587 passed (587)
 ### PR #67 — `Fix/lab4 09 change password layout fix`
 🔗 https://github.com/napatsun/TokTickIT/pull/67
 
-**Reviewer 2:** 
+**Reviewer 1:** Good catch ครับ ที่เห็นในส่วยของ layout ที่ผิด จากที่ดูในส่วนของ commit ก็แก้ไขได้ดีครับ ไม่มีข้อติอะไร เก่งมากครับ
 
-**Me:** 
-
-**สถานะ:** Approved by Reviewer 2 — Merged into `lab4-staging`
+**สถานะ:** Approved by Reviewer 1 — Merged into `lab4-staging`
 
 ---
 
-### PR #67 — `Fix/lab4 09 change password layout fix`
-🔗 https://github.com/napatsun/TokTickIT/pull/67
+### PR #69 — `Fix/lab4 10 focus and a11y polish`
+🔗 https://github.com/napatsun/TokTickIT/pull/69
 
-**Reviewer 2:** 
-
-**Me:** 
+**Reviewer 2:** ผ่านครบถ้วนดีมากๆครับ
 
 **สถานะ:** Approved by Reviewer 2 — Merged into `lab4-staging`
 
@@ -146,10 +142,30 @@ Tests 587 passed (587)
 
 ### For ALONGKORN KAEWPROM — 67070501050 — [@Alongkron1234](https://github.com/Alongkron1234)
 
+**1. PR #64** — https://github.com/Alongkron1234/toktickit/pull/64
+
+- **My comment:** ภาพรวมทำได้ดีมากและครอบคลุมตาม Spec ของ Lab 4 อย่างครบถ้วน ผ่านครับ
+เเต่มีให้พิจารณาเพิ่มเติมคือไฟล์ ActionsTakenSection.tsx เริ่มเยอะเเล้วนะ ถ้าอนาคตต้องเพิ่มฟีเจอร์อาจลองแยกส่วน Form ออกมาเป็น component ย่อยจะได้จัดการง่ายขึ้นครับ 👳🏾‍♂️
+
+- **Partner's response:** โขอบคุณสำหรับความเห็นครับ ตอนนี้ในไฟล์เรารวมไว้ 4อย่างคือ ดึงข้อมูล, ฟอร์มเพิ่ม/แก้, ขั้นตอน Complete/Cancel, และรายการ Action ที่แสดงผล เลยคิดว่าถ้าแยกก็น่าจะดีเหมือนกันๆ อาจจะแยกเป็น component ใน issue หน้าที่ต้องมีการแก้ไขไฟล์นี้อยุ่แล้วนะครับ
+
 
 ---
 
 ### For KRITTAPHAT PANYASOMPHAN — 67070501052 — [@krittaphato3](https://github.com/krittaphato3)
 
+**1. PR #63** — https://github.com/krittaphato3/TokTickIT/pull/63
+
+- **My comment:** งานดีครับ เเต่มีจุดเล็กๆที่อยากถามเพิ่มเติมเพื่อความชัวร์ครับ
+
+1.ใน ResolveTicketDialog.tsx ตอนที่เกิด 409 และ user กด Reload นอกจากจะอัปเดต version แล้ว มีการจัดการ state ของ resolutionSummary ให้สะอาดหรือยัง (จาก PR ดูเหมือนจะเก็บไว้ซึ่งดีมาก แต่อยากแน่ใจว่าไม่มีการ leak ของ state เก่า)
+2.ตรงส่วนที่ Requester พยายามเปลี่ยนสถานะแล้วได้ 403 FORBIDDEN มีการแสดง error message ที่ฝั่ง UI ให้ user รู้ได้มั้ยครับว่าทำไมถึงทำไม่ได้
+
+- **Partner's response:** ตตั้งใจตั้งแบบเก็บ state ไว้ครับ เพื่อให้ User ไม่ต้องพิมพ์ข้อความสรุปการแก้ปัญหาใหม่ทั้งหมดหากโดน Conflict จาก Version เก่า และ
+มีจัดการไว้ครับ เมื่อ Catch ได้ HTTP status 403 ตัวระบบจะเรียก Toast notification / Error alert เพื่อขึ้นข้อความเตือน User เช่น "คุณไม่มีสิทธิ์ในการเปลี่ยนสถานะรายการนี้" ให้ทราบทันทีครับ
+
+- **My comment:** เข้าใจเเล้วครับ ผ่านครับ
+
 ---
+
 
