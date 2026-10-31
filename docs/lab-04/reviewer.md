@@ -105,6 +105,33 @@ Tests 587 passed (587)
 ### PR #63 — `feature/lab4-07-final-hardening-regression`
 🔗 https://github.com/napatsun/TokTickIT/pull/63
 
+**Reviewer 2:** ตรวจดูเรียบร้อยแล้วครับ โดยรวมโอเคเลย ครบทั้ง UI, test, screenshot 3ขนาด ดีมากครับ
+
+**สถานะ:** Approved by Reviewer 2 — Merged into `lab4-staging`
+
+### PR #65 — `Fix/lab4 dashboard gap fix`
+🔗 https://github.com/napatsun/TokTickIT/pull/65
+
+**Reviewer 2:** โดยรวมสำหรับ Issue นี้เรียบร้อยครบถ้วนดีครับ ผ่านฮะ
+
+**สถานะ:** Approved by Reviewer 2 — Merged into `lab4-staging`
+
+---
+
+### PR #67 — `Fix/lab4 09 change password layout fix`
+🔗 https://github.com/napatsun/TokTickIT/pull/67
+
+**Reviewer 2:** 
+
+**Me:** 
+
+**สถานะ:** Approved by Reviewer 2 — Merged into `lab4-staging`
+
+---
+
+### PR #67 — `Fix/lab4 09 change password layout fix`
+🔗 https://github.com/napatsun/TokTickIT/pull/67
+
 **Reviewer 2:** 
 
 **Me:** 
